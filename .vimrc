@@ -13,8 +13,6 @@ set clipboard=unnamed
 set mouse=a
 " Always show status line
 set laststatus=2
-" My status line
-set statusline=\ %{strftime(\"%d-%m-%y\ -\ %H:%M\")}\ (%{&ff}){%Y}[%v]\ %t
 " Syntastic highlight
 set statusline+=%#warningmsg#
 set statusline+=%{SyntasticStatuslineFlag()}
