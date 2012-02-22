@@ -115,8 +115,8 @@ function! s:ExtractGitDir(path) abort
   let fn = fnamemodify(path,':s?[\/]$??')
   let ofn = ""
   let nfn = fn
-  while fn != ofn
-    if isdirectory(fn) && filereadable(fn . '/.git/HEAD')
+  while fn !=# ofn && fn !=# '/'
+    if filereadable(fn . '/.git/HEAD')
       return s:sub(simplify(fnamemodify(fn . '/.git',':p')),'\W$','')
     elseif fn =~ '\.git$' && filereadable(fn . '/HEAD')
       return s:sub(simplify(fnamemodify(fn,':p')),'\W$','')
@@ -1483,7 +1483,7 @@ function! s:Blame(bang,line1,line2,count,args) abort
         let top = line('w0') + &scrolloff
         let current = line('.')
         let s:temp_files[temp] = s:repo().dir()
-        exe 'leftabove vsplit '.temp
+        exe 'keepalt leftabove vsplit '.temp
         let b:fugitive_blamed_bufnr = bufnr
         let w:fugitive_leave = restore
         let b:fugitive_blame_arguments = join(a:args,' ')
