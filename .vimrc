@@ -101,6 +101,9 @@ nnoremap <silent> <Space> :nohlsearch<Bar>:echo<CR>
 " Copy path to current buffer into clipboard
 nnoremap <leader><space> :!echo -n % \| pbcopy<CR><CR>
 
+" Show current file as HTML (to paste into Keynote)
+nmap <Leader>h :TOhtml<CR>:w<cr>:!open %<CR>:q<CR>
+
 " ------------------------------------------------------------------------------
 " File type specifics *
 " ------------------------------------------------------------------------------
