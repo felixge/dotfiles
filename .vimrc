@@ -51,7 +51,7 @@ let g:syntastic_mode_map = { 'mode': 'passive',
 " Syntax highlighting
 syntax on
 " Color Scheme
-colorscheme ir_black
+colorscheme summerfruit256
 " Show Line numbers
 set number
 " Visual line marking 80 characters (vim 7.3)
