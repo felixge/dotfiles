@@ -31,6 +31,10 @@ snippet ie
 	}
 snippet r
 	var ${1:var} = require('${2:module}')${3};
+snippet si
+	setInterval(function() {
+		${2}
+	}, ${1:interval});
 snippet cl
 	module.exports = $1;
 	function ${1:Class}() {
