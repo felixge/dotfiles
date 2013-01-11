@@ -43,7 +43,7 @@ let g:snippets_dir="~/.vim/snippets"
 let g:syntastic_mode_map = { 'mode': 'passive',
                            \ 'active_filetypes': ['javascript', 'php'],
                            \ 'passive_filetypes': ['puppet'] }
-
+set completeopt=menuone,longest
 
 " ------------------------------------------------------------------------------
 " Styling
@@ -58,8 +58,6 @@ set number
 if v:version >= 703
   set colorcolumn=80
 endif
-" Text-mate style display of invisible characters (tab/newline)
-set listchars=tab:▸\ ,eol:¬
 set list
 highlight NonText guifg=#4a4a59
 highlight SpecialKey guifg=#4a4a59 guibg=NONE
@@ -107,6 +105,8 @@ nmap <Leader>h :TOhtml<CR>:w<cr>:!open %<CR>:q<CR>
 " ------------------------------------------------------------------------------
 " File type specifics *
 " ------------------------------------------------------------------------------
+set rtp+=/usr/local/go/misc/vim
+
 " Execute current file with node.js
 autocmd BufEnter *.js nmap <Leader><Leader> :w<CR>:!node %:p<CR>
 " Execute current file with coffee-script node.js
@@ -120,5 +120,14 @@ autocmd BufEnter *.json set filetype=javascript
 autocmd BufEnter *.isml set filetype=html
 autocmd BufEnter *.ejs set filetype=html
 
+" Text-mate style display of invisible characters (tab/newline)
+autocmd BufEnter * set listchars=tab:▸\ ,eol:¬
+autocmd BufEnter *.go set listchars=tab:\ \ ,eol:¬
+ 
+
+
 " Magic to make ledger work
 au BufNewFile,BufRead *.ldg,*.ledger setf ledger | comp ledger
+
+" Super replace
+command! -nargs=* Argdo noautocmd silent argdo <args>

@@ -1,0 +1,12 @@
+snippet pa
+	package ${1:name}
+snippet p
+	fmt.Printf("${1:format}\n", ${2:args})${3}
+snippet m
+	func (${1:receiver}) ${2:methodName}(${3:args}) ${4:... } {
+		${5}
+	}
+snippet f
+	func ${1:functionName}(${2:args}) ${3:... }{
+		${4}
+	}

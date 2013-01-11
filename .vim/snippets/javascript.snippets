@@ -25,6 +25,18 @@ snippet st
 	setTimeout(function() {
 		${2}
 	}, ${1:duration});
+snippet me
+	var exports = module.exports = function ${1:functionName}() {
+		${2}
+	};
+snippet mc
+	var exports = module.exports = function create${1:Class}() {
+		return new $1();
+	};
+
+	exports.$1 = $1;
+	function $1() {
+	}
 snippet cl
 	module.exports = $1;
 	function ${1:Class}() {
