@@ -122,9 +122,8 @@ autocmd BufEnter *.ejs set filetype=html
 
 " Text-mate style display of invisible characters (tab/newline)
 autocmd BufEnter * set listchars=tab:▸\ ,eol:¬
+autocmd BufEnter NERD_* set listchars=tab:\ \ ,eol:¬
 autocmd BufEnter *.go set listchars=tab:\ \ ,eol:¬
- 
-
 
 " Magic to make ledger work
 au BufNewFile,BufRead *.ldg,*.ledger setf ledger | comp ledger
