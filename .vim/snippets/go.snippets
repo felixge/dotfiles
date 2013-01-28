@@ -12,3 +12,19 @@ snippet f
 	}
 snippet t
 	type ${1:name} ${2:struct{}}
+snippet __f
+	import (
+		"runtime"
+	)
+	// Get name of this source file
+	var _, __filename, _, _ = runtime.Caller(0)
+snippet __d
+	import (
+		"runtime"
+		"path/filepath"
+	)
+	// Get name/dir of this source file
+	var (
+		_, __filename, _, _ = runtime.Caller(0)
+		__dirname = filepath.Dir(__filename)
+	)
