@@ -41,8 +41,9 @@ set nofoldenable
 let g:snippets_dir="~/.vim/snippets"
 " Setup syntastic filetypes
 let g:syntastic_mode_map = { 'mode': 'passive',
-                           \ 'active_filetypes': ['javascript', 'php'],
+                           \ 'active_filetypes': ['javascript', 'php', 'go'],
                            \ 'passive_filetypes': ['puppet'] }
+let g:syntastic_auto_loc_list=1
 set completeopt=menuone,longest
 
 " ------------------------------------------------------------------------------
@@ -92,6 +93,8 @@ nnoremap <Leader>f :NERDTree<CR>:NERDTreeClose<cr>:NERDTreeFind<CR>
 nmap <Leader>v :e ~/.vimrc<CR>
 " Edit project .vimrc
 map <Leader>V :e .vimrc<CR>
+" Generate ctags
+nmap <Leader>c :!ctags -R .<CR>
 
 " Clear search results when hitting space
 nnoremap <silent> <Space> :nohlsearch<Bar>:echo<CR>
@@ -101,6 +104,9 @@ nnoremap <leader><space> :!echo -n % \| pbcopy<CR><CR>
 
 " Show current file as HTML (to paste into Keynote)
 nmap <Leader>h :TOhtml<CR>:w<cr>:!open %<CR>:q<CR>
+
+" Open syntastic error location list
+nmap <Leader>e :lopen<CR><CR>
 
 " ------------------------------------------------------------------------------
 " File type specifics *
@@ -121,9 +127,10 @@ autocmd BufEnter *.isml set filetype=html
 autocmd BufEnter *.ejs set filetype=html
 
 " Text-mate style display of invisible characters (tab/newline)
-autocmd BufEnter * set listchars=tab:▸\ ,eol:¬
-autocmd BufEnter NERD_* set listchars=tab:\ \ ,eol:¬
-autocmd BufEnter *.go set listchars=tab:\ \ ,eol:¬
+autocmd BufEnter * set listchars=tab:\ \ ,eol:¬
+"autocmd BufEnter * set listchars=tab:▸\ ,eol:¬
+"autocmd BufEnter NERD_* set listchars=tab:\ \ ,eol:¬
+"autocmd BufEnter *.go set listchars=tab:\ \ ,eol:¬
 
 " Magic to make ledger work
 au BufNewFile,BufRead *.ldg,*.ledger setf ledger | comp ledger
