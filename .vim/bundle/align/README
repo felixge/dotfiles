@@ -4,7 +4,7 @@ This is a mirror of http://www.vim.org/scripts/script.php?script_id=294
 
 Align and AlignMaps lets you align statements on their equal signs, make comment boxes, align comments, align declarations, etc.
 
-Note: this plugin is not a left&right margin justification tool!  See vimscript#177 or vimscript#2324 for that.
+Note: this plugin is not a left&right margin justification tool!  See vimscript#177, vimscript#2324, or vimscript#3728 for that.
 Note: if you have vim 7.1 or later, your vimball should unpack just fine without having to update it.
 
 There are two basic commands provided by this package:
@@ -80,9 +80,10 @@ AlignMaps also provides some internally complex maps for aligning C declarations
 	
 To see some examples of this, check out
 
-    http://mysite.verizon.net/astronaut/vim/align.html#Examples
+    http://www.drchip.org/astronaut/vim/align.html#Examples
 
 (the proportional fonts used by most browsers in showing you this page preclude showing the examples here). The help for Align and AlignCtrl also contains many examples.
+(for those of you who prefer not to have the maps that AlignMaps.vim provides, simply remove the AlignMapsPlugin.vim from .vim/plugin and AlignMaps.vim from .vim/autoload - that's why AlignMaps is separate from Align)
 
 ALIGNMENT ON VISUAL BLOCKS AND g,v-LIKE CONTROL
 

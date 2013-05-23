@@ -3,6 +3,8 @@
 " ------------------------------------------------------------------------------
 " Be IMproved
 set nocompatible
+" Leader key
+let mapleader = ","
 " Enable pathogen bundle loader
 call pathogen#infect()
 " Recognize file types / set indent mode
@@ -35,16 +37,17 @@ set noswapfile
 if v:version >= 703
   set undofile
 endif
-" Disable folding
-set nofoldenable
 " Configure snipmate dir
 let g:snippets_dir="~/.vim/snippets"
 " Setup syntastic filetypes
 let g:syntastic_mode_map = { 'mode': 'passive',
-                           \ 'active_filetypes': ['javascript', 'php', 'go'],
-                           \ 'passive_filetypes': ['puppet'] }
+                           \ 'active_filetypes': ['javascript', 'php'],
+                           \ 'passive_filetypes': ['puppet', 'go'] }
 let g:syntastic_auto_loc_list=1
+let g:syntastic_auto_jump=1
 set completeopt=menuone,longest
+" Ignore certain things
+set wildignore+=.git,*/node_modules/*,*/deps/build/*,*/stack/*,*/deps/go/*,*/deps/node/*,*/_site/*
 
 " ------------------------------------------------------------------------------
 " Styling
@@ -64,10 +67,15 @@ highlight NonText guifg=#4a4a59
 highlight SpecialKey guifg=#4a4a59 guibg=NONE
 " Highlight active line
 set cursorline
+hi CursorLine cterm=none
+
 " Highlight search results
 set hlsearch
 hi Search guibg=Khaki guifg=Black gui=NONE
 
+" Folding
+hi Folded ctermbg=5 ctermfg=white
+:
 " ------------------------------------------------------------------------------
 " Tabs vs. Spaces
 " ------------------------------------------------------------------------------
@@ -79,10 +87,26 @@ set tabstop=2
 set shiftwidth=2
 
 " ------------------------------------------------------------------------------
+" Folding
+" ------------------------------------------------------------------------------
+set foldmethod=syntax
+set foldlevelstart=1
+set foldnestmax=1
+set fillchars+=fold:\ 
+set foldopen=hor,mark,percent,quickfix,search,tag,undo
+
+
+" ------------------------------------------------------------------------------
+" CtrlP
+" ------------------------------------------------------------------------------
+let g:ctrlp_dont_split = 'NERD_tree_2'
+let g:ctrlp_working_path_mode = ''
+nmap <Leader>p :CtrlP<CR>
+
+" ------------------------------------------------------------------------------
 " Key bindings
 " ------------------------------------------------------------------------------
 " Make , the leader key
-let mapleader = ","
 
 " Nerd Tree (toggle)
 nnoremap <Leader>n :NERDTreeToggle<CR>
@@ -106,7 +130,7 @@ nnoremap <leader><space> :!echo -n % \| pbcopy<CR><CR>
 nmap <Leader>h :TOhtml<CR>:w<cr>:!open %<CR>:q<CR>
 
 " Open syntastic error location list
-nmap <Leader>e :lopen<CR><CR>
+nmap <Leader>e :SyntasticCheck<CR>
 
 " ------------------------------------------------------------------------------
 " File type specifics *

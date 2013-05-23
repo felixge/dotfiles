@@ -39,9 +39,11 @@ that are part of Git repositories).
                         <CR>  |:Gedit|
                         -     |:Git| add
                         -     |:Git| reset (staged files)
-                        C     |:Gcommit|
-                        cA    |Gcommit| --amend --reuse-message=HEAD
-                        ca    |Gcommit| --amend
+                        cA    |:Gcommit| --amend --reuse-message=HEAD
+                        ca    |:Gcommit| --amend
+                        cc    |:Gcommit|
+                        cva   |:Gcommit| --amend --verbose
+                        cvc   |:Gcommit| --verbose
                         D     |:Gdiff|
                         ds    |:Gsdiff|
                         dp    |:Git!| diff (p for patch; use :Gw to apply)
@@ -53,6 +55,7 @@ that are part of Git repositories).
                         p     |:Git| reset --patch (staged files)
                         q     close status
                         R     reload status
+                        S     |:Gvsplit|
 
                                                 *fugitive-:Gcommit*
 :Gcommit [args]         A wrapper around git-commit.  If there is nothing
@@ -69,12 +72,20 @@ that are part of Git repositories).
                                                 *fugitive-:Ggrep*
 :Ggrep [args]           |:grep| with git-grep as 'grepprg'.
 
+                                                *fugitive-:Glgrep*
+:Glgrep [args]          |:lgrep| with git-grep as 'grepprg'.
+
                                                 *fugitive-:Glog*
 :Glog [args]            Load all previous revisions of the current file into
                         the quickfix list.  Additional git-log arguments can
                         be given (for example, --reverse).  If "--" appears as
                         an argument, no file specific filtering is done, and
-                        commits are loaded into the quickfix list.
+                        previous commits rather than previous file revisions
+                        are loaded.
+
+                                                *fugitive-:Gllog*
+:Gllog [args]           Like |:Glog|, but use the location list instead of the
+                        quickfix list.
 
                                         *fugitive-:Gedit* *fugitive-:Ge*
 :Gedit [revision]       |:edit| a |fugitive-revision|.
@@ -111,7 +122,7 @@ that are part of Git repositories).
 
 :{range}Gread! [args]  |:read| the output of a Git command after {range}.
 
-                                                *fugitive-:Gwrite*
+                                        *fugitive-:Gw* *fugitive-:Gwrite*
 :Gwrite                 Write to the current file's path and stage the results.
                         When run in a work tree file, it is effectively git
                         add.  Elsewhere, it is effectively git-checkout.  A
@@ -162,16 +173,19 @@ that are part of Git repositories).
 :Gblame [flags]         Run git-blame on the file and open the results in a
                         scroll bound vertical split.  Press enter on a line to
                         reblame the file as it was in that commit.  You can
-                        give any of ltwfsMC as flags and they will be passed
+                        give any of ltfnsewMC as flags and they will be passed
                         along to git-blame.  The following maps, which work on
                         the cursor line commit where sensible, are provided:
 
+                        A     resize to end of author column
+                        C     resize to end of commit column
+                        D     resize to end of date/time column
                         q     close blame and return to blamed window
                         gq    q, then |:Gedit| to return to work tree version
                         i     q, then open commit
                         o     open commit in horizontal split
                         O     open commit in new tab
-                        <CR>  reblame at commit
+                        -     reblame at commit
                         ~     reblame at [count]th first grandparent
                         P     reblame at [count]th parent (like HEAD^[count])
 
@@ -186,6 +200,11 @@ that are part of Git repositories).
                         "git instaweb" from a terminal).  If a range is given,
                         it is appropriately appended to the URL as an anchor.
 
+                        To use with GitHub FI, point g:fugitive_github_domains
+                        at a list of domains:
+>
+                        let g:fugitive_github_domains = ['https://example.com']
+~
 :[range]Gbrowse!        Like :Gbrowse, but put the URL on the clipboard rather
                         than opening it.
 
@@ -201,6 +220,16 @@ that are part of Git repositories).
 
 MAPPINGS                                        *fugitive-mappings*
 
+These maps are available everywhere.
+
+                                                *fugitive-c_CTRL-R_CTRL-G*
+<C-R><C-G>              On the command line, recall the path to the current
+                        object (that is, a representation of the object
+                        recognized by |:Gedit|).
+
+                                                *fugitive-y_CTRL-G*
+["x]y<C-G>              Yank the commit SHA and path to the current object.
+
 These maps are available in Git objects.
 
                                                 *fugitive-<CR>*
@@ -209,8 +238,15 @@ These maps are available in Git objects.
                                                 *fugitive-o*
 o                       Jump to the revision under the cursor in a new split.
 
+                                                *fugitive-S*
+S                       Jump to the revision under the cursor in a new
+                        vertical split.
+
                                                 *fugitive-O*
 O                       Jump to the revision under the cursor in a new tab.
+
+                                                *fugitive--*
+-                       Go to the tree containing the current tree or blob.
 
                                                 *fugitive-~*
 ~                       Go to the current file in the [count]th first
@@ -262,6 +298,12 @@ a statusline, this one matches the default when 'ruler' is set:
 >
     set statusline=%<%f\ %h%m%r%{fugitive#statusline()}%=%-14.(%l,%c%V%)\ %P
 <
+                                                *fugitive#head(...)*
+Use fugitive#head() to return the name of the current branch. If the current
+HEAD is detached, fugitive#head() will return the empty string, unless the
+optional argument is given, in which case the hash of the current commit will
+be truncated to the given number of characters.
+
 ABOUT                                           *fugitive-about*
 
 Grab the latest version or report a bug on GitHub:

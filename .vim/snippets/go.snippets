@@ -2,6 +2,10 @@ snippet pa
 	package ${1:name}
 snippet p
 	fmt.Printf("${1:format}\n", ${2:args})${3}
+snippet l
+	log.Printf("${1:format}\n", ${2:args})${3}
+snippet tl
+	t.Logf("${1:format}", ${2:args})${3}
 snippet m
 	func (${1:receiver}) ${2:methodName}(${3:args}) ${4:... } {
 		${5}
@@ -10,8 +14,10 @@ snippet f
 	func ${1:functionName}(${2:args}) ${3:... }{
 		${4}
 	}
+snippet s
+	type ${1:name} struct{${2}}
 snippet t
-	type ${1:name} ${2:struct{}}
+	type ${1:name} ${2}
 snippet __f
 	import (
 		"runtime"
