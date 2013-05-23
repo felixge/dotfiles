@@ -39,12 +39,6 @@ if v:version >= 703
 endif
 " Configure snipmate dir
 let g:snippets_dir="~/.vim/snippets"
-" Setup syntastic filetypes
-let g:syntastic_mode_map = { 'mode': 'passive',
-                           \ 'active_filetypes': ['javascript', 'php'],
-                           \ 'passive_filetypes': ['puppet', 'go'] }
-let g:syntastic_auto_loc_list=1
-let g:syntastic_auto_jump=1
 set completeopt=menuone,longest
 " Ignore certain things
 set wildignore+=.git,*/node_modules/*,*/deps/build/*,*/stack/*,*/deps/go/*,*/deps/node/*,*/_site/*
