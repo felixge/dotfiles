@@ -57,8 +57,8 @@ if v:version >= 703
   set colorcolumn=80
 endif
 set list
-highlight NonText guifg=#4a4a59
-highlight SpecialKey guifg=#4a4a59 guibg=NONE
+highlight NonText guifg=#C9C9C9
+highlight SpecialKey guifg=#C9C9C9 guibg=NONE
 " Highlight active line
 set cursorline
 hi CursorLine cterm=none
@@ -145,8 +145,8 @@ autocmd BufEnter *.isml set filetype=html
 autocmd BufEnter *.ejs set filetype=html
 
 " Text-mate style display of invisible characters (tab/newline)
-autocmd BufEnter * set listchars=tab:\ \ ,eol:¬
-"autocmd BufEnter * set listchars=tab:▸\ ,eol:¬
+"autocmd BufEnter * set listchars=tab:\ \ ,eol:¬
+autocmd BufEnter * set listchars=tab:▸\ ,eol:¬
 "autocmd BufEnter NERD_* set listchars=tab:\ \ ,eol:¬
 "autocmd BufEnter *.go set listchars=tab:\ \ ,eol:¬
 
