@@ -119,6 +119,7 @@ nnoremap <silent> <Space> :nohlsearch<Bar>:echo<CR>
 
 " Copy path to current buffer into clipboard
 nnoremap <leader><space> :!echo -n % \| pbcopy<CR><CR>
+nnoremap <leader>o :!echo `git url`/blob/`git rev-parse --abbrev-ref HEAD`/%\#L<C-R>=line('.')<CR> \| xargs open<CR><CR>
 
 " Show current file as HTML (to paste into Keynote)
 nmap <Leader>h :TOhtml<CR>:w<cr>:!open %<CR>:q<CR>
