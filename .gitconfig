@@ -18,17 +18,11 @@
 	top = shortlog -ns --no-merges
 	bl = "!bash -c 'for k in `git branch|sed s/^..//`;do echo -e `git log -1 --pretty=format:\"%Cgreen%ci %Cblue%cr%Creset\" \"$k\" --`\t\"$k\";done|sort'"
   l = log --decorate --stat --graph --pretty=format:'%C(yellow)%h%Creset (%ar - %Cred%an%Creset), %s%n'
-	billable = rev-list --all --pretty=medium --author=felix
 [color]
 	ui = auto
-[gui]
-	recentrepo = /Users/felix/dev/www/php5/debuggable
 [core]
 	excludesfile = /Users/felix/.gitignore
 	quotepath = off
-# editor = mate -w
-# editor = mvim -f
-#	editor = /usr/bin/vim
 [merge]
   keepBackup = false
   tool = p4merge
