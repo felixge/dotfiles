@@ -1,0 +1,55 @@
+[user]
+	name = Felix Geisendörfer
+	email = felix@debuggable.com
+[alias]
+	url =! bash -c 'git config --get remote.origin.url | sed -E "s/.+:\\(.+\\)\\.git$/https:\\\\/\\\\/github\\\\.com\\\\/\\\\1/g"'
+	open =! sh -c 'SHA1=`[ "$0" = "sh" ] && echo HEAD || echo $0` && hub browse -- commit/`git rev-parse $SHA1`'
+	co = checkout
+	ci = commit
+	up = pull --rebase
+	sup =! git stash && git up && git stash apply
+	spush =! git sup && git push
+	st = status -sb
+	review = diff --cached
+	back = reset HEAD^ --hard
+	count =! git-log --no-merges --pretty=oneline | wc -l | tr -d \" \"
+	timeline = log \"--pretty=format:%cr: %h%x09%an%x09%s\"
+	cp = cherry-pick
+	top = shortlog -ns --no-merges
+	bl = "!bash -c 'for k in `git branch|sed s/^..//`;do echo -e `git log -1 --pretty=format:\"%Cgreen%ci %Cblue%cr%Creset\" \"$k\" --`\t\"$k\";done|sort'"
+  l = log --decorate --stat --graph --pretty=format:'%C(yellow)%h%Creset (%ar - %Cred%an%Creset), %s%n'
+	billable = rev-list --all --pretty=medium --author=felix
+[color]
+	ui = auto
+[gui]
+	recentrepo = /Users/felix/dev/www/php5/debuggable
+[core]
+	excludesfile = /Users/felix/.gitignore
+	quotepath = off
+# editor = mate -w
+# editor = mvim -f
+#	editor = /usr/bin/vim
+[merge]
+  keepBackup = false
+  tool = p4merge
+[mergetool "p4merge"]
+  cmd = p4merge "$BASE" "$LOCAL" "$REMOTE" "$MERGED"
+  keepTemporaries = false
+  trustExitCode = false
+  keepBackup = false
+[push]
+	default = current
+[github]
+	user = felixge
+[rerere]
+	enabled = 1
+[mergetool]
+	keepBackup = true
+[difftool "sourcetree"]
+	cmd = opendiff \"$LOCAL\" \"$REMOTE\"
+	path = 
+[mergetool "sourcetree"]
+	cmd = /Applications/SourceTree.app/Contents/Resources/opendiff-w.sh \"$LOCAL\" \"$REMOTE\" -ancestor \"$BASE\" -merge \"$MERGED\"
+	trustExitCode = true
+
+# vim: noexpandtab
