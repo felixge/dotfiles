@@ -40,6 +40,8 @@ endif
 " Configure snipmate dir
 let g:snippets_dir="~/.vim/snippets"
 set completeopt=menuone,longest
+" open go definitions in same window
+let g:godef_split=0
 " Ignore certain things
 set wildignore+=.git,*/node_modules/*,*/deps/build/*,*/stack/*,*/deps/go/*,*/deps/node/*,*/_site/*
 
