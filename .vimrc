@@ -37,13 +37,21 @@ set noswapfile
 if v:version >= 703
   set undofile
 endif
-" Configure snipmate dir
-let g:snippets_dir="~/.vim/snippets"
 set completeopt=menuone,longest
-" open go definitions in same window
-let g:godef_split=0
 " Ignore certain things
-set wildignore+=.git,*/node_modules/*,*/deps/build/*,*/stack/*,*/deps/go/*,*/deps/node/*,*/_site/*
+"set wildignore+=.git,*/node_modules/*,*/deps/build/*,*/stack/*,*/deps/go/*,*/deps/node/*,*/_site/*
+
+
+" ------------------------------------------------------------------------------
+" Powerline
+" ------------------------------------------------------------------------------
+set rtp+=/Users/felix/Library/Python/2.7/lib/python/site-packages/powerline/bindings/vim
+
+" ------------------------------------------------------------------------------
+" TypeScript Plugin
+" ------------------------------------------------------------------------------
+au BufRead,BufNewFile *.ts        setlocal filetype=typescript
+set rtp+=/Users/felix/code/typescript-tools/
 
 " ------------------------------------------------------------------------------
 " Styling
@@ -59,19 +67,14 @@ if v:version >= 703
   set colorcolumn=80
 endif
 set list
-highlight NonText guifg=#C9C9C9
-highlight SpecialKey guifg=#C9C9C9 guibg=NONE
 " Highlight active line
 set cursorline
 hi CursorLine cterm=none
-
 " Highlight search results
 set hlsearch
-hi Search guibg=Khaki guifg=Black gui=NONE
+" Invisible characters
+autocmd BufEnter * set listchars=tab:▸\ ,eol:¬
 
-" Folding
-hi Folded ctermbg=5 ctermfg=white
-:
 " ------------------------------------------------------------------------------
 " Tabs vs. Spaces
 " ------------------------------------------------------------------------------
@@ -82,33 +85,40 @@ set tabstop=2
 " 2 spaces for indention
 set shiftwidth=2
 
-" ------------------------------------------------------------------------------
-" Folding
-" ------------------------------------------------------------------------------
-set foldmethod=syntax
-set foldlevelstart=1
-set foldnestmax=1
-set fillchars+=fold:\ 
-set foldopen=hor,mark,percent,quickfix,search,tag,undo
 
+" ------------------------------------------------------------------------------
+" godef
+" ------------------------------------------------------------------------------
+" open go definitions in same window
+let g:godef_split=0
+"
+" ------------------------------------------------------------------------------
+" snipmate
+" ------------------------------------------------------------------------------
+" Configure snipmate dir
+let g:snippets_dir="~/.vim/snippets"
 
 " ------------------------------------------------------------------------------
 " CtrlP
 " ------------------------------------------------------------------------------
 let g:ctrlp_dont_split = 'NERD_tree_2'
 let g:ctrlp_working_path_mode = ''
-nmap <Leader>p :CtrlP<CR>
+let g:ctrlp_mruf_relative = 1
+nmap <Leader>p :CtrlPMRU<CR>
+
+" ------------------------------------------------------------------------------
+" NERDTree
+" ------------------------------------------------------------------------------
+" Nerd Tree (toggle)
+nnoremap <Leader>n :NERDTreeToggle<CR>
+" Nerd Tree (reveal current file)
+nnoremap <Leader>f :NERDTreeFind<CR>
+" Close NERDtree when selecting a file
+let NERDTreeQuitOnOpen=1
 
 " ------------------------------------------------------------------------------
 " Key bindings
 " ------------------------------------------------------------------------------
-" Make , the leader key
-
-" Nerd Tree (toggle)
-nnoremap <Leader>n :NERDTreeToggle<CR>
-" Nerd Tree (reveal current file)
-nnoremap <Leader>f :NERDTree<CR>:NERDTreeClose<cr>:NERDTreeFind<CR>
-
 " Edit user .vimrc
 nmap <Leader>v :e ~/.vimrc<CR>
 " Edit project .vimrc
@@ -125,9 +135,6 @@ nnoremap <leader>o :!echo `git url`/blob/`git rev-parse --abbrev-ref HEAD`/%\#L<
 
 " Show current file as HTML (to paste into Keynote)
 nmap <Leader>h :TOhtml<CR>:w<cr>:!open %<CR>:q<CR>
-
-" Open syntastic error location list
-nmap <Leader>e :SyntasticCheck<CR>
 
 " ------------------------------------------------------------------------------
 " File type specifics *
@@ -146,15 +153,6 @@ autocmd BufEnter *.ds set filetype=javascript
 autocmd BufEnter *.json set filetype=javascript
 autocmd BufEnter *.isml set filetype=html
 autocmd BufEnter *.ejs set filetype=html
-
-" Text-mate style display of invisible characters (tab/newline)
-"autocmd BufEnter * set listchars=tab:\ \ ,eol:¬
-autocmd BufEnter * set listchars=tab:▸\ ,eol:¬
-"autocmd BufEnter NERD_* set listchars=tab:\ \ ,eol:¬
-"autocmd BufEnter *.go set listchars=tab:\ \ ,eol:¬
-
-" Magic to make ledger work
-au BufNewFile,BufRead *.ldg,*.ledger setf ledger | comp ledger
 
 " Super replace
 command! -nargs=* Argdo noautocmd silent argdo <args>
