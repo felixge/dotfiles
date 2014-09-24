@@ -24,7 +24,7 @@ endif
 let g:colors_name="summerfruit256"
 
 if has("gui_running") || &t_Co == 88 || &t_Co == 256
-    " functions {{{
+    " functions 
     " returns an approximate grey index for the given grey level
     fun <SID>grey_number(x)
         if &t_Co == 88
@@ -231,15 +231,16 @@ if has("gui_running") || &t_Co == 88 || &t_Co == 256
             exec "hi " . a:group . " gui=" . a:attr . " cterm=" . a:attr
         endif
     endfun
-    " }}}
+    " 
 
     " Global
     call <SID>X("Normal", "000000", "ffffff", "")
-    call <SID>X("NonText", "438ec3", "ffffff", "")
+    call <SID>X("NonText", "c9c9c9", "ffffff", "")
+    call <SID>X("SpecialKey", "c9c9c9", "ffffff", "")
 
     " Search
-    call <SID>X("Search", "800000", "ffae00", "")
-    call <SID>X("IncSearch", "800000", "ffae00", "")
+    call <SID>X("Search", "000000", "f0e68c", "")
+    call <SID>X("IncSearch", "000000", "f0e68c", "")
 
     " Interface Elements
     call <SID>X("StatusLine", "ffffff", "43c464", "bold")
@@ -305,7 +306,7 @@ if has("gui_running") || &t_Co == 88 || &t_Co == 256
     call <SID>X("jinjaAttribute", "dd7700", "fbf4c7", "")
     call <SID>X("jinjaSpecial", "008ffd", "fbf4c7", "")
 
-    " delete functions {{{
+    " delete functions 
     delf <SID>X
     delf <SID>rgb
     delf <SID>color
@@ -315,7 +316,7 @@ if has("gui_running") || &t_Co == 88 || &t_Co == 256
     delf <SID>grey_color
     delf <SID>grey_level
     delf <SID>grey_number
-    " }}}
+    " 
 endif
 
 " vim: set fdl=0 fdm=marker:

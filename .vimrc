@@ -39,8 +39,20 @@ if v:version >= 703
 endif
 set completeopt=menuone,longest
 " Ignore certain things
-"set wildignore+=.git,*/node_modules/*,*/deps/build/*,*/stack/*,*/deps/go/*,*/deps/node/*,*/_site/*
+set wildignore+=.git,*/node_modules/*
+" Fix mouse clicks in terminal
+" see http://stackoverflow.com/questions/7000960/vim-mouse-problem
+if has("mouse_sgr")
+    set ttymouse=sgr
+else
+    set ttymouse=xterm2
+end
 
+
+" ------------------------------------------------------------------------------
+" Syntastic
+" ------------------------------------------------------------------------------
+let g:syntastic_always_populate_loc_list = 1
 
 " ------------------------------------------------------------------------------
 " Powerline
@@ -139,7 +151,18 @@ nmap <Leader>h :TOhtml<CR>:w<cr>:!open %<CR>:q<CR>
 " ------------------------------------------------------------------------------
 " File type specifics *
 " ------------------------------------------------------------------------------
-set rtp+=/usr/local/go/misc/vim
+" Go
+au FileType go nmap gd <Plug>(go-def)
+au FileType go nmap <Leader>i <Plug>(go-info)
+au FileType go nmap <Leader>gd <Plug>(go-doc)
+au FileType go nmap <Leader>gv <Plug>(go-doc-vertical)
+au FileType go nmap <Leader>gb <Plug>(go-doc-browser)
+au FileType go nmap <leader>r <Plug>(go-run)
+au FileType go nmap <leader>b <Plug>(go-build)
+au FileType go nmap <leader>t <Plug>(go-test)
+au FileType go nmap <Leader>ds <Plug>(go-def-split)
+au FileType go nmap <Leader>dv <Plug>(go-def-vertical)
+au FileType go nmap <Leader>dt <Plug>(go-def-tab)
 
 " Execute current file with node.js
 autocmd BufEnter *.js nmap <Leader><Leader> :w<CR>:!node %:p<CR>

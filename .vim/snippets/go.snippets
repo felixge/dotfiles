@@ -1,5 +1,11 @@
 snippet pa
 	package ${1:name}
+snippet pm
+	package main
+
+	func main() {
+		${1}
+	}
 snippet p
 	fmt.Printf("${1:format}\n", ${2:args})${3}
 snippet l
@@ -16,6 +22,10 @@ snippet f
 	}
 snippet s
 	type ${1:name} struct{${2}}
+snippet e
+	error
+snippet i
+	interface{}
 snippet t
 	type ${1:name} ${2}
 snippet __f
@@ -34,3 +44,10 @@ snippet __d
 		_, __filename, _, _ = runtime.Caller(0)
 		__dirname = filepath.Dir(__filename)
 	)
+snippet tr
+	TODO(refactor): 
+snippet fa
+	func fatalf(msg string, args ...interface{}) {
+		fmt.Fprintf(os.Stderr, msg+"\n", args...)
+		os.Exit(1)
+	}
