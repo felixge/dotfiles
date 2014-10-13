@@ -47,7 +47,7 @@ if has("mouse_sgr")
 else
     set ttymouse=xterm2
 end
-
+set foldlevel=9999
 
 " ------------------------------------------------------------------------------
 " Syntastic
