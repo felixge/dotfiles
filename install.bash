@@ -14,5 +14,6 @@ for file in ${files}; do
   fi
 
   echo "Symlinking ~/$file"
+  rm -f ~/$file
   ln -fs $dir/$file ~/$file
 done
