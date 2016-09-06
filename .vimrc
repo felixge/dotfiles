@@ -83,6 +83,8 @@ let g:go_fmt_command = "goimports"
 " ========= SYNTASTIC PLUGIN ======
 let g:syntastic_always_populate_loc_list = 1
 let g:syntastic_go_go_build_args="-o /tmp"
+let g:syntastic_check_on_open = 1
+let g:syntastic_check_on_wq = 0
 
 " ========= NERDTREE PLUGIN ======
 " close NERDtree when selecting a file

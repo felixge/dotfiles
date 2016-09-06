@@ -19,3 +19,6 @@
 [submodule ".vim/bundle/summerfruit256.vim"]
 	path = .vim/bundle/summerfruit256.vim
 	url = git@github.com:felixge/summerfruit256.vim.git
+[submodule ".vim/bundle/syntastic"]
+	path = .vim/bundle/syntastic
+	url = https://github.com/scrooloose/syntastic.git
