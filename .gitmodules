@@ -13,3 +13,6 @@
 [submodule ".vim/bundle/tabular"]
 	path = .vim/bundle/tabular
 	url = git://github.com/godlygeek/tabular.git
+[submodule ".oh-my-zsh/custom/themes/powerlevel9k"]
+	path = .oh-my-zsh/custom/themes/powerlevel9k
+	url = https://github.com/bhilburn/powerlevel9k.git
