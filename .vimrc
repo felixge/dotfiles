@@ -21,6 +21,8 @@ set noswapfile
 set mouse=a
 " some auto-complete stuff
 set completeopt=menuone,longest,preview
+" use bash because plugins expect it
+set shell=bash
 
 " ========= STYLE =========
 " enable syntax highlighting
@@ -83,8 +85,8 @@ let g:go_fmt_command = "goimports"
 " ========= SYNTASTIC PLUGIN ======
 let g:syntastic_always_populate_loc_list = 1
 let g:syntastic_go_go_build_args="-o /tmp"
-let g:syntastic_check_on_open = 1
 let g:syntastic_check_on_wq = 0
+let g:syntastic_go_checkers="go"
 
 " ========= NERDTREE PLUGIN ======
 " close NERDtree when selecting a file
