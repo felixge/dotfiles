@@ -11,14 +11,53 @@ filetype plugin indent on
 set clipboard+=unnamed
 " make backspace work normally in insert mode
 set backspace=indent,eol,start
+" remember undo chains between sessions
+set undofile
+" do not create swap files
+set nobackup
+set nowritebackup
+set noswapfile
+" allow mouse usage in terminal vim
+set mouse=a
+" some auto-complete stuff
+set completeopt=menuone,longest,preview
 
-" ========= COLORS =========
+" ========= STYLE =========
 " enable syntax highlighting
 syntax on
 " use solarized
 colorscheme summerfruit256
 " tell theme we're using a light background
 set background=light
+" highlight active line
+set cursorline
+hi CursorLine cterm=none
+" visual line marking 80 characters (vim 7.3)
+set colorcolumn=80
+" show Line numbers
+set number
+" highlight search results
+set hlsearch
+
+" ========== KEY BINDINGS ==========
+" clear search results when hitting space
+nmap <silent> <Space> :nohlsearch<Bar>:echo<CR>
+" copy path to current buffer into clipboard
+nmap <leader><space> :!echo -n % \| pbcopy<CR><CR>
+" open ctrlp
+nmap <Leader>p :CtrlPMRU<CR>
+" show go decls (uses ctrpl)
+au FileType go nmap <Leader>d :GoDecls<CR>
+" show godoc
+au FileType go nmap <Leader>h <Plug>(go-doc)
+" alternate between test and source file
+au FileType go nmap <Leader>a :GoAlternate<CR>
+" toggle nerd tree
+nnoremap <Leader>n :NERDTreeToggle<CR>
+" reveal current file in nerdtree
+nnoremap <Leader>f :NERDTreeFind<CR>
+" edit ~/.vimrc
+nmap <Leader>v :e ~/.vimrc<CR>
 
 " ========= TABS VS SPACES =========
 set expandtab
@@ -26,6 +65,9 @@ set expandtab
 set tabstop=2
 " 2 spaces for indention
 set shiftwidth=2
+" shows tabs vs spaces
+set list
+autocmd BufEnter * set listchars=tab:▸\ ,eol:¬
 
 " ========== POWERLINE PLUGIN =========
 " load powerline
@@ -35,20 +77,13 @@ python del powerline_setup
 " enable status line
 set laststatus=2
 
-" ========== CTRLP PLUGIN =========
-nmap <Leader>p :CtrlPMRU<CR>
-
 " ========== VIM-GO PLUGIN ==========
-nmap <Leader>d :GoDecls<CR>
 let g:go_fmt_command = "goimports"
-let g:go_highlight_functions = 1
-let g:go_highlight_methods = 1
-let g:go_highlight_structs = 1
-let g:go_highlight_interfaces = 1
-let g:go_highlight_operators = 1
-let g:go_highlight_build_constraints = 1
 
 " ========= SYNTASTIC PLUGIN ======
 let g:syntastic_always_populate_loc_list = 1
 let g:syntastic_go_go_build_args="-o /tmp"
 
+" ========= NERDTREE PLUGIN ======
+" close NERDtree when selecting a file
+let NERDTreeQuitOnOpen=1
