@@ -59,6 +59,7 @@ plugins=(git, brew, docker, golang, docker-compose)
 
 source $ZSH/oh-my-zsh.sh
 source $HOME/.profile
+[[ -f $HOME/.profile_secret ]] && source $HOME/.profile_secret
 
 # User configuration
 
