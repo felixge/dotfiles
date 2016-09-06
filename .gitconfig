@@ -10,3 +10,5 @@
        	enabled = 1
 [core]
 	excludesfile = /Users/felix/.gitignore
+[push]
+	default = matching
