@@ -58,6 +58,7 @@ export DEFAULT_USER="felix"
 plugins=(git, brew, docker, golang, docker-compose)
 
 source $ZSH/oh-my-zsh.sh
+source $HOME/.profile
 
 # User configuration
 
