@@ -16,3 +16,6 @@
 [submodule ".oh-my-zsh/custom/themes/powerlevel9k"]
 	path = .oh-my-zsh/custom/themes/powerlevel9k
 	url = https://github.com/bhilburn/powerlevel9k.git
+[submodule ".vim/bundle/summerfruit256.vim"]
+	path = .vim/bundle/summerfruit256.vim
+	url = git@github.com:vim-scripts/summerfruit256.vim.git

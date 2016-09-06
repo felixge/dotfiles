@@ -16,9 +16,9 @@ set backspace=indent,eol,start
 " enable syntax highlighting
 syntax on
 " use solarized
-colorscheme solarized
+colorscheme summerfruit256
 " tell theme we're using a light background
-set background=dark
+set background=light
 
 " ========= TABS VS SPACES =========
 set expandtab
