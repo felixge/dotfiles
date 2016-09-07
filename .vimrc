@@ -89,6 +89,7 @@ python del powerline_setup
 
 " ========== VIM-GO PLUGIN ==========
 let g:go_fmt_command = "goimports"
+au FileType go silent exe "GoGuruScope " . go#package#ImportPath(expand('%:p:h')) . "..."
 
 " ========= SYNTASTIC PLUGIN ======
 let g:syntastic_always_populate_loc_list = 1
