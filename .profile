@@ -7,7 +7,7 @@ export EDITOR='vim'
 
 # golang
 [[ -s "$HOME/.gvm/scripts/gvm" ]] && source "$HOME/.gvm/scripts/gvm"
-export GOPATH="$HOME/code/go:$GOPATH"
+export GOPATH="$HOME/code/go"
 export PATH="$HOME/code/go/bin:$PATH"
 
 # git
