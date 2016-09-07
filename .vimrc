@@ -31,6 +31,10 @@ set autoindent
 set splitbelow
 " disable folding
 set nofoldenable
+" automatically safe files when switchin between them / leaving vim
+set autowriteall
+autocmd FocusLost * silent! :wa
+autocmd TabLeave * silent! :wa
 
 " ========= STYLE =========
 " enable syntax highlighting
