@@ -12,4 +12,4 @@
 [core]
 	excludesfile = /Users/felix/.gitignore
 [push]
-	default = matching
+	default = current
