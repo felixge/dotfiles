@@ -62,6 +62,9 @@ au FileType go nmap <Leader>d :GoDeclsDir<CR>
 au FileType go nmap <Leader>h <Plug>(go-doc)
 " alternate between test and source file
 au FileType go nmap <Leader>a :GoAlternate<CR>
+" highlight same identifiers
+au FileType go nmap <Leader>s :GoSameIdsAutoToggle<CR>
+nmap <Leader>e :ll<CR>
 " toggle nerd tree
 nnoremap <Leader>n :NERDTreeToggle<CR>
 " reveal current file in nerdtree
@@ -90,7 +93,7 @@ python del powerline_setup
 " ========== VIM-GO PLUGIN ==========
 let g:go_fmt_command = "goimports"
 let g:go_auto_type_info = 1
-au FileType go silent exe "GoGuruScope " . go#package#ImportPath(expand('%:p:h')) . "..."
+au BufEnter *.go silent exe "GoGuruScope " . go#package#ImportPath(expand('%:p:h')) . "..."
 
 " ========= SYNTASTIC PLUGIN ======
 let g:syntastic_always_populate_loc_list = 1
