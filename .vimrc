@@ -79,7 +79,7 @@ set tabstop=2
 set shiftwidth=2
 " shows tabs vs spaces
 set list
-autocmd BufEnter * set listchars=tab:▸\ ,eol:¬
+au BufEnter * set listchars=tab:▸\ ,eol:¬
 
 " ========== POWERLINE PLUGIN =========
 " load powerline
