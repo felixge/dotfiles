@@ -23,6 +23,12 @@ set mouse=a
 set completeopt=menuone,longest,preview
 " use bash because plugins expect it
 set shell=bash
+" enable status line
+set laststatus=2
+" indention
+set autoindent
+" focus on bottom split when splitting vertically
+set splitbelow
 
 " ========= STYLE =========
 " enable syntax highlighting
@@ -76,8 +82,6 @@ autocmd BufEnter * set listchars=tab:▸\ ,eol:¬
 python from powerline.vim import setup as powerline_setup
 python powerline_setup()
 python del powerline_setup
-" enable status line
-set laststatus=2
 
 " ========== VIM-GO PLUGIN ==========
 let g:go_fmt_command = "goimports"
@@ -86,7 +90,7 @@ let g:go_fmt_command = "goimports"
 let g:syntastic_always_populate_loc_list = 1
 let g:syntastic_go_go_build_args="-o /tmp"
 let g:syntastic_check_on_wq = 0
-let g:syntastic_go_checkers="go"
+let g:syntastic_go_checkers= ["go"]
 
 " ========= NERDTREE PLUGIN ======
 " close NERDtree when selecting a file
