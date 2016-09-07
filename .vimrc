@@ -103,3 +103,10 @@ let NERDTreeQuitOnOpen=1
 " ========= SNIPMATE PLUGIN ======
 " configure snipmate dir
 let g:snippets_dir="~/.vim/snippets"
+
+
+" ========= CTRLP PLUGIN ======
+" don't modify the current working directory
+let g:ctrlp_working_path_mode = ''
+" only show most recently used files relative to current working directory
+let g:ctrlp_mruf_relative = 1
