@@ -68,6 +68,8 @@ nnoremap <Leader>n :NERDTreeToggle<CR>
 nnoremap <Leader>f :NERDTreeFind<CR>
 " edit ~/.vimrc
 nmap <Leader>v :e ~/.vimrc<CR>
+" jump to current location list entry (errror)
+nmap <Leader>e :ll<CR>
 
 " ========= TABS VS SPACES =========
 set expandtab
