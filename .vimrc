@@ -29,6 +29,8 @@ set laststatus=2
 set autoindent
 " focus on bottom split when splitting vertically
 set splitbelow
+" disable folding
+set nofoldenable
 
 " ========= STYLE =========
 " enable syntax highlighting
@@ -95,3 +97,7 @@ let g:syntastic_go_checkers= ["go"]
 " ========= NERDTREE PLUGIN ======
 " close NERDtree when selecting a file
 let NERDTreeQuitOnOpen=1
+
+" ========= SNIPMATE PLUGIN ======
+" configure snipmate dir
+let g:snippets_dir="~/.vim/snippets"

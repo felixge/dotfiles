@@ -25,3 +25,12 @@
 [submodule ".vim/bundle/nerdcommenter"]
 	path = .vim/bundle/nerdcommenter
 	url = git@github.com:scrooloose/nerdcommenter.git
+[submodule ".vim/bundle/vim-snipmate"]
+	path = .vim/bundle/vim-snipmate
+	url = git@github.com:garbas/vim-snipmate.git
+[submodule ".vim/tlib_vim"]
+	path = .vim/bundle/tlib_vim
+	url = https://github.com/tomtom/tlib_vim.git
+[submodule ".vim/vim-addon-mw-utils"]
+	path = .vim/bundle/vim-addon-mw-utils
+	url = https://github.com/MarcWeber/vim-addon-mw-utils.git
