@@ -17,3 +17,6 @@ for file in ${files}; do
   rm -f ~/$file
   ln -fs $dir/$file ~/$file
 done
+
+echo "Installing powerline"
+pip install powerline-status
