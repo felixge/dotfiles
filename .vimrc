@@ -57,7 +57,7 @@ nmap <leader><space> :!echo -n % \| pbcopy<CR><CR>
 " open ctrlp
 nmap <Leader>p :CtrlPMRU<CR>
 " show go decls (uses ctrpl)
-au FileType go nmap <Leader>d :GoDecls<CR>
+au FileType go nmap <Leader>d :GoDeclsDir<CR>
 " show godoc
 au FileType go nmap <Leader>h <Plug>(go-doc)
 " alternate between test and source file
@@ -89,6 +89,7 @@ python del powerline_setup
 
 " ========== VIM-GO PLUGIN ==========
 let g:go_fmt_command = "goimports"
+let g:go_auto_type_info = 1
 au FileType go silent exe "GoGuruScope " . go#package#ImportPath(expand('%:p:h')) . "..."
 
 " ========= SYNTASTIC PLUGIN ======
