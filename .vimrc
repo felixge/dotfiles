@@ -77,6 +77,11 @@ nnoremap <Leader>f :NERDTreeFind<CR>
 nmap <Leader>v :e ~/.vimrc<CR>
 " jump to current location list entry (errror)
 nmap <Leader>e :ll<CR>
+" tab navigation
+nmap td :tabclose<CR>
+nmap tn :tabnew<CR>
+nmap th :tabprev<CR>
+nmap tl :tabnext<CR>
 
 " ========= TABS VS SPACES =========
 set expandtab
@@ -96,7 +101,6 @@ python del powerline_setup
 
 " ========== VIM-GO PLUGIN ==========
 let g:go_fmt_command = "goimports"
-let g:go_auto_type_info = 1
 au BufEnter *.go silent exe "GoGuruScope " . go#package#ImportPath(expand('%:p:h')) . "..."
 
 " ========= SYNTASTIC PLUGIN ======

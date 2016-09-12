@@ -23,6 +23,10 @@ snippet f
 snippet s
 	type ${1:name} struct{${2}}
 snippet ie
+	if err != nil {
+		${1}
+	}
+snippet iei
 	if ${1:val, }err := ${2}; err != nil {
 		${3}
 	}
