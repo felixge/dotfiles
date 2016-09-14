@@ -35,6 +35,8 @@ set nofoldenable
 set autowriteall
 autocmd FocusLost * silent! :wa
 autocmd TabLeave * silent! :wa
+" per project vimrc
+set exrc
 
 " ========= STYLE =========
 " enable syntax highlighting
@@ -123,3 +125,8 @@ let g:snippets_dir="~/.vim/snippets"
 let g:ctrlp_working_path_mode = ''
 " only show most recently used files relative to current working directory
 let g:ctrlp_mruf_relative = 1
+
+
+" ========= VITALITY PLUGIN ======
+" don't screw with my cursor
+let g:vitality_fix_cursor = 0
