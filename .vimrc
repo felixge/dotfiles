@@ -80,10 +80,10 @@ nmap <Leader>v :e ~/.vimrc<CR>
 " jump to current location list entry (errror)
 nmap <Leader>e :ll<CR>
 " tab navigation
-nmap td :tabclose<CR>
-nmap tn :tabnew<CR>
-nmap th :tabprev<CR>
-nmap tl :tabnext<CR>
+nmap <Esc>[1;9D :tabprev<CR>
+nmap <Esc>[1;9C :tabnext<CR>
+nmap ∑ :tabclose<CR>
+nmap † :tabnew<CR>
 
 " ========= TABS VS SPACES =========
 set expandtab

@@ -34,3 +34,6 @@
 [submodule ".vim/bundle/vitality.vim"]
 	path = .vim/bundle/vitality.vim
 	url = git@github.com:sjl/vitality.vim.git
+[submodule ".vim/bundle/ack.vim"]
+	path = .vim/bundle/ack.vim
+	url = git@github.com:mileszs/ack.vim.git

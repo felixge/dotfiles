@@ -5,6 +5,7 @@
 	up = pull --rebase
 	sup =! git stash && git up && git stash apply
 	lg = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+	top = shortlog -ns --no-merges
 [rerere]
 	enabled = 1
 [core]
