@@ -10,7 +10,6 @@ export EDITOR='vim'
 [[ $- == *i* ]] && source /usr/local/etc/bash_completion.d/git-prompt.sh
 
 # golang
-[[ -s "$HOME/.gvm/scripts/gvm" ]] && source "$HOME/.gvm/scripts/gvm"
 export GOPATH="$HOME/code/go"
 export PATH="$HOME/code/go/bin:$PATH"
 
