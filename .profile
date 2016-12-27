@@ -29,7 +29,7 @@ PROMPT_COMMAND='__git_ps1 "" "\W \[\e[0;31m\]⌁\[\e[0m\]\[\e[0m\] " "(%s) "'
 eval "$(direnv hook bash)"
 
 # postgres app cli tools
-#export PATH="$PATH:/Applications/Postgres.app/Contents/Versions/latest/bin"
+export PATH="$PATH:/Applications/Postgres.app/Contents/Versions/latest/bin"
 
 export LANG="en_US.UTF-8"
 
