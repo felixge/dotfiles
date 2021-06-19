@@ -1,2 +1,3 @@
 .git
 .gitignore
+/vim/.config/nvim/plugged
