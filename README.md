@@ -4,8 +4,8 @@ These are my dotfiles. I don't recommend you to use them as-is, but rather to se
 
 ```
 # initial installation
-git clone ...
+git clone https://github.com/felixge/dotfiles.git ~/dotfiles
 
-# update symlinks (needed if new files are added)
-stow *
+# install/update dotfiles after adding a new file
+make
 ```
