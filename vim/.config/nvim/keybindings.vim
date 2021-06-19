@@ -84,7 +84,7 @@ nnoremap [c <cmd>lua vim.lsp.diagnostic.goto_prev()<CR>
 nnoremap ]c <cmd>lua vim.lsp.diagnostic.goto_next()<CR>
 
 " Telescope
-nnoremap <leader>V <cmd>lua require('telescope.builtin').find_files{search_dirs={'~/dotfiles'}, hidden = true}<cr>
+nnoremap <leader>V <cmd>lua require('telescope.builtin').find_files{search_dirs={'~/dotfiles/vim'}, hidden = true}<cr>
 nnoremap <leader>p <cmd>Telescope find_files<cr>
 nnoremap <leader>D <cmd>Telescope lsp_workspace_diagnostics<cr>
 nnoremap <leader>d <cmd>Telescope lsp_document_diagnostics<cr>
