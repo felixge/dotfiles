@@ -1,0 +1,85 @@
+snippet u
+	var util = require('util');
+snippet EE
+	var EventEmitter = require('events').EventEmitter;
+snippet S
+	var Stream = require('stream').Stream;
+snippet s
+	var self = this;
+snippet v
+	var ${1:variable} = ${2:value};
+snippet ie
+	if (err) {
+		cb(err);
+		return;
+	}
+snippet ui
+	util.inherits(${1:Class}, ${2:ParentClass});
+snippet r
+	var ${1:var} = require('${2:module}')${3};
+snippet si
+	setInterval(function() {
+		${2}
+	}, ${1:interval});
+snippet st
+	setTimeout(function() {
+		${2}
+	}, ${1:duration});
+snippet me
+	var exports = module.exports = function ${1:functionName}() {
+		${2}
+	};
+snippet mc
+	var exports = module.exports = function create${1:Class}() {
+		return new $1();
+	};
+
+	exports.$1 = $1;
+	function $1() {
+	}
+snippet cl
+	module.exports = $1;
+	function ${1:Class}() {
+	}
+snippet p
+	${1:Class}.prototype.${2:method} = function(${3}) {
+	${4}
+	};
+snippet cm
+	${1:Class}.${2:method} = function(${3}) {
+	${4}
+	};
+snippet f
+	function(${1}) {
+	${2}
+	}
+snippet ae
+	assert.equal(${1:val}, ${2:expected});
+snippet as
+	assert.strictEqual(${1:val}, ${2:expected});
+snippet ad
+	assert.deepEqual(${1:val}, ${2:expected});
+snippet ao
+	assert.ok(${1:val});
+snippet at
+	assert.throws(function() {
+		${1}
+	});
+snippet if
+	if (${1:condition}) {
+	${2}
+	}
+snippet fi
+	for (var ${1:i} = 0; $1 < ${2:array}.length; $1++) {
+		var ${3:item} = $2[$1];
+		${4}
+	}
+snippet fk
+	for (var ${1:key} in ${2:object}) {
+		var ${3:value} = $2[$1];
+		${4}
+	}
+snippet c
+	console.log(${1:var});
+snippet ce
+	console.error(${1:var});
