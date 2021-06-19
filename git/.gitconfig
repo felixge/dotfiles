@@ -1,0 +1,44 @@
+[user]
+  name = Felix Geisendörfer
+  email = felix@felixge.de
+[alias]
+  ci = commit
+  cp = cherry-pick
+  st = status
+  co = checkout
+  up = pull --rebase
+  sup =! git stash && git up && git stash apply
+  lg = log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+  l = log --pretty='format:%C(yellow)%h %Cblue%>(12)%ad %Cgreen%<(7)%aN%Cred %Creset%s'
+  top = shortlog -ns --no-merges
+  kdiff = difftool --no-symlinks --dir-diff
+[branch]
+  sort = -committerdate
+[rerere]
+  enabled = 1
+[core]
+  excludesfile = ~/.gitignore
+[push]
+  default = current
+[commit]
+  verbose = true
+[diff]
+  tool = kitty
+  guitool = kitty.gui
+[difftool]
+  prompt = false
+  trustExitCode = true
+[difftool "kitty"]
+  cmd = kitty +kitten diff $LOCAL $REMOTE
+[difftool "kitty.gui"]
+  cmd = kitty kitty +kitten diff $LOCAL $REMOTE
+[log]
+  date = iso
+[include]
+  path = .gitconfig.secret
+[http]
+  cookiefile = /Users/felix.geisendoerfer/.gitcookies
+[init]
+  defaultBranch = main
+[credential]
+  helper = osxkeychain

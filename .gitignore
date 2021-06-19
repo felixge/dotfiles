@@ -1,3 +1,7 @@
-.git
-.gitignore
+# hide these from rg/telescope/etc.
+/.git
+/.gitignore
 /vim/.config/nvim/plugged
+
+# don't check in secret git config files
+/git/.gitconfig.*
