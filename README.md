@@ -9,3 +9,13 @@ git clone https://github.com/felixge/dotfiles.git ~/dotfiles
 # install/update dotfiles after adding a new file
 make
 ```
+
+## Manual Config
+
+I'll try to document important configurations changes that I have not automated yet below:
+
+## Add kitty to Security & Privacy Developer Tools
+
+![](./kitty-dev-tools.png)
+
+This avoids [potential delays](https://sigpipe.macromates.com/2020/macos-catalina-slow-by-design/) due to macOS trying to do notarization.
