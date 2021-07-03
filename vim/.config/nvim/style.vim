@@ -15,6 +15,13 @@ set number
 " highlight search results
 set hlsearch
 
+" disable signs column (for vim-gutter)
+set scl=no
+" use line high-lighting
+let g:gitgutter_highlight_linenrs=1
+" update on file save
+autocmd BufWritePost * GitGutter
+
 " airline
 let g:airline_theme='light'
 let g:airline_powerline_fonts = 1

@@ -14,9 +14,10 @@ Plug 'nvim-telescope/telescope.nvim'
 Plug 'nvim-telescope/telescope-fzy-native.nvim'
 " ripgrep
 Plug 'jremmen/vim-ripgrep'
-" git plugin
+" git plugins
 Plug 'tpope/vim-fugitive'
 Plug 'tpope/vim-rhubarb'
+Plug 'airblade/vim-gitgutter'
 " vim surround
 Plug 'tpope/vim-surround'
 " comment

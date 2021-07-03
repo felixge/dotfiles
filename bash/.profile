@@ -47,3 +47,11 @@ cl() {
   path=$(command cl -dir "$GOPATH/src" "$1")
   cd "$path"
 }
+
+until_fail() {
+  local i=0
+  while $@; do
+    echo "attempt $i did not fail, running again"
+    let "i+=1"
+  done
+}
