@@ -4,7 +4,7 @@ let mapleader = " "
 " clear search results when hitting space
 nmap <silent> <Space> :nohlsearch<Bar>:echo<CR>
 " copy path to current buffer into clipboard
-nmap <leader><space> :!echo -n % \| pbcopy<CR><CR>
+nmap <leader>p :!echo -n % \| pbcopy<CR><CR>
 " toggle tagbar
 nmap <Leader>t :TagbarToggle<CR>
 " close quickfix window
@@ -33,9 +33,9 @@ au FileType asm set expandtab
   "nmap <A-{> :-tabmove<CR>
 "else
 " alt+t
-nmap ˇ :tab split<CR>
+"nmap ˇ :tab split<CR>
 " alt+T
-nmap † :tabnew<CR>
+nmap † :tab split<CR>
 " alt+w
 nmap ∑ :tabclose<CR>
 " alt+[
@@ -75,7 +75,7 @@ nnoremap ]c <cmd>lua vim.lsp.diagnostic.goto_next()<CR>
 
 " Telescope
 nnoremap <leader>V <cmd>lua require('telescope.builtin').find_files{cwd='~/dotfiles/vim/.config/nvim', hidden = true, prompt_title = "vim config"}<cr>
-nnoremap <leader><leader> <cmd>Telescope find_files<cr>
+nnoremap <leader><space> <cmd>Telescope find_files<cr>
 nnoremap <leader>D <cmd>Telescope lsp_workspace_diagnostics<cr>
 nnoremap <leader>d <cmd>Telescope lsp_document_diagnostics<cr>
 nnoremap <leader>S <cmd>Telescope lsp_dynamic_workspace_symbols<cr>
