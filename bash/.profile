@@ -36,6 +36,9 @@ alias typora="open -a typora"
 # rust
 source "$HOME/.cargo/env"
 
+# ssh into current directory mounted into the linux vm
+alias vm="ssh vm \"bash -c 'cd \"$(pwd)\" && bash -il'\""
+
 # fzf key bindings
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
 
