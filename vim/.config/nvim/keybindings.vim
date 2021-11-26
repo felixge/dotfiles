@@ -27,27 +27,26 @@ nnoremap <Leader>f :NERDTreeFind<CR>
 " jump to current location list entry (errror)
 nmap <Leader>e :ll<CR>
 au FileType asm set expandtab
-  "nmap <A-t> :tab split<CR>
-  "nmap <A-w> :tabclose<CR>
-  "nmap <A-[> :tabprev<CR>
-  "nmap <A-]> :tabnext<CR>
-  "nmap <A-}> :+tabmove<CR>
-  "nmap <A-{> :-tabmove<CR>
-"else
-" alt+t
-"nmap ˇ :tab split<CR>
-" alt+T
+
+" tab controls (linux, macos)
+nmap <A-t> :tab split<CR>
 nmap † :tab split<CR>
-" alt+w
+
+nmap <A-w> :tabclose<CR>
 nmap ∑ :tabclose<CR>
-" alt+[
+
+nmap <A-[> :tabprev<CR>
 nmap “ :tabprev<CR>
-" alt+]
+
+nmap <A-]> :tabnext<CR>
 nmap ‘ :tabnext<CR>
-" alt+shift+[
+
+nmap <A-}> :+tabmove<CR>
 nmap ’ :+tabmove<CR>
-" alt+shift+]
+
+nmap <A-{> :-tabmove<CR>
 nmap ” :-tabmove<CR>
+
 " typing % in select mode while using snipMate is interpreted as a movement
 " comment in neovim rather than inserting the % character. This fixes it.
 " For some reason it only works with the VimEnter auto command.
