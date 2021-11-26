@@ -1,5 +1,7 @@
 # Go bin path
 export PATH="$PATH:$HOME/go/bin"
+# Go path
+export GOPATH="$HOME/go"
 # Tell go to not cache my tests, it's annoying!
 export GOFLAGS="-count=1"
 # Local go compiled from source

@@ -34,7 +34,7 @@ alias typora="open -a typora"
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
 
 # rust
-source "$HOME/.cargo/env"
+[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
 
 # ssh into current directory mounted into the linux vm
 alias vm="ssh -tt vm \"bash -c 'cd \"$(pwd)\" && bash -il'\""
