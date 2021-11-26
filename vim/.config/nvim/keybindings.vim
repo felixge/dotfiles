@@ -5,6 +5,8 @@ let mapleader = " "
 nmap <silent> <Space> :nohlsearch<Bar>:echo<CR>
 " copy path to current buffer into clipboard
 nmap <leader>p :!echo -n % \| pbcopy<CR><CR>
+" https://stackoverflow.com/questions/17498144/yank-file-path-with-line-no-from-vim-to-system-clipboard
+nmap <leader>l :let @+=expand("%") . ':' . line(".")<CR>
 " toggle tagbar
 nmap <Leader>t :TagbarToggle<CR>
 " close quickfix window
@@ -69,7 +71,6 @@ nnoremap lw <cmd>lua vim.lsp.buf.workspace_symbol()<CR>
 nnoremap lb <cmd>lua vim.lsp.buf.document_symbol()<CR>
 nnoremap <S-k> <cmd>lua vim.lsp.buf.hover()<CR>
 nnoremap <A-k> <cmd>lua vim.lsp.buf.signature_help()<CR>
-inoremap <A-k> <cmd>lua vim.lsp.buf.signature_help()<CR>
 nnoremap [c <cmd>lua vim.lsp.diagnostic.goto_prev()<CR>
 nnoremap ]c <cmd>lua vim.lsp.diagnostic.goto_next()<CR>
 
@@ -87,8 +88,8 @@ nnoremap <leader>k <cmd>Telescope keymaps<cr>
 "nnoremap <leader>fh <cmd>Telescope help_tags<cr>
 "nnoremap <leader>fo <cmd>Telescope oldfiles<cr>
 
-" Edit File
-nnoremap E :e<cr>
+" Reload File
+nnoremap R :e<cr>
 
 " Git Gutter
 nnoremap ]h <cmd>GitGutterNextHunk<cr>
@@ -100,3 +101,13 @@ nnoremap hs <cmd>GitGutterStageHunk<cr><cmd>e<cr>
 " hunk (s)undo
 nnoremap hu <cmd>GitGutterUndoHunk<cr><cmd>e<cr>
 nnoremap hh <cmd>GitGutterQuickFix<cr><cmd>cc 1<cr><cmd>e<cr>
+
+" Automatic undo breakpoints
+" see https://twitter.com/0merxx/status/1421783803442434049?s=20
+inoremap , ,<c-g>u
+inoremap . .<c-g>u
+inoremap ! !<c-g>u
+inoremap ? ?<c-g>u
+
+" terminal escape
+tnoremap <Esc> <C-\><C-n>

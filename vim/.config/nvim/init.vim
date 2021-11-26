@@ -4,3 +4,5 @@ runtime general.vim
 runtime style.vim
 runtime keybindings.vim
 runtime go.vim
+runtime typescript.vim
+runtime debugging.vim

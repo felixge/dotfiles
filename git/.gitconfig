@@ -2,6 +2,7 @@
   name = Felix Geisendörfer
   email = felix@felixge.de
 [alias]
+  hack = commit -a -m "hack"
   ci = commit
   cp = cherry-pick
   st = status

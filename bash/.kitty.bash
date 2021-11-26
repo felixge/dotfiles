@@ -7,4 +7,5 @@ if [[ "$TERM" == 'xterm-kitty' ]]; then
   alias pcat="open -a Preview.app -f"
   alias pdot="dot -Tpdf | pcat"
   alias ssh='kitty +kitten ssh'
+  alias tab='kitty @ set-tab-title'
 fi

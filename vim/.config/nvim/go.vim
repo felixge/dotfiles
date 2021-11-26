@@ -19,11 +19,16 @@ lspconfig.gopls.setup {
   capabilities = capabilities,
   settings = {
     gopls = {
+      codelenses = {
+        gc_details = true, -- TODO: make this work
+      },
       analyses = {
         unusedparams = true,
       },
+      usePlaceholders = true,
       staticcheck = true,
       experimentalPostfixCompletions = true,
+      -- experimentalWorkspaceModule = true,
     },
   },
   on_attach = on_attach,
