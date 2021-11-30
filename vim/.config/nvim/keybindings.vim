@@ -4,9 +4,9 @@ let mapleader = " "
 " clear search results when hitting space
 nmap <silent> <Space> :nohlsearch<Bar>:echo<CR>
 " copy path to current buffer into clipboard
-nmap <leader>p :!echo -n % \| pbcopy<CR><CR>
+nmap <leader>p :let @+=expand("%:p")<CR>
 " https://stackoverflow.com/questions/17498144/yank-file-path-with-line-no-from-vim-to-system-clipboard
-nmap <leader>l :let @+=expand("%") . ':' . line(".")<CR>
+nmap <leader>l :let @+=expand("%:p") . ':' . line(".")<CR>
 " toggle tagbar
 nmap <Leader>t :TagbarToggle<CR>
 " close quickfix window

@@ -1,6 +1,9 @@
 # directory that includes this file
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
+# cd into most recent directory (see prompt.bash)
+[ -f /tmp/whereami ] && cd $(cat /tmp/whereami)
+
 # Anything that's not core bash config or has more than 3 lines of config gets
 # its own file.
 source "${CWD}/.git.bash"

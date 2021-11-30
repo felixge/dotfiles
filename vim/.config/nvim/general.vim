@@ -1,6 +1,6 @@
 " == GENERAL
-" use system clipboard
-set clipboard+=unnamed
+" use system clipboard, see https://stackoverflow.com/a/30691754/62383
+set clipboard^=unnamed,unnamedplus
 " make vim behave like vim, not vi
 set nocompatible
 " recognize file types and set indent mode accordingly

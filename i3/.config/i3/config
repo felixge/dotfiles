@@ -15,6 +15,9 @@ set $mod Mod1
 # is used in the bar {} block below.
 font pango:monospace 8
 
+# border/background/text color for active window
+client.focused          #ff0000 #ff0000 #ffffff
+
 # This font is widely installed, provides lots of unicode glyphs, right-to-left
 # text rendering and scalability on retina/hidpi displays (thanks to pango).
 #font pango:DejaVu Sans Mono 8
