@@ -55,6 +55,8 @@ au BufEnter * set listchars=tab:▸\ ,eol:¬
 " use new snipmate parser, don't warn about it
 let g:snipMate = { 'snippet_version' : 1 }
 
+let g:vsnip_snippet_dir = "~/.config/nvim/vsnips"
+
 " telescope
 lua << EOF
 require('telescope').load_extension('fzy_native')
