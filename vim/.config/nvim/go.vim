@@ -24,11 +24,13 @@ lspconfig.gopls.setup {
       },
       analyses = {
         unusedparams = true,
+        -- see https://staticcheck.io/docs/checks
+        QF1008 = false,
       },
       usePlaceholders = true,
       staticcheck = true,
       experimentalPostfixCompletions = true,
-      -- experimentalWorkspaceModule = true,
+      experimentalWorkspaceModule = false,
     },
   },
   on_attach = on_attach,

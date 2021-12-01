@@ -30,6 +30,12 @@ let g:airline_powerline_fonts = 1
 lua require'nvim-treesitter.configs'.setup { highlight = { enable = true } }
 
 lua << EOF
+vim.diagnostic.config({
+    float = {
+        source = 'always',
+    },
+})
+
 vim.fn.sign_define("LspDiagnosticsSignError", {text = "", numhl = "LspDiagnosticsDefaultError"})
 vim.fn.sign_define("LspDiagnosticsSignWarning", {text = "", numhl = "LspDiagnosticsDefaultWarning"})
 vim.fn.sign_define("LspDiagnosticsSignInformation", {text = "", numhl = "LspDiagnosticsDefaultInformation"})

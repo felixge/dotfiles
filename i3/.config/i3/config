@@ -15,6 +15,8 @@ set $mod Mod1
 # is used in the bar {} block below.
 font pango:monospace 8
 
+focus_follows_mouse no
+
 # border/background/text color for active window
 client.focused          #ff0000 #ff0000 #ffffff
 
