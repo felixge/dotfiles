@@ -12,6 +12,19 @@ local on_attach = function(client, bufnr)
   local function buf_set_option(...) vim.api.nvim_buf_set_option(bufnr, ...) end
 
   buf_set_option('omnifunc', 'v:lua.vim.lsp.omnifunc')
+
+  if client.resolved_capabilities.code_lens then
+    vim.lsp.codelens.refresh()
+    vim.api.nvim_exec(
+      [[
+      augroup lsp_code_lens_refresh
+        autocmd! * <buffer>
+        autocmd BufEnter,CursorHold,InsertLeave <buffer> lua vim.lsp.codelens.refresh()
+      augroup END
+    ]],
+      false
+    )
+  end
 end
 
 lspconfig = require "lspconfig"
@@ -20,7 +33,8 @@ lspconfig.gopls.setup {
   settings = {
     gopls = {
       codelenses = {
-        gc_details = true, -- TODO: make this work
+        gc_details = true,
+        -- test = true, TODO: not working yet
       },
       analyses = {
         unusedparams = true,
@@ -61,6 +75,8 @@ end
 EOF
 
 autocmd BufWritePre *.go lua go_organize_imports_sync(1000)
+" autocmd BufEnter *.go lua codelens()
+"autocmd BufEnter,CursorHold,InsertLeave *.go silent! lua vim.lsp.codelens.refresh()
 
 augroup ft_golang
   au!
