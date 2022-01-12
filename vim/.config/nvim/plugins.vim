@@ -8,17 +8,29 @@ endif
 call plug#begin()
 " lsp / auto-complete
 Plug 'neovim/nvim-lspconfig'
-"Plug 'nvim-lua/completion-nvim'
-Plug 'hrsh7th/nvim-compe'
+Plug 'hrsh7th/nvim-cmp'
+Plug 'hrsh7th/cmp-nvim-lsp'
+Plug 'hrsh7th/cmp-buffer'
+Plug 'hrsh7th/cmp-path'
+Plug 'hrsh7th/cmp-cmdline'
+Plug 'hrsh7th/nvim-cmp'
+
+" highlight interesting words
+Plug 'mrnugget/vim-interestingwords'
+
 " debugging
 Plug 'mfussenegger/nvim-dap'
 Plug 'rcarriga/nvim-dap-ui'
 " snippets
+Plug 'hrsh7th/cmp-vsnip'
 Plug 'hrsh7th/vim-vsnip'
-Plug 'hrsh7th/vim-vsnip-integ'
 Plug 'golang/vscode-go'
-" theme
+" rust
+Plug 'simrat39/rust-tools.nvim'
+" themes
 Plug 'felixge/summerfruit256.vim', {}
+Plug 'sonph/onehalf', { 'rtp': 'vim' }
+Plug 'ayu-theme/ayu-vim'
 " nerdtree
 Plug 'preservim/nerdtree'
 " telescope & deps

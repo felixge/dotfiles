@@ -30,6 +30,7 @@ end
 lspconfig = require "lspconfig"
 lspconfig.gopls.setup {
   capabilities = capabilities,
+  cmd = {"gopls", "serve", "--debug=localhost:6060"},
   settings = {
     gopls = {
       codelenses = {

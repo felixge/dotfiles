@@ -2,7 +2,17 @@
 " enable syntax highlighting
 syntax on
 " use colorscheme
-colorscheme summerfruit256
+"colorscheme summerfruit256
+set t_Co=256
+set cursorline
+colorscheme onehalflight
+let g:airline_theme='onehalfdark'
+
+
+set termguicolors     " enable true colors support
+let ayucolor="light"  " for light version of theme
+colorscheme ayu
+
 " tell theme we're using a light background
 set background=light
 " highlight active line
