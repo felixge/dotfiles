@@ -83,6 +83,10 @@ nnoremap <leader>S <cmd>Telescope lsp_dynamic_workspace_symbols<cr>
 nnoremap <leader>s <cmd>Telescope lsp_document_symbols<cr>
 nnoremap <leader>m <cmd>Telescope marks<cr>
 nnoremap <leader>k <cmd>Telescope keymaps<cr>
+nnoremap <leader>t <cmd>Telescope<cr>
+nnoremap <leader>q <cmd>Telescope quickfix<cr>
+nnoremap <leader>d  <cmd>Telescope git_status<cr>
+nnoremap <leader>b  <cmd>Telescope buffers<cr>
 "nnoremap <leader>fg <cmd>Telescope live_grep<cr>
 "nnoremap <leader>fb <cmd>Telescope buffers<cr>
 "nnoremap <leader>fh <cmd>Telescope help_tags<cr>
