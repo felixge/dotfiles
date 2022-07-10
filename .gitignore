@@ -1,7 +1,8 @@
 # hide these from rg/telescope/etc.
 /.git
 /.gitignore
-/vim/.config/nvim/plugged
+/vim/.config*/nvim/plugged
+/vim/.config*/nvim/plugin/packer_compiled.lua
 
 # don't check in secret git config files
 /git/.gitconfig.*

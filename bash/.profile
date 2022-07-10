@@ -61,3 +61,6 @@ until_fail() {
     let "i+=1"
   done
 }
+
+# auto complete
+eval "$(starship init bash)"
