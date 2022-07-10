@@ -64,6 +64,7 @@ nnoremap gt <cmd>lua vim.lsp.buf.type_definition()<CR>
 nnoremap <Leader>a <cmd>lua vim.lsp.buf.code_action()<CR>
 nnoremap lc <cmd>lua vim.lsp.buf.incoming_calls()<CR>
 nnoremap lr <cmd>lua vim.lsp.buf.references()<CR>
+nnoremap ld <cmd>lua vim.lsp.diagnostic.show_position_diagnostics()<CR>
 nnoremap ll <cmd>lua vim.lsp.codelens.run()<CR>
 nnoremap lo <cmd>lua vim.lsp.buf.outgoing_calls()<CR>
 nnoremap li <cmd>lua vim.lsp.buf.implementation()<CR>
