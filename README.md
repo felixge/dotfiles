@@ -4,7 +4,7 @@ These are my dotfiles. I don't recommend you to use them as-is, but rather to se
 
 ```
 # macOS pre-requisites
-brew install stow direnv
+brew install stow direnv fasd
 chsh -s /bin/bash # set login shell to bash
 
 # initial installation
