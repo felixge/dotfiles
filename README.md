@@ -3,33 +3,25 @@
 These are my dotfiles. I don't recommend you to use them as-is, but rather to serve as an inspiration for your own configurations.
 
 ```
-# install stow
-brew install stow # macos
+# macOS pre-requisites
+brew install stow direnv
+chsh -s /bin/bash # set login shell to bash
 
 # initial installation
 git clone https://github.com/felixge/dotfiles.git ~/dotfiles
 
 # install/update dotfiles after adding a new file
 make
+
+# add packer for vim, then run :PackerSync in vim
+git clone --depth 1 https://github.com/wbthomason/packer.nvim ~/.local/share/nvim/site/pack/packer/start/packer.nvim
+
 ```
 
 ## Manual Config
 
 I'll try to document important configurations changes that I have not automated yet below:
 
-## Set login shell to bash
-
-```
-chsh -s /bin/bash
-```
-
-## Initial vim setup
-
-```
-# install packer for vim
-git clone --depth 1 https://github.com/wbthomason/packer.nvim ~/.local/share/nvim/site/pack/packer/start/packer.nvim
-
-# in vim run :PackerSync
 ```
 
 ## Add kitty to Security & Privacy Developer Tools
