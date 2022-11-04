@@ -23,7 +23,7 @@ I'll try to document important configurations changes that I have not automated 
 # install packer for vim
 git clone --depth 1 https://github.com/wbthomason/packer.nvim ~/.local/share/nvim/site/pack/packer/start/packer.nvim
 
-# in vim run :PackerSycner
+# in vim run :PackerSync
 ```
 
 ## Add kitty to Security & Privacy Developer Tools
