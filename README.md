@@ -17,6 +17,12 @@ make
 
 I'll try to document important configurations changes that I have not automated yet below:
 
+## Set login shell to bash
+
+```
+chsh -s /bin/bash
+```
+
 ## Initial vim setup
 
 ```
