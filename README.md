@@ -3,6 +3,9 @@
 These are my dotfiles. I don't recommend you to use them as-is, but rather to serve as an inspiration for your own configurations.
 
 ```
+# install stow
+brew install stow # macos
+
 # initial installation
 git clone https://github.com/felixge/dotfiles.git ~/dotfiles
 
