@@ -22,8 +22,6 @@ git clone --depth 1 https://github.com/wbthomason/packer.nvim ~/.local/share/nvi
 
 I'll try to document important configurations changes that I have not automated yet below:
 
-```
-
 ## Add kitty to Security & Privacy Developer Tools
 
 ![](./kitty-dev-tools.png)
