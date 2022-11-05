@@ -19,8 +19,7 @@
   enabled = 1
 [core]
   excludesfile = ~/.gitignore
-	pager = diff-so-fancy | less --tabs=4 -RFX
-	hooksPath = /usr/local/dd/global_hooks
+  #pager = diff-so-fancy | less --tabs=4 -RFX
 [push]
   default = current
 [commit]
@@ -46,7 +45,7 @@
 [credential]
   helper = osxkeychain
 [interactive]
-	diffFilter = diff-so-fancy --patch
+  #diffFilter = diff-so-fancy --patch
 [add.interactive]
   useBuiltin = false
 [color "diff"]

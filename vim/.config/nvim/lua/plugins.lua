@@ -8,11 +8,12 @@ return require('packer').startup(function(use)
   use {'jremmen/vim-ripgrep'} -- ripgrep
   use {"tpope/vim-surround"} -- editing pairs of quotes, etc.
   use {
-    -- TODO: switch back to official version once PR is merged:
-    -- https://github.com/nvim-telescope/telescope.nvim/pull/2151
     --'nvim-telescope/telescope.nvim',
     --tag = '0.1.0',
-    '/Users/felix.geisendoerfer/go/src/github.com/nvim-telescope/telescope.nvim',
+    -- TODO: switch back to official version once PR is merged:
+    -- https://github.com/nvim-telescope/telescope.nvim/pull/2151
+    'felixge/telescope.nvim',
+    branch = 'fname_direction',
     requires = { {'nvim-lua/plenary.nvim'} },
   } -- awesome fuzzy finder
   use {'nvim-telescope/telescope-fzf-native.nvim', run = 'cmake -S. -Bbuild -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release && cmake --install build --prefix build' }

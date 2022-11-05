@@ -30,9 +30,6 @@ export PATH="$PATH:$HOME/bin"
 # direnv hook: https://direnv.net/docs/hook.html#bash (MUST BE executed after PROMPT_COMMAND changes above)
 eval "$(direnv hook bash)"
 
-# typora command line alias: https://support.typora.io/Use-Typora-From-Shell-or-cmd/
-alias typora="open -a typora"
-
 # fzf
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
 
@@ -61,6 +58,3 @@ until_fail() {
     let "i+=1"
   done
 }
-
-# auto complete
-eval "$(starship init bash)"
