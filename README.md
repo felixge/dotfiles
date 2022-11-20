@@ -3,12 +3,11 @@
 These are my dotfiles. I don't recommend you to use them as-is, but rather to serve as an inspiration for your own configurations.
 
 ```
-# macOS pre-requisites
-brew install stow direnv fasd ripgrep graphviz protobuf gh cloc fzf
-chsh -s /bin/bash # set login shell to bash
-
 # initial installation
 git clone https://github.com/felixge/dotfiles.git ~/dotfiles
+
+# install dependencies
+ansible-playbook ansible.yml
 
 # install/update dotfiles after adding a new file
 make

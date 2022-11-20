@@ -1,3 +1,5 @@
+vim.cmd("packadd cfilter") -- for filtering quickfix window
+
 local o = {
   clipboard = 'unnamed,unnamedplus', -- use system clipboard, see https://stackoverflow.com/a/30691754/62383
   nocompatible = true, -- behave like vim, not vi

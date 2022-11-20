@@ -1,0 +1,21 @@
+- hosts: localhost
+  tasks:
+  - name: Install packages
+    homebrew:
+      name:
+        - bash
+        - stow
+        - direnv
+        - fasd
+        - ripgrep
+  - name: get bash path
+    command: which bash
+    register: bash_path
+  - name: register shell
+    become: true
+    lineinfile:
+      path: /etc/shells
+      line: "{{ bash_path.stdout }}"
+  - name: change default shell
+    become: true
+    command: chsh -s "{{ bash_path.stdout }}"

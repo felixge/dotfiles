@@ -63,3 +63,10 @@
 	newHighlight = green bold 22
 [color]
 	ui = true
+
+[url "git@github.com:"]
+  insteadOf = git://github
+[url "git@github.com:"]
+    insteadOf = https://github.com/
+#[url "ssh://git@github.com/"]
+    #insteadOf = https://github.com/
