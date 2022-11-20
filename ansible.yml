@@ -3,6 +3,7 @@
   - name: Install packages
     homebrew:
       name:
+        - go
         - bash
         - stow
         - direnv
@@ -24,3 +25,9 @@
   - name: change default shell
     become: true
     command: chsh -s "{{ bash_path.stdout }}"
+  - name: install go packages
+    command: go install "{{ item }}"
+    with_items:
+      - golang.org/x/review/git-codereview@latest
+      - golang.org/x/perf/cmd/benchstat@latest
+
