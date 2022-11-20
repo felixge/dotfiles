@@ -7,7 +7,7 @@ These are my dotfiles. I don't recommend you to use them as-is, but rather to se
 git clone https://github.com/felixge/dotfiles.git ~/dotfiles
 
 # install dependencies
-ansible-playbook ansible.yml
+ansible-playbook ansible.yml --ask-become-pass
 
 # install/update dotfiles after adding a new file
 make

@@ -8,6 +8,11 @@
         - direnv
         - fasd
         - ripgrep
+        - graphviz
+        - protobuf
+        - gh
+        - cloc
+        - fzf
   - name: get bash path
     command: which bash
     register: bash_path
