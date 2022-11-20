@@ -1,6 +1,7 @@
 - hosts: localhost
   tasks:
-  - name: Install packages
+  - name: install homebrew packages
+    tags: [packages]
     homebrew:
       name:
         - go
@@ -14,20 +15,34 @@
         - gh
         - cloc
         - fzf
+  - name: install go packages
+    tags: [packages]
+    command: go install "{{ item }}"
+    with_items:
+      - golang.org/x/review/git-codereview@latest
+      - golang.org/x/perf/cmd/benchstat@latest
+      - github.com/go-delve/delve/cmd/dlv@latest
+
   - name: get bash path
+    tags: [shell]
     command: which bash
     register: bash_path
   - name: register shell
+    tags: [shell]
     become: true
     lineinfile:
       path: /etc/shells
       line: "{{ bash_path.stdout }}"
   - name: change default shell
+    tags: [shell]
     become: true
     command: chsh -s "{{ bash_path.stdout }}"
-  - name: install go packages
-    command: go install "{{ item }}"
-    with_items:
-      - golang.org/x/review/git-codereview@latest
-      - golang.org/x/perf/cmd/benchstat@latest
+  - name: enable touch id in terminal
 
+    tags: [touchid]
+    become: true
+    lineinfile:
+      path: /etc/pam.d/sudo
+      line: auth sufficient pam_tid.so
+      insertafter: '^#'
+      firstmatch: true
