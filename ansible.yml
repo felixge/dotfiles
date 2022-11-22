@@ -1,7 +1,7 @@
 - hosts: localhost
   tasks:
   - name: install homebrew packages
-    tags: [packages]
+    tags: [pkgs]
     homebrew:
       name:
         - go
@@ -15,8 +15,9 @@
         - gh
         - cloc
         - fzf
+        - saulpw/vd/visidata
   - name: install go packages
-    tags: [packages]
+    tags: [gopkgs]
     command: go install "{{ item }}"
     with_items:
       - golang.org/x/review/git-codereview@latest
