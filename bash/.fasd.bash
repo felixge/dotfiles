@@ -4,6 +4,7 @@ then
 
   function j() {
     fasd_cd -d $1
+    tab
   }
   alias jo='fasd -e open -d'
 fi

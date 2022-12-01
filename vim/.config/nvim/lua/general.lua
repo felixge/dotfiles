@@ -14,7 +14,7 @@ local o = {
   cursorline = true, -- highlight current line
   colorcolumn = 80, -- highlight 80 char limit
   completeopt = "menu,menuone,noselect",
-  relativenumber = true, -- relative line numbers
+  relativenumber = false, -- relative line numbers
 
   expandtab = true, -- insert spaces for tabs
   autoindent = true, -- auto indent

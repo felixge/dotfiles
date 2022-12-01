@@ -16,6 +16,7 @@
         - cloc
         - fzf
         - saulpw/vd/visidata
+        - noti
   - name: install go packages
     tags: [gopkgs]
     command: go install "{{ item }}"
