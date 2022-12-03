@@ -17,6 +17,7 @@
         - fzf
         - saulpw/vd/visidata
         - noti
+        - flyctl
   - name: install go packages
     tags: [gopkgs]
     command: go install "{{ item }}"
