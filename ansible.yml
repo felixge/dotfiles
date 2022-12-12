@@ -49,3 +49,6 @@
       line: auth sufficient pam_tid.so
       insertafter: '^#'
       firstmatch: true
+  - name: hide icons from desktop
+    tags: [desktop]
+    shell: "defaults write com.apple.finder CreateDesktop false && killall Finder"
