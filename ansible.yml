@@ -1,7 +1,7 @@
 - hosts: localhost
   tasks:
   - name: install homebrew packages
-    tags: [pkgs]
+    tags: [homebrew]
     homebrew:
       name:
         - go
@@ -20,13 +20,19 @@
         - flyctl
         - sphinx-doc
   - name: install go packages
-    tags: [gopkgs]
+    tags: [goinstall]
     command: go install "{{ item }}"
     with_items:
       - golang.org/x/review/git-codereview@latest
       - golang.org/x/perf/cmd/benchstat@latest
       - github.com/go-delve/delve/cmd/dlv@latest
       - golang.org/x/tools/cmd/go-contrib-init@latest
+  - name: install pip packages
+    tags: [pip]
+    pip:
+      state: latest
+      name:
+        - sphinx
   - name: get bash path
     tags: [shell]
     command: which bash
