@@ -44,6 +44,14 @@ return require('packer').startup(function(use)
     }) end,
   } -- symbol outline
 
+  use {
+    "github/copilot.vim",
+    config = function()
+      -- Disable copilot.vim by default, I'm only enabling it for work where IP doesn't matter.
+      vim.g.copilot_enabled = false
+    end
+  }
+
   -- color schemes
   --use {'tjdevries/colorbuddy.vim'}
   --use {'Th3Whit3Wolf/onebuddy'}

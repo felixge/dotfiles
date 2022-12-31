@@ -8,7 +8,6 @@ local o = {
   title = true, -- set title in shell
   t_Co = 256, -- lots of colors
   termguicolors = true, -- colors
-  cursorline = true, -- line
   background = 'light', -- light colors
   number = true, -- line numbers
   cursorline = true, -- highlight current line

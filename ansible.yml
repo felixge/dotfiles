@@ -1,7 +1,7 @@
 - hosts: localhost
   tasks:
   - name: install homebrew packages
-    tags: [homebrew]
+    tags: [brew]
     homebrew:
       name:
         - go
@@ -18,7 +18,8 @@
         - saulpw/vd/visidata
         - noti
         - flyctl
-        - sphinx-doc
+        - pandoc
+        - node
   - name: install go packages
     tags: [goinstall]
     command: go install "{{ item }}"
@@ -33,6 +34,9 @@
       state: latest
       name:
         - sphinx
+        - sphinx-rtd-theme
+        - sphinx-autobuild
+        - sphinxemoji
   - name: get bash path
     tags: [shell]
     command: which bash
