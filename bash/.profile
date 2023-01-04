@@ -34,8 +34,7 @@ eval "$(direnv hook bash)"
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
 
 # rust
-[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
-
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 # ssh into current directory mounted into the linux vm
 alias vm="ssh -tt vm \"bash -c 'cd \"$(pwd)\" && bash -il'\""
 

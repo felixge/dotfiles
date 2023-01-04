@@ -37,6 +37,14 @@
         - sphinx-rtd-theme
         - sphinx-autobuild
         - sphinxemoji
+  - name: install rust
+    tags: [rust]
+    shell: curl https://sh.rustup.rs -sSf | sh -s -- -y
+  - name: install cargo packages
+    tags: [cargo]
+    community.general.cargo:
+      name:
+        - samply # macos profiler
   - name: get bash path
     tags: [shell]
     command: which bash
@@ -52,7 +60,6 @@
     become: true
     command: chsh -s "{{ bash_path.stdout }}"
   - name: enable touch id in terminal
-
     tags: [touchid]
     become: true
     lineinfile:
