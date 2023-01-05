@@ -1,3 +1,5 @@
+# This ansible playbook configures remote ubuntu 22.04 machines on AWS as basic
+# development machines. I mostly develop on macOS, but some stuff needs linux.
 - hosts: all
   vars:
       go_path: '~/src/github.com/golang/go'
