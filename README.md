@@ -26,3 +26,10 @@ I'll try to document important configurations changes that I have not automated 
 ![](./kitty-dev-tools.png)
 
 This avoids [potential delays](https://sigpipe.macromates.com/2020/macos-catalina-slow-by-design/) due to macOS trying to do notarization.
+
+## Cloud Machines
+
+```
+# run ansible against cloud machine
+ansible-playbook -i 'HOST,' ansible-ubuntu.yml --tags ...
+```

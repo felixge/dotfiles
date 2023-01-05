@@ -1,0 +1,53 @@
+- hosts: all
+  vars:
+      go_path: '~/src/github.com/golang/go'
+      go_version: go1.19.4
+
+  tasks:
+  - name: update apt
+    tags: [apt]
+    become: true
+    apt:
+      update_cache: yes
+      cache_valid_time: 3600
+  - name: add neovim apt repo
+    tags: [apt]
+    become: true
+    apt_repository:
+      repo: ppa:neovim-ppa/unstable
+  - name: install apt packages
+    tags: [apt]
+    become: true
+    apt:
+      pkg:
+      - golang-go # bootstrap Go, other versions are installed below
+      - atop # great overall system monitoring tool
+      - ripgrep # fast search
+      - neovim # good editor
+
+  - name: "add ~/go/bin to PATH"
+    tags: [path]
+    lineinfile:
+      insertbefore: BOF
+      path: '~/.bashrc'
+      line: 'PATH="$PATH:/home/ubuntu/go/bin"'
+      regexp: 'go/bin'
+
+  - name: install {{ go_version }}
+    tags: [go]
+    shell: 'go install golang.org/dl/{{ go_version }}@latest && {{ go_version }} download'
+    args:
+      executable: /bin/bash
+
+  - name: clone go repo
+    tags: [gosrc]
+    git:
+      repo: 'https://github.com/golang/go.git'
+      dest: '{{ go_path }}'
+      update: false
+  - name: build latest go version
+    tags: [gosrc]
+    shell: './make.bash'
+    args:
+      chdir: '{{ go_path }}/src'
+
