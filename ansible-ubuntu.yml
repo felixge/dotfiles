@@ -24,20 +24,55 @@
       - atop # great overall system monitoring tool
       - ripgrep # fast search
       - neovim # good editor
+      - unzip # decompression
+      - make # build system
+      - linux-tools-common # linux perf
+      - linux-tools-aws # linux perf
 
-  - name: "add ~/go/bin to PATH"
-    tags: [path]
-    lineinfile:
+  - name: Create nvim config directory
+    tags: [nvim]
+    file:
+      path: '~/.config/nvim/'
+      state: directory
+  - name: Create nvim config
+    tags: [nvim]
+    copy:
+      src: 'nvim-ubuntu/init.lua'
+      dest: '~/.config/nvim/init.lua'
+
+  - name: Configure bashrc
+    tags: [bashrc]
+    blockinfile:
       insertbefore: BOF
       path: '~/.bashrc'
-      line: 'PATH="$PATH:/home/ubuntu/go/bin"'
-      regexp: 'go/bin'
+      block: |
+        export EDITOR="$(which nvim)"
+        PATH="$PATH:/home/ubuntu/go/bin"
+        alias vim="$(which nvim)"
+
+        cl() {
+          cloned=$(command cl -dir "$HOME/src" "$1")
+          cd "$cloned"
+        }
+
+  - name: Disable NMI watchdog (so perf stat can report branch misses)
+    tags: [nmi]
+    become: true
+    shell: 'echo 0 > /proc/sys/kernel/nmi_watchdog'
 
   - name: install {{ go_version }}
     tags: [go]
     shell: 'go install golang.org/dl/{{ go_version }}@latest && {{ go_version }} download'
     args:
       executable: /bin/bash
+
+  - name: install go packages
+    tags: [goinstall]
+    command: "{{ go_version }} install {{ item }}"
+    with_items:
+      - golang.org/x/perf/cmd/benchstat@latest
+      - github.com/go-delve/delve/cmd/dlv@latest
+      - github.com/felixge/cl@latest
 
   - name: clone go repo
     tags: [gosrc]
@@ -50,4 +85,3 @@
     shell: './make.bash'
     args:
       chdir: '{{ go_path }}/src'
-
