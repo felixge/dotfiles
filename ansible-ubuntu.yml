@@ -30,6 +30,8 @@
       - make # build system
       - linux-tools-common # linux perf
       - linux-tools-aws # linux perf
+      - graphviz # visualize graphs, needed for pprof
+      - bpftrace # dtrace is dead, long live dtrace
 
   - name: Create nvim config directory
     tags: [nvim]

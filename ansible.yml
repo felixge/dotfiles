@@ -4,22 +4,23 @@
     tags: [brew]
     homebrew:
       name:
-        - go
-        - bash
-        - stow
-        - direnv
-        - fasd
-        - ripgrep
-        - graphviz
-        - protobuf
-        - gh
-        - cloc
-        - fzf
-        - saulpw/vd/visidata
-        - noti
-        - flyctl
-        - pandoc
-        - node
+        - bash # my shell
+        - cloc # count lines of code
+        - direnv # auto-env variables per directory
+        - fasd # quick directory navigation
+        - flyctl # the new heroku
+        - fzf # fuzzy finding
+        - gh # github cli
+        - go # go programming language
+        - graphviz # visualize graphs
+        - hugo # static site generator
+        - node # node.js
+        - noti # cli notifications
+        - pandoc # document converter
+        - protobuf # questionable encoding format
+        - ripgrep # fast grep
+        - saulpw/vd/visidata # tabular data explorer
+        - stow # dotfile manager
   - name: install go packages
     tags: [goinstall]
     command: go install "{{ item }}"
