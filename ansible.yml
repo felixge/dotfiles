@@ -6,29 +6,48 @@
       name:
         - bash # my shell
         - cloc # count lines of code
+        - colima # container runtime
         - direnv # auto-env variables per directory
+        - docker # container runtime
         - fasd # quick directory navigation
+        - ffmpeg # video conversion
         - flyctl # the new heroku
         - fzf # fuzzy finding
         - gh # github cli
         - go # go programming language
         - graphviz # visualize graphs
         - hugo # static site generator
+        - imagemagick # image editing
+        - maven # also installs java
+        - mutagen-io/mutagen/mutagen # fast remote file sync
         - node # node.js
+        - nodenv # pin node version for project
         - noti # cli notifications
         - pandoc # document converter
         - protobuf # questionable encoding format
         - ripgrep # fast grep
         - saulpw/vd/visidata # tabular data explorer
         - stow # dotfile manager
+
   - name: install go packages
     tags: [goinstall]
     command: go install "{{ item }}"
     with_items:
-      - golang.org/x/review/git-codereview@latest
-      - golang.org/x/perf/cmd/benchstat@latest
-      - github.com/go-delve/delve/cmd/dlv@latest
-      - golang.org/x/tools/cmd/go-contrib-init@latest
+      - github.com/go-delve/delve/cmd/dlv@latest # debugger
+      - github.com/maruel/panicparse/v2@latest # analyze go stack traces
+      - golang.org/x/perf/cmd/benchstat@latest # benchmark analysis
+      - golang.org/x/review/git-codereview@latest # for contributing to go
+      - golang.org/x/tools/cmd/go-contrib-init@latest # for contributing to go
+
+  - name: install npm packages
+    tags: [npm]
+    npm:
+      state: latest
+      global: true
+      name: "{{ item }}"
+    loop:
+       - yarn
+
   - name: install pip packages
     tags: [pip]
     pip:
@@ -38,6 +57,7 @@
         - sphinx-rtd-theme
         - sphinx-autobuild
         - sphinxemoji
+
   - name: install rust
     tags: [rust]
     shell: curl https://sh.rustup.rs -sSf | sh -s -- -y
@@ -46,6 +66,7 @@
     community.general.cargo:
       name:
         - samply # macos profiler
+
   - name: get bash path
     tags: [shell]
     command: which bash
@@ -61,6 +82,7 @@
     become: true
     command: chsh -s "{{ bash_path.stdout }}"
   - name: enable touch id in terminal
+
     tags: [touchid]
     become: true
     lineinfile:
@@ -68,6 +90,7 @@
       line: auth sufficient pam_tid.so
       insertafter: '^#'
       firstmatch: true
+
   - name: hide icons from desktop
     tags: [desktop]
     shell: "defaults write com.apple.finder CreateDesktop false && killall Finder"

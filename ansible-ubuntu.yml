@@ -32,6 +32,7 @@
       - linux-tools-aws # linux perf
       - graphviz # visualize graphs, needed for pprof
       - bpftrace # dtrace is dead, long live dtrace
+      - systemtap # bpftrace's older brother
 
   - name: Create nvim config directory
     tags: [nvim]
