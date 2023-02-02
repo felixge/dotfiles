@@ -24,6 +24,8 @@ return require('packer').startup(function(use)
   } -- auto pairing
   use {'tpope/vim-fugitive'} -- git
   use {'tpope/vim-commentary'} -- comments
+  use {'tpope/vim-rhubarb'} -- GBrowse
+  use {'dylanahsmith/vim-fugitive-googlesource'} -- GBrowse for Go
 
   -- lsp and auto complete stuff
   use {"neovim/nvim-lspconfig"} -- lsp configs

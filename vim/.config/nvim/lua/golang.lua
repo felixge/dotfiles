@@ -38,7 +38,6 @@ lspconfig.gopls.setup {
       usePlaceholders = true,
       staticcheck = true,
       experimentalPostfixCompletions = true,
-      experimentalWorkspaceModule = false,
     },
   },
 }
