@@ -27,6 +27,10 @@ shopt -s extglob
 # custom scripts
 export PATH="$PATH:$HOME/bin"
 
+# java11
+export PATH="/opt/homebrew/opt/openjdk@11/bin:$PATH"
+export CPPFLAGS="-I/opt/homebrew/opt/openjdk@11/include"
+
 # direnv hook: https://direnv.net/docs/hook.html#bash (MUST BE executed after PROMPT_COMMAND changes above)
 eval "$(direnv hook bash)"
 

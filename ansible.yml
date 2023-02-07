@@ -33,6 +33,7 @@
     tags: [goinstall]
     command: go install "{{ item }}"
     with_items:
+      - github.com/boyter/scc/v3@latest # count lines of code
       - github.com/go-delve/delve/cmd/dlv@latest # debugger
       - github.com/maruel/panicparse/v2@latest # analyze go stack traces
       - golang.org/x/perf/cmd/benchstat@latest # benchmark analysis
