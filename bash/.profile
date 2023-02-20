@@ -34,6 +34,9 @@ export CPPFLAGS="-I/opt/homebrew/opt/openjdk@11/include"
 # direnv hook: https://direnv.net/docs/hook.html#bash (MUST BE executed after PROMPT_COMMAND changes above)
 eval "$(direnv hook bash)"
 
+# colima
+export DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock"
+
 # fzf
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
 

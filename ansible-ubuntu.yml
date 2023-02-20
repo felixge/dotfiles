@@ -3,7 +3,7 @@
 - hosts: all
   vars:
       go_path: '~/src/github.com/golang/go'
-      go_version: go1.19.4
+      go_version: go1.20
 
   tasks:
   - name: update apt
@@ -22,17 +22,18 @@
     become: true
     apt:
       pkg:
-      - golang-go # bootstrap Go, other versions are installed below
       - atop # great overall system monitoring tool
-      - ripgrep # fast search
-      - neovim # good editor
-      - unzip # decompression
-      - make # build system
-      - linux-tools-common # linux perf
-      - linux-tools-aws # linux perf
-      - graphviz # visualize graphs, needed for pprof
       - bpftrace # dtrace is dead, long live dtrace
+      - gdb # debugger
+      - golang-go # bootstrap Go, other versions are installed below
+      - graphviz # visualize graphs, needed for pprof
+      - linux-tools-aws # linux perf
+      - linux-tools-common # linux perf
+      - make # build system
+      - neovim # good editor
+      - ripgrep # fast search
       - systemtap # bpftrace's older brother
+      - unzip # decompression
 
   - name: Create nvim config directory
     tags: [nvim]
@@ -64,6 +65,7 @@
     tags: [nmi]
     become: true
     shell: 'echo 0 > /proc/sys/kernel/nmi_watchdog'
+    ignore_errors: yes # only works on bare metal instances
 
   - name: install {{ go_version }}
     tags: [go]
@@ -75,16 +77,21 @@
     tags: [goinstall]
     command: "{{ go_version }} install {{ item }}"
     with_items:
-      - golang.org/x/perf/cmd/benchstat@latest
-      - github.com/go-delve/delve/cmd/dlv@latest
-      - github.com/felixge/cl@latest
+      - github.com/boyter/scc/v3@latest # count lines of code
+      - github.com/felixge/cl@latest # git clone helper
+      - github.com/go-delve/delve/cmd/dlv@latest # debugger
+      - github.com/maruel/panicparse/v2@latest # analyze go stack traces
+      - github.com/x-motemen/gore/cmd/gore@latest # repl
+      - golang.org/x/perf/cmd/benchstat@latest # benchmark analysis
+      - golang.org/x/review/git-codereview@latest # for contributing to go
+      - golang.org/x/tools/cmd/go-contrib-init@latest # for contributing to go
 
   - name: clone go repo
     tags: [gosrc]
     git:
       repo: 'https://github.com/golang/go.git'
       dest: '{{ go_path }}'
-      update: false
+      update: true
   - name: build latest go version
     tags: [gosrc]
     shell: './make.bash'

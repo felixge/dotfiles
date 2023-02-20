@@ -9,6 +9,7 @@
         - colima # container runtime
         - direnv # auto-env variables per directory
         - docker # container runtime
+        - docker-compose # container orchestration
         - fasd # quick directory navigation
         - ffmpeg # video conversion
         - flyctl # the new heroku
@@ -82,8 +83,13 @@
     tags: [shell]
     become: true
     command: chsh -s "{{ bash_path.stdout }}"
-  - name: enable touch id in terminal
 
+  # see https://smallsharpsoftwaretools.com/tutorials/use-colima-to-run-docker-containers-on-macos/
+  - name: setup docker compose
+    tags: [docker]
+    shell: "mkdir -p ~/.docker/cli-plugins && ln -sfn $(brew --prefix)/opt/docker-compose/bin/docker-compose ~/.docker/cli-plugins/docker-compose"
+
+  - name: enable touch id in terminal
     tags: [touchid]
     become: true
     lineinfile:
