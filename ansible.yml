@@ -15,6 +15,7 @@
         - flyctl # the new heroku
         - fzf # fuzzy finding
         - gh # github cli
+        - gifski # video to high quality gif converter
         - go # go programming language
         - graphviz # visualize graphs
         - hugo # static site generator

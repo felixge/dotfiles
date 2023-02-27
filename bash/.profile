@@ -40,6 +40,9 @@ export DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock"
 # fzf
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
 
+# ripgrep
+export RIPGREP_CONFIG_PATH=$HOME/.ripgreprc
+
 # rust
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 # ssh into current directory mounted into the linux vm
