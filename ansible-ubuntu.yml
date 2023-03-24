@@ -63,6 +63,9 @@
           cd "$cloned"
         }
 
+        # fzf key bindings
+        source /usr/share/doc/fzf/examples/key-bindings.bash
+
   - name: Disable NMI watchdog (so perf stat can report branch misses)
     tags: [nmi]
     become: true
