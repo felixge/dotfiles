@@ -39,6 +39,7 @@ export DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock"
 
 # fzf
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
+#$(brew --prefix)/opt/fzf/install
 
 # ripgrep
 export RIPGREP_CONFIG_PATH=$HOME/.ripgreprc

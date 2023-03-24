@@ -16,10 +16,12 @@
         - fzf # fuzzy finding
         - gh # github cli
         - gifski # video to high quality gif converter
+        - gnu-units # unit math
         - go # go programming language
         - graphviz # visualize graphs
         - hugo # static site generator
         - imagemagick # image editing
+        - libmagic # used by flamescope
         - maven # also installs java
         - mutagen-io/mutagen/mutagen # fast remote file sync
         - node # node.js

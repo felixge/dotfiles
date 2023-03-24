@@ -24,6 +24,8 @@
       pkg:
       - atop # great overall system monitoring tool
       - bpftrace # dtrace is dead, long live dtrace
+      - errno # view C error codes
+      - fzf # fuzzy finder
       - gdb # debugger
       - golang-go # bootstrap Go, other versions are installed below
       - graphviz # visualize graphs, needed for pprof
