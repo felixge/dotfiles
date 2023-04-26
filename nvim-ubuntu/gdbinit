@@ -1,0 +1,23 @@
+# keep command history
+set history save on
+set history filename ~/.gdb_history
+set history size 10000
+
+# don't ask annoying y/n questions all the time
+set confirm off
+
+# print stack trace using frame pointers starting from $arg0 or $rbp (default).
+define xbt
+  set language c
+  if $argc == 1
+    set $xbp = $arg0
+  else
+    set $xbp = $rbp
+  end
+  set $xbp = (void **)$xbp
+  while $xbp != 0
+    x/2a $xbp
+    set $xbp = (void **)$xbp[0]
+  end
+  set language auto
+end
