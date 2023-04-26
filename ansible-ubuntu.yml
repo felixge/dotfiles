@@ -24,6 +24,7 @@
       pkg:
       - atop # great overall system monitoring tool
       - bpftrace # dtrace is dead, long live dtrace
+      - build-essential # gcc toolchain
       - errno # view C error codes
       - fzf # fuzzy finder
       - gdb # debugger
@@ -47,6 +48,12 @@
     copy:
       src: 'nvim-ubuntu/init.lua'
       dest: '~/.config/nvim/init.lua'
+
+  - name: Create gdb config
+    tags: [gdb]
+    copy:
+      src: 'nvim-ubuntu/gdbinit'
+      dest: '~/.gdbinit'
 
   - name: Configure bashrc
     tags: [bashrc]
@@ -102,3 +109,14 @@
     shell: './make.bash'
     args:
       chdir: '{{ go_path }}/src'
+
+  - name: Schedule a cron job to shut down the machine at midnight
+    tags: [cron]
+    become: true
+    cron:
+      name: "Shutdown machine at midnight"
+      cron_file: "shutdown_midnight"
+      minute: "0"
+      hour: "0"
+      user: "root"
+      job: "/sbin/shutdown -h now"

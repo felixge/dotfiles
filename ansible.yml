@@ -4,6 +4,8 @@
     tags: [brew]
     homebrew:
       name:
+        - 1password/tap/1password-cli # 1password op command
+        - awscli # aws cli
         - bash # my shell
         - cloc # count lines of code
         - colima # container runtime
@@ -58,6 +60,7 @@
     pip:
       state: latest
       name:
+        - boto3
         - sphinx
         - sphinx-rtd-theme
         - sphinx-autobuild
