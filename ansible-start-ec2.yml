@@ -1,0 +1,20 @@
+- name: Start EC2 instance with name 'foo'
+  hosts: localhost
+  gather_facts: no
+  vars_prompt:
+    - name: instance_name
+      prompt: instance_name
+      private: false
+      default: "{{lookup('env', 'USER')}}-dev"
+  tasks:
+    - name: Gather information about stopped instances
+      ec2_instance_info:
+        filters:
+          instance-state-name: stopped
+          tag:Name: "{{instance_name}}"
+      register: stopped_instances
+
+    - name: Start EC2 instance
+      ec2_instance:
+        instance_ids: "{{ stopped_instances.instances[0].instance_id }}"
+        state: running

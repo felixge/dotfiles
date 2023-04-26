@@ -1,0 +1,58 @@
+---
+- name: Launch EC2 Sandbox Instance
+  hosts: localhost
+  gather_facts: no
+  vars_prompt:
+    - name: instance_name
+      prompt: instance_name
+      private: false
+      default: "{{lookup('env', 'USER')}}-dev"
+    - name: instance_type
+      prompt: instance_type
+      default: "c6i.8xlarge"
+      private: false
+    - name: image_id
+      prompt: image_id
+      default: "ami-007855ac798b5175e" # ubuntu 22.04
+      private: false
+  tasks:
+    - name: Load arguments from 1Password
+      block:
+        - shell: op item get 'EC2 Sandbox' --format json | jq '.fields | INDEX(.label)'
+          register: out
+        - set_fact:
+            "{{item}}": "{{(out.stdout | from_json)[item].value}}"
+          loop:
+            - key_name
+            - key_path
+            - region
+            - security_groups
+            - user
+            - vpc_subnet_id
+
+    - name: "Launch {{instance_type}} instance named {{instance_name}}"
+      ec2_instance:
+        name: "{{instance_name}}"
+        instance_type: "{{instance_type}}"
+        region: "{{region}}"
+        image_id: "{{image_id}}"
+        vpc_subnet_id: "{{vpc_subnet_id}}"
+        key_name: "{{key_name}}"
+        security_groups: "{{security_groups}}"
+        wait: yes
+      register: ec2_instance
+
+    - name: Update ~/.ssh/config file
+      blockinfile:
+        path: "~/.ssh/config"
+        block: |
+          Host {{instance_name}}
+            HostName {{ec2_instance.instances[0].private_ip_address}}
+            User {{user}}
+            IdentityFile "{{key_path}}"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK for {{instance_name}}"
+
+    - debug:
+        msg:
+          - Setup: ansible-playbook -i '{{instance_name}},' ansible-ubuntu.yml
+          - Connect: ssh {{instance_name}}"
