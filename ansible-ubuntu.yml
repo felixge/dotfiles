@@ -98,18 +98,6 @@
       - golang.org/x/review/git-codereview@latest # for contributing to go
       - golang.org/x/tools/cmd/go-contrib-init@latest # for contributing to go
 
-  - name: clone go repo
-    tags: [gosrc]
-    git:
-      repo: 'https://github.com/golang/go.git'
-      dest: '{{ go_path }}'
-      update: true
-  - name: build latest go version
-    tags: [gosrc]
-    shell: './make.bash'
-    args:
-      chdir: '{{ go_path }}/src'
-
   - name: Schedule a cron job to shut down the machine at midnight
     tags: [cron]
     become: true

@@ -39,6 +39,14 @@
         vpc_subnet_id: "{{vpc_subnet_id}}"
         key_name: "{{key_name}}"
         security_groups: "{{security_groups}}"
+        volumes:
+          - device_name: /dev/sda1 # root volume
+            ebs:
+              volume_size: 256 # GB
+              volume_type: gp3
+              delete_on_termination: true
+              iops: 10000
+          #throughput: 250
         wait: yes
       register: ec2_instance
 
