@@ -11,6 +11,7 @@
         - direnv # auto-env variables per directory
         - docker # container runtime
         - docker-compose # container orchestration
+        - ejoffe/tap/spr # stacked PRs
         - fasd # quick directory navigation
         - ffmpeg # video conversion
         - flyctl # the new heroku
@@ -34,6 +35,7 @@
         - ripgrep # fast grep
         - saulpw/vd/visidata # tabular data explorer
         - stow # dotfile manager
+
   - name: install homebrew casks
     tags: [brew]
     homebrew_cask:
