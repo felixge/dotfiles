@@ -12,6 +12,7 @@
         - docker # container runtime
         - docker-compose # container orchestration
         - ejoffe/tap/spr # stacked PRs
+        - entr # file watching
         - fasd # quick directory navigation
         - ffmpeg # video conversion
         - flyctl # the new heroku
@@ -19,6 +20,7 @@
         - gh # github cli
         - gifski # video to high quality gif converter
         - git-absorb # helps with good commit histories
+        - git-lfs # git large file storage
         - gnu-units # unit math
         - go # go programming language
         - graphviz # visualize graphs
@@ -35,6 +37,7 @@
         - ripgrep # fast grep
         - saulpw/vd/visidata # tabular data explorer
         - stow # dotfile manager
+        - withgraphite/tap/graphite # stacked PRs
 
   - name: install homebrew casks
     tags: [brew]
@@ -49,7 +52,9 @@
       - github.com/boyter/scc/v3@latest # count lines of code
       - github.com/felixge/cl@latest # git clone helper
       - github.com/go-delve/delve/cmd/dlv@latest # debugger
+      - github.com/goreleaser/goreleaser@latest # release go apps
       - github.com/maruel/panicparse/v2@latest # analyze go stack traces
+      - github.com/spf13/cobra-cli@latest # cli scaffold generator
       - github.com/x-motemen/gore/cmd/gore@latest # repl
       - golang.org/x/perf/cmd/benchstat@latest # benchmark analysis
       - golang.org/x/review/git-codereview@latest # for contributing to go

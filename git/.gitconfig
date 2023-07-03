@@ -19,12 +19,14 @@
   enabled = 1
 [core]
   excludesfile = ~/.gitignore
+	hooksPath = /usr/local/dd/global_hooks
+	commitGraph = true
   #pager = diff-so-fancy | less --tabs=4 -RFX
 [push]
   default = current
 	autoSetupRemote = true
 [commit]
-  verbose = true
+	verbose = false
 [diff]
   tool = kitty
   guitool = kitty.gui
@@ -67,8 +69,13 @@
 	ui = true
 
 [url "git@github.com:"]
-  insteadOf = git://github
 [url "git@github.com:"]
-    insteadOf = https://github.com/
+	insteadOf = https://github.com/
+	insteadOf = git://github.com/
 #[url "ssh://git@github.com/"]
     #insteadOf = https://github.com/
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true

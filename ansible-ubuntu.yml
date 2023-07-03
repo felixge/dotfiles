@@ -92,11 +92,14 @@
       - github.com/boyter/scc/v3@latest # count lines of code
       - github.com/felixge/cl@latest # git clone helper
       - github.com/go-delve/delve/cmd/dlv@latest # debugger
+      - github.com/goreleaser/goreleaser@latest # release go apps
       - github.com/maruel/panicparse/v2@latest # analyze go stack traces
+      - github.com/spf13/cobra-cli@latest # cli scaffold generator
       - github.com/x-motemen/gore/cmd/gore@latest # repl
       - golang.org/x/perf/cmd/benchstat@latest # benchmark analysis
       - golang.org/x/review/git-codereview@latest # for contributing to go
       - golang.org/x/tools/cmd/go-contrib-init@latest # for contributing to go
+      - gotest.tools/gotestsum@latest # pretty test output
 
   - name: Schedule a cron job to shut down the machine at midnight
     tags: [cron]

@@ -111,6 +111,13 @@ require('lazy').setup({
     },
   },
 
+  { 
+    'nathangrigg/vim-beancount',
+    config = function() 
+      vim.g["beancount_separator_col"] = 60
+    end,
+  }, -- text based accounting
+
   -- Useful Go stuff
   {
     'ray-x/go.nvim',
@@ -295,6 +302,14 @@ vim.api.nvim_create_autocmd('TextYankPost', {
 -- See `:help telescope` and `:help telescope.setup()`
 require('telescope').setup {
   defaults = {
+    vimgrep_arguments = {
+      "rg",
+      "--no-heading",
+      "--with-filename",
+      "--line-number",
+      "--column",
+      "--color=never"
+    },
     mappings = {
       i = {
         ['<C-u>'] = false,
@@ -414,7 +429,7 @@ local on_attach = function(_, bufnr)
   nmap('gd', vim.lsp.buf.definition, '[G]oto [D]efinition')
   nmap('gr', require('telescope.builtin').lsp_references, '[G]oto [R]eferences')
   nmap('gI', vim.lsp.buf.implementation, '[G]oto [I]mplementation')
-  nmap('<leader>D', vim.lsp.buf.type_definition, 'Type [D]efinition')
+  nmap('gt', vim.lsp.buf.type_definition, 'Type [D]efinition')
   nmap('<leader>ds', require('telescope.builtin').lsp_document_symbols, '[D]ocument [S]ymbols')
   nmap('<leader>ws', require('telescope.builtin').lsp_dynamic_workspace_symbols, '[W]orkspace [S]ymbols')
 
