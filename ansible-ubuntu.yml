@@ -12,6 +12,17 @@
     apt:
       update_cache: yes
       cache_valid_time: 3600
+  - name: add docker GPG apt key
+    tags: [apt]
+    become: true
+    apt_key:
+      url: https://download.docker.com/linux/ubuntu/gpg
+      state: present
+  - name: add docker apt repo
+    tags: [apt]
+    become: true
+    apt_repository:
+      repo: deb https://download.docker.com/linux/ubuntu jammy stable
   - name: add neovim apt repo
     tags: [apt]
     become: true
@@ -25,9 +36,13 @@
       - atop # great overall system monitoring tool
       - bpftrace # dtrace is dead, long live dtrace
       - build-essential # gcc toolchain
+      - ca-certificates # needed for docker
+      - curl # needed for docker
+      - docker-ce # container thingy
       - errno # view C error codes
       - fzf # fuzzy finder
       - gdb # debugger
+      - gnupg # needed for docker
       - golang-go # bootstrap Go, other versions are installed below
       - graphviz # visualize graphs, needed for pprof
       - linux-tools-aws # linux perf

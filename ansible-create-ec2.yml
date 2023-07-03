@@ -1,3 +1,4 @@
+# aws-vault exec sso-sandbox-account-admin -- ansible-playbook ansible-create-ec2.yml
 ---
 - name: Launch EC2 Sandbox Instance
   hosts: localhost
@@ -9,7 +10,7 @@
       default: "{{lookup('env', 'USER')}}-dev"
     - name: instance_type
       prompt: instance_type
-      default: "c6i.8xlarge"
+      default: "c6i.2xlarge"
       private: false
     - name: image_id
       prompt: image_id
