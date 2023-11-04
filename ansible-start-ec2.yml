@@ -1,4 +1,4 @@
-- name: Start EC2 instance with name 'foo'
+- name: Start EC2 instance
   hosts: localhost
   gather_facts: no
   vars_prompt:

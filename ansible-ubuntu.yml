@@ -3,7 +3,7 @@
 - hosts: all
   vars:
       go_path: '~/src/github.com/golang/go'
-      go_version: go1.20
+      go_version: go1.20.5
 
   tasks:
   - name: update apt
@@ -12,6 +12,12 @@
     apt:
       update_cache: yes
       cache_valid_time: 3600
+  - name: install gpg
+    tags: [apt]
+    become: true
+    apt:
+      pkg:
+      - gpg # crypto stuff
   - name: add docker GPG apt key
     tags: [apt]
     become: true
@@ -51,6 +57,7 @@
       - neovim # good editor
       - ripgrep # fast search
       - systemtap # bpftrace's older brother
+      - tmux # session multiplexer
       - unzip # decompression
 
   - name: Create nvim config directory
@@ -77,7 +84,7 @@
       path: '~/.bashrc'
       block: |
         export EDITOR="$(which nvim)"
-        PATH="$PATH:/home/ubuntu/go/bin"
+        PATH="$PATH:$HOME/go/bin"
         alias vim="$(which nvim)"
 
         cl() {
@@ -126,3 +133,4 @@
       hour: "0"
       user: "root"
       job: "/sbin/shutdown -h now"
+    when: "'EC2' in ansible_facts['system_vendor']"

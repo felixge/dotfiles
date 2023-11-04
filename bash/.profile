@@ -35,7 +35,7 @@ export CPPFLAGS="-I/opt/homebrew/opt/openjdk@11/include"
 eval "$(direnv hook bash)"
 
 # colima
-export DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock"
+#export DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock"
 
 # fzf
 [ -f ~/.fzf.bash ] && source ~/.fzf.bash
@@ -99,3 +99,6 @@ complete -o bashdefault -o default -F _gt_yargs_completions gt
 
 export VOLTA_HOME="$HOME/.volta"
 export PATH="$VOLTA_HOME/bin:$PATH"
+
+# Added by OrbStack: command-line tools and integration
+source ~/.orbstack/shell/init.bash 2>/dev/null || :
