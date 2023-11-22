@@ -3,7 +3,7 @@
 - hosts: all
   vars:
       go_path: '~/src/github.com/golang/go'
-      go_version: go1.20.5
+      go_version: go1.21.3
 
   tasks:
   - name: update apt
@@ -12,23 +12,7 @@
     apt:
       update_cache: yes
       cache_valid_time: 3600
-  - name: install gpg
-    tags: [apt]
-    become: true
-    apt:
-      pkg:
-      - gpg # crypto stuff
-  - name: add docker GPG apt key
-    tags: [apt]
-    become: true
-    apt_key:
-      url: https://download.docker.com/linux/ubuntu/gpg
-      state: present
-  - name: add docker apt repo
-    tags: [apt]
-    become: true
-    apt_repository:
-      repo: deb https://download.docker.com/linux/ubuntu jammy stable
+
   - name: add neovim apt repo
     tags: [apt]
     become: true
@@ -42,13 +26,10 @@
       - atop # great overall system monitoring tool
       - bpftrace # dtrace is dead, long live dtrace
       - build-essential # gcc toolchain
-      - ca-certificates # needed for docker
       - curl # needed for docker
-      - docker-ce # container thingy
       - errno # view C error codes
       - fzf # fuzzy finder
       - gdb # debugger
-      - gnupg # needed for docker
       - golang-go # bootstrap Go, other versions are installed below
       - graphviz # visualize graphs, needed for pprof
       - linux-tools-aws # linux perf
@@ -59,6 +40,44 @@
       - systemtap # bpftrace's older brother
       - tmux # session multiplexer
       - unzip # decompression
+      - htop # htop
+
+  - name: check if docker is already installed
+    tags: [docker]
+    command: which docker
+    register: docker_installed
+    failed_when: docker_installed.rc == 1
+    ignore_errors: true
+    changed_when: false
+  - name: install docker deps
+    tags: [docker]
+    become: true
+    apt:
+      pkg:
+      - gpg # crypto stuff
+      - gnupg # needed for docker
+      - ca-certificates # needed for docker
+    when: docker_installed.failed
+  - name: add docker GPG apt key
+    tags: [docker]
+    become: true
+    apt_key:
+      url: https://download.docker.com/linux/ubuntu/gpg
+      state: present
+    when: docker_installed.failed
+  - name: add docker apt repo
+    tags: [docker]
+    become: true
+    apt_repository:
+      repo: deb https://download.docker.com/linux/ubuntu jammy stable
+    when: docker_installed.failed
+  - name: install docker
+    tags: [docker]
+    become: true
+    apt:
+      name: docker-ce
+      state: latest
+    when: docker_installed.failed
 
   - name: Create nvim config directory
     tags: [nvim]
@@ -103,7 +122,7 @@
 
   - name: install {{ go_version }}
     tags: [go]
-    shell: 'go install golang.org/dl/{{ go_version }}@latest && {{ go_version }} download'
+    shell: "bash -lc 'go install golang.org/dl/{{ go_version }}@latest && {{ go_version }} download'"
     args:
       executable: /bin/bash
 

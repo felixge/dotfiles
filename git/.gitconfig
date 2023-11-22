@@ -50,8 +50,6 @@
   helper = osxkeychain
 [interactive]
   #diffFilter = diff-so-fancy --patch
-[add.interactive]
-  useBuiltin = false
 [color "diff"]
 	commit = yellow bold
 	meta = blue
