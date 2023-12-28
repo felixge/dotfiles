@@ -3,6 +3,9 @@ set history save on
 set history filename ~/.gdb_history
 set history size 10000
 
+# allow loading src/runtime/runtime-gdb.py for go binaries
+set auto-load safe-path /
+
 # don't ask annoying y/n questions all the time
 set confirm off
 
