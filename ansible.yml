@@ -122,3 +122,11 @@
   - name: hide icons from desktop
     tags: [desktop]
     shell: "defaults write com.apple.finder CreateDesktop false && killall Finder"
+
+  # see https://twitter.com/thorstenball/status/1609969938415894529
+  - name: set keyboard repeat rate
+    tags: [keyboard]
+    shell: |
+      defaults write -g InitialKeyRepeat -int 12
+      defaults write -g KeyRepeat -int 2
+      defaults write -g ApplePressAndHoldEnabled -bool false

@@ -31,6 +31,8 @@
   tool = kitty
   guitool = kitty.gui
   mnemonicPrefix = true # https://github.com/tpope/vim-fugitive/discussions/1649
+  colormoved = "default"
+  colormovedws = "allow-indentation-change"
 [difftool]
   prompt = false
   trustExitCode = true
