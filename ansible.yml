@@ -120,13 +120,19 @@
       firstmatch: true
 
   - name: hide icons from desktop
-    tags: [desktop]
+    tags: [macos]
     shell: "defaults write com.apple.finder CreateDesktop false && killall Finder"
 
   # see https://twitter.com/thorstenball/status/1609969938415894529
   - name: set keyboard repeat rate
-    tags: [keyboard]
+    tags: [macos]
     shell: |
       defaults write -g InitialKeyRepeat -int 12
       defaults write -g KeyRepeat -int 2
       defaults write -g ApplePressAndHoldEnabled -bool false
+  
+  - name: faster dock animations
+    tags: [macos]
+    shell: |
+      defaults write com.apple.dock autohide-delay -int 0
+      defaults write com.apple.dock autohide-time-modifier -float 0.4
