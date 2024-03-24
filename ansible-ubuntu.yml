@@ -5,6 +5,7 @@
       go_path: '~/src/github.com/golang/go'
       go_version: go1.22.1
       duckdb_version: v0.10.1
+      node_version: v20.11.1
 
   tasks:
   - name: update apt
@@ -97,6 +98,21 @@
       src: 'nvim-ubuntu/gdbinit'
       dest: '~/.gdbinit'
 
+
+  - name: install node.js
+    tags: [nodejs]
+    shell: |
+      case "$(uname -m)" in
+          x86_64) arch="x64" ;;
+          arm64|aarch64) arch="arm64" ;;
+          *) arch="unknown" ;;
+      esac
+      node_dir="node-{{node_version}}-linux-$arch"
+      node_tar="${node_dir}.tar.xz"
+      curl -L "https://nodejs.org/dist/{{node_version}}/$node_tar" -O
+      tar -xvf "$node_tar"
+      sudo mv "$node_dir" /usr/local/nodejs
+
   - name: Configure bashrc
     tags: [bashrc]
     blockinfile:
@@ -104,7 +120,7 @@
       path: '~/.bashrc'
       block: |
         export EDITOR="$(which nvim)"
-        PATH="$HOME/go/bin:$PATH"
+        PATH="$HOME/go/bin:/usr/local/nodejs/bin:$PATH"
         alias vim="$(which nvim)"
 
         cl() {
