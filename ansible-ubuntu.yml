@@ -4,6 +4,7 @@
   vars:
       go_path: '~/src/github.com/golang/go'
       go_version: go1.22.1
+      duckdb_version: v0.10.1
 
   tasks:
   - name: update apt
@@ -153,3 +154,14 @@
       user: "root"
       job: "/sbin/shutdown -h now"
     when: "'EC2' in ansible_facts['system_vendor']"
+
+  - name: install duckdb
+    tags: [duckdb]
+    shell: |
+      arch=$(uname -m) && [ "$arch" = "x86_64" ] && url="https://github.com/duckdb/duckdb/releases/download/{{ duckdb_version }}/duckdb_cli-linux-amd64.zip" || url="https://github.com/duckdb/duckdb/releases/download/{{ duckdb_version }}/duckdb_cli-linux-aarch64.zip"; curl -L $url -o duckdb.zip && unzip -f duckdb.zip -d ~/go/bin/ && rm duckdb.zip
+
+  - name: install clickhouse
+    tags: [clickhouse]
+    shell: |
+      curl https://clickhouse.com/ | sh
+      sudo ./clickhouse install
