@@ -14,7 +14,7 @@
       private: false
     - name: image_id
       prompt: image_id
-      default: "ami-007855ac798b5175e" # ubuntu 22.04
+      default: "ami-04b4f1a9cf54c11d0" # ubuntu 24.04 (kernel )
       private: false
   tasks:
     - name: Load arguments from 1Password

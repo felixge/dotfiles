@@ -29,11 +29,13 @@
       - bpftrace # dtrace is dead, long live dtrace
       - build-essential # gcc toolchain
       - curl # needed for docker
+      - direnv # auto load env vars
       - errno # view C error codes
       - fzf # fuzzy finder
       - gdb # debugger
       - golang-go # bootstrap Go, other versions are installed below
       - graphviz # visualize graphs, needed for pprof
+      - htop # htop
       - linux-tools-aws # linux perf
       - linux-tools-common # linux perf
       - make # build system
@@ -42,7 +44,6 @@
       - systemtap # bpftrace's older brother
       - tmux # session multiplexer
       - unzip # decompression
-      - htop # htop
 
   - name: check if docker is already installed
     tags: [docker]
