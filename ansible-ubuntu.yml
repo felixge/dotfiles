@@ -2,8 +2,7 @@
 # development machines. I mostly develop on macOS, but some stuff needs linux.
 - hosts: all
   vars:
-      go_path: '~/src/github.com/golang/go'
-      go_version: go1.22.1
+      go_version: go1.23.1
       duckdb_version: v0.10.1
       node_version: v20.11.1
 
@@ -14,7 +13,12 @@
     apt:
       update_cache: yes
       cache_valid_time: 3600
-
+  - name: pre-install apt packages
+    tags: [apt]
+    become: true
+    apt:
+      pkg:
+      - gnupg2 # needed for step below
   - name: add neovim apt repo
     tags: [apt]
     become: true
@@ -30,17 +34,19 @@
       - build-essential # gcc toolchain
       - curl # needed for docker
       - direnv # auto load env vars
+      - dwarves # dwarf utils
       - errno # view C error codes
       - fzf # fuzzy finder
       - gdb # debugger
-      - golang-go # bootstrap Go, other versions are installed below
       - graphviz # visualize graphs, needed for pprof
       - htop # htop
       - linux-tools-aws # linux perf
       - linux-tools-common # linux perf
       - make # build system
       - neovim # good editor
+      - protobuf-compiler # protoc
       - ripgrep # fast search
+      - sqlite3 # database
       - systemtap # bpftrace's older brother
       - tmux # session multiplexer
       - unzip # decompression
@@ -108,11 +114,13 @@
           arm64|aarch64) arch="arm64" ;;
           *) arch="unknown" ;;
       esac
-      node_dir="node-{{node_version}}-linux-$arch"
-      node_tar="${node_dir}.tar.xz"
-      curl -L "https://nodejs.org/dist/{{node_version}}/$node_tar" -O
-      tar -xvf "$node_tar"
-      sudo mv "$node_dir" /usr/local/nodejs
+      dir="node-{{node_version}}-linux-$arch"
+      tar="${dir}.tar.xz"
+      rm -rf "$dir"
+      sudo rm -rf "/usr/local/nodejs"
+      curl -L "https://nodejs.org/dist/{{node_version}}/$tar" -O
+      tar -xf "$tar"
+      sudo mv "$dir" /usr/local/nodejs
 
   - name: Configure bashrc
     tags: [bashrc]
@@ -121,7 +129,7 @@
       path: '~/.bashrc'
       block: |
         export EDITOR="$(which nvim)"
-        PATH="$HOME/go/bin:/usr/local/nodejs/bin:$PATH"
+        PATH="$HOME/go/bin:/usr/local/go/bin:/usr/local/nodejs/bin:$PATH"
         alias vim="$(which nvim)"
 
         cl() {
@@ -132,21 +140,33 @@
         # fzf key bindings
         source /usr/share/doc/fzf/examples/key-bindings.bash
 
+        eval "$(direnv hook bash)"
+
   - name: Disable NMI watchdog (so perf stat can report branch misses)
     tags: [nmi]
     become: true
     shell: 'echo 0 > /proc/sys/kernel/nmi_watchdog'
     ignore_errors: yes # only works on bare metal instances
 
-  - name: install {{ go_version }}
+  - name: install go
     tags: [go]
-    shell: "bash -lc 'go install golang.org/dl/{{ go_version }}@latest && {{ go_version }} download' && ln -s $(which {{ go_version }}) && go env -w GOTOOLCHAIN={{ go_version }}+auto"
-    args:
-      executable: /bin/bash
+    shell: |
+      cd /tmp
+      sudo rm -rf "go"
+      sudo rm -rf "/usr/local/go"
+      case "$(uname -m)" in
+          x86_64) arch="amd64" ;;
+          arm64|aarch64) arch="arm64" ;;
+          *) arch="unknown" ;;
+      esac
+      tar="{{go_version}}.linux-$arch.tar.gz"
+      curl -L "https://go.dev/dl/${tar}" -O
+      tar -xzf "$tar"
+      sudo mv ./go/ /usr/local/go
 
   - name: install go packages
     tags: [goinstall]
-    command: "{{ go_version }} install {{ item }}"
+    command: "go install {{ item }}"
     with_items:
       - github.com/boyter/scc/v3@latest # count lines of code
       - github.com/felixge/cl@latest # git clone helper
@@ -158,6 +178,8 @@
       - golang.org/x/perf/cmd/benchstat@latest # benchmark analysis
       - golang.org/x/review/git-codereview@latest # for contributing to go
       - golang.org/x/tools/cmd/go-contrib-init@latest # for contributing to go
+      - google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest #protobuf
+      - google.golang.org/protobuf/cmd/protoc-gen-go@latest # protobuf
       - gotest.tools/gotestsum@latest # pretty test output
 
   - name: Schedule a cron job to shut down the machine at midnight

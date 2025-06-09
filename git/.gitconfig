@@ -69,10 +69,9 @@
 [color]
 	ui = true
 
-[url "git@github.com:"]
-[url "git@github.com:"]
-	insteadOf = https://github.com/
-	insteadOf = git://github.com/
+# [url "git@github.com:"]
+# 	insteadOf = https://github.com/
+# 	insteadOf = git://github.com/
 #[url "ssh://git@github.com/"]
     #insteadOf = https://github.com/
 [filter "lfs"]
@@ -80,3 +79,6 @@
 	smudge = git-lfs smudge -- %f
 	process = git-lfs filter-process
 	required = true
+[url "git@github.com:"]
+	insteadOf = https://github.com/
+	insteadOf = git://github.com/

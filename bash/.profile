@@ -27,9 +27,15 @@ shopt -s extglob
 # custom scripts
 export PATH="$PATH:$HOME/bin"
 
+# gradle
+export PATH="$PATH:/opt/gradle/gradle-8.14/bin"
+
 # java11
 export PATH="/opt/homebrew/opt/openjdk@11/bin:$PATH"
 export CPPFLAGS="-I/opt/homebrew/opt/openjdk@11/include"
+
+# mise-en place
+eval "$($HOME/.local/bin/mise activate bash)"
 
 # direnv hook: https://direnv.net/docs/hook.html#bash (MUST BE executed after PROMPT_COMMAND changes above)
 eval "$(direnv hook bash)"
@@ -45,8 +51,7 @@ eval "$(direnv hook bash)"
 export RIPGREP_CONFIG_PATH=$HOME/.ripgreprc
 
 # rust
-[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
-# ssh into current directory mounted into the linux vm
+[ -f "$HOME/.cargo/env" ] && # ssh into current directory mounted into the linux vm
 alias vm="ssh -tt vm \"bash -c 'cd \"$(pwd)\" && bash -il'\""
 
 # fzf key bindings
@@ -102,3 +107,5 @@ export PATH="$VOLTA_HOME/bin:$PATH"
 
 # Added by OrbStack: command-line tools and integration
 source ~/.orbstack/shell/init.bash 2>/dev/null || :
+
+. "$HOME/.local/bin/env"

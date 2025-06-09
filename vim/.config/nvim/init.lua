@@ -607,3 +607,13 @@ nmap('<C-k>', '<cmd>cprevious<cr>')
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
+
+vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
+  pattern = "*.jjdescription",
+  callback = function()
+    -- set filetype
+    vim.bo.filetype  = "diff"
+    -- wrap at 72 chars
+    vim.bo.textwidth = 72
+  end,
+})

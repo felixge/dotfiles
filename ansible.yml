@@ -1,11 +1,17 @@
 - hosts: localhost
   tasks:
+  - name: tap borders repo
+    tags: [brew]
+    homebrew_tap:
+      name: FelixKratz/formulae
+
   - name: install homebrew packages
     tags: [brew]
     homebrew:
       name:
         - awscli # aws cli
         - bash # my shell
+        - borders # color borders for macOS windows
         - cloc # count lines of code
         - colima # container runtime
         - direnv # auto-env variables per directory
@@ -40,10 +46,12 @@
         - withgraphite/tap/graphite # stacked PRs
 
   - name: install homebrew casks
-    tags: [brew]
+    tags: [brew, brewcask]
     homebrew_cask:
       name:
         - 1password/tap/1password-cli # 1password op command
+        - nikitabobko/tap/aerospace # tiling wm
+        - nikitabobko/tap/aerospace # tiling wm
 
   - name: install go packages
     tags: [goinstall]

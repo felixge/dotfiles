@@ -1,5 +1,5 @@
 # Go bin path
-export PATH="$PATH:$HOME/go/bin"
+export PATH="$PATH:$(go env GOPATH)/go/bin"
 # Go path
 export GOPATH="$HOME/go"
 # Tell go to not cache my tests, it's annoying!
