@@ -33,7 +33,7 @@ apt-packages:
 
 .PHONY: homebrew
 homebrew:
-	./installers/homebrew.bash
+	./scripts/install_homebrew.bash
 
 .PHONY: brew-packages
 brew-packages:
