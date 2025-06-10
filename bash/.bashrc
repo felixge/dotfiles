@@ -111,3 +111,31 @@ export PATH="$VOLTA_HOME/bin:$PATH"
 source ~/.orbstack/shell/init.bash 2>/dev/null || : # OrbStack
 source ~/.local/bin/env 2>/dev/null || : # not sure
 source ~/.profile.local 2>/dev/null || : # local profile, see ./scripts/backup_local_dotfiles.bash
+
+
+generate_prompt() {
+    local reset='\[\e[0m\]'
+    local red='\[\e[1;31m\]'
+
+    local color="${reset}"
+    if [ -n "$SSH_CONNECTION" ]; then
+        color="${red}"
+    fi
+    PS1="\W ${color}\$${reset} "
+}
+PROMPT_COMMAND=generate_prompt
+
+# generate_prompt() {
+#     local exit="$?"
+#     local green='\[\e[1;32m\]'
+
+#     local status
+#     if [[ $exit -eq 0 ]]; then
+#         status="${green}:)${reset}"
+#     else
+#         status="${red}:(${reset}"
+#     fi
+#     PS1="${status} \w \$ "
+# }
+
+# export PROMPT_COMMAND=generate_prompt
