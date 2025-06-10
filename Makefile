@@ -16,6 +16,7 @@ all: packages dotfiles
 
 .PHONY: dotfiles
 dotfiles:
+	./scripts/backup_local_dotfiles.bash
 	stow -t $$HOME neovim macos linux kitty i3 git bash borders aerospace ripgrep skhdrc yabairc jj
 
 ifeq ($(shell uname),Linux)
