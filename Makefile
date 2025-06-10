@@ -3,7 +3,7 @@
 all: packages dotfiles
 
 dotfiles:
-	stow $$(echo */ | xargs -n1 basename)
+	stow -t $$HOME $$(echo */ | xargs -n1 basename)
 
 ifeq ($(shell uname),Linux)
 # apt-get
