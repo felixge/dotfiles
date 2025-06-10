@@ -3,7 +3,7 @@
 all: packages dotfiles
 
 dotfiles:
-	stow -t $$HOME $$(echo */ | xargs -n1 basename)
+	stow -t $$HOME neovim macos linux kitty i3 git bash borders aerospace ripgrep skhdrc yabairc jj
 
 ifeq ($(shell uname),Linux)
 # apt-get
