@@ -1,0 +1,36 @@
+[user]
+name = "Felix Geisendörfer"
+email = "felix.geisendoerfer@datadoghq.com"
+
+[templates]
+draft_commit_description = '''
+concat(
+  coalesce(description, "\n"),
+  surround(
+    "\nJJ: This commit contains the following changes:\n", "",
+    indent("JJ:     ", diff.stat(72)),
+  ),
+  "\nJJ: ignore-rest\n",
+  diff.git(),
+)
+'''
+
+[revset-aliases]
+'closest_bookmark(to)' = 'heads(::to & bookmarks())'
+'wip' = '((trunk()..@):: & mine()) | trunk()'
+"mine()" = """
+    author('felix@felixge.de')
+  | author('felix@datadoghq.com')
+  | author('felix.geisendoerfer@datadoghq.com')
+  | author('haimuiba@gmail.com')
+"""
+
+[aliases]
+wip = ["log", "-r", "wip"]
+e = ["edit"]
+# bring nearest bookmark up to recent commit
+tug = ["bookmark", "move", "--from", "closest_bookmark(@-)", "--to", "@-"]
+
+[ui]
+default-command = "log"
+#default-command = "wip"
