@@ -1,3 +1,9 @@
+# shellcheck disable=all
+source ~/.bashrc.local 2>/dev/null || : # see ./scripts/backup_local_dotfiles.bash
+
+# .bash_profile is executed for non-login shells, i.e. every time you open a new
+# terminal window.
+
 # directory that includes this file
 CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
@@ -36,9 +42,6 @@ export CPPFLAGS="-I/opt/homebrew/opt/openjdk@11/include"
 
 # mise-en place
 eval "$($HOME/.local/bin/mise activate bash)"
-
-# direnv hook: https://direnv.net/docs/hook.html#bash (MUST BE executed after PROMPT_COMMAND changes above)
-eval "$(direnv hook bash)"
 
 # colima
 #export DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock"
@@ -105,7 +108,6 @@ complete -o bashdefault -o default -F _gt_yargs_completions gt
 export VOLTA_HOME="$HOME/.volta"
 export PATH="$VOLTA_HOME/bin:$PATH"
 
-# Added by OrbStack: command-line tools and integration
-source ~/.orbstack/shell/init.bash 2>/dev/null || :
-
-. "$HOME/.local/bin/env"
+source ~/.orbstack/shell/init.bash 2>/dev/null || : # OrbStack
+source ~/.local/bin/env 2>/dev/null || : # not sure
+source ~/.profile.local 2>/dev/null || : # local profile, see ./scripts/backup_local_dotfiles.bash
