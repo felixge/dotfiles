@@ -1,5 +1,10 @@
 [user]
 name = "Felix Geisendörfer"
+email = "felix@felixge.de"
+
+[[--scope]]
+--when.repositories = ["~/go/src/github.com/DataDog"]
+[--scope.user]
 email = "felix.geisendoerfer@datadoghq.com"
 
 [templates]
