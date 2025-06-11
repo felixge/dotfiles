@@ -124,18 +124,3 @@ generate_prompt() {
     PS1="\W ${color}\$${reset} "
 }
 PROMPT_COMMAND=generate_prompt
-
-# generate_prompt() {
-#     local exit="$?"
-#     local green='\[\e[1;32m\]'
-
-#     local status
-#     if [[ $exit -eq 0 ]]; then
-#         status="${green}:)${reset}"
-#     else
-#         status="${red}:(${reset}"
-#     fi
-#     PS1="${status} \w \$ "
-# }
-
-# export PROMPT_COMMAND=generate_prompt
