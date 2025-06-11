@@ -1,4 +1,33 @@
 # shellcheck disable=all
+
+# declare prompt, has to be done before the BASH_RC_EXECUTED check below,
+# otherwise it doesn't work in cursor terminals.
+generate_prompt() {
+  local exit_code=$?
+  local reset='\[\e[0m\]'
+  local red='\[\e[1;31m\]'
+  local blue='\[\e[1;34m\]'
+
+  local prompt_color="${blue}"
+  if [ -n "$SSH_CONNECTION" ]; then
+      prompt_color="${red}"
+  fi
+
+  local exit_color="${reset}"
+  if [ $exit_code -ne 0 ]; then
+      exit_color="${red}"
+  fi
+
+  PS1="${exit_color}\W${reset} ${prompt_color}\$${reset} "
+}
+export PROMPT_COMMAND=generate_prompt
+
+# prevent sourcing this file multiple times
+if [ -n "$BASH_RC_EXECUTED" ]; then
+  return
+fi
+export BASH_RC_EXECUTED=1
+
 source ~/.bashrc.local 2>/dev/null || : # see ./scripts/backup_local_dotfiles.bash
 
 # .bash_profile is executed for non-login shells, i.e. every time you open a new
@@ -110,24 +139,3 @@ export PATH="$VOLTA_HOME/bin:$PATH"
 source ~/.orbstack/shell/init.bash 2>/dev/null || : # OrbStack
 source ~/.local/bin/env 2>/dev/null || : # not sure
 source ~/.profile.local 2>/dev/null || : # local profile, see ./scripts/backup_local_dotfiles.bash
-
-
-generate_prompt() {
-  local exit_code=$?
-  local reset='\[\e[0m\]'
-  local red='\[\e[1;31m\]'
-  local blue='\[\e[1;34m\]'
-
-  local prompt_color="${blue}"
-  if [ -n "$SSH_CONNECTION" ]; then
-      prompt_color="${red}"
-  fi
-
-  local exit_color="${reset}"
-  if [ $exit_code -ne 0 ]; then
-      exit_color="${red}"
-  fi
-
-  PS1="${exit_color}\W${reset} ${prompt_color}\$${reset} "
-}
-PROMPT_COMMAND=generate_prompt
