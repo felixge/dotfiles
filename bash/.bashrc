@@ -13,7 +13,6 @@ CWD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 # Anything that's not core bash config or has more than 3 lines of config gets
 # its own file.
 source "${CWD}/.git.bash"
-source "${CWD}/.prompt.bash"
 source "${CWD}/.go.bash"
 source "${CWD}/.kitty.bash"
 source "${CWD}/.docker.bash"
