@@ -113,13 +113,21 @@ source ~/.profile.local 2>/dev/null || : # local profile, see ./scripts/backup_l
 
 
 generate_prompt() {
-    local reset='\[\e[0m\]'
-    local red='\[\e[1;31m\]'
+  local exit_code=$?
+  local reset='\[\e[0m\]'
+  local red='\[\e[1;31m\]'
+  local blue='\[\e[1;34m\]'
 
-    local color="${reset}"
-    if [ -n "$SSH_CONNECTION" ]; then
-        color="${red}"
-    fi
-    PS1="\W ${color}\$${reset} "
+  local prompt_color="${blue}"
+  if [ -n "$SSH_CONNECTION" ]; then
+      prompt_color="${red}"
+  fi
+
+  local exit_color="${reset}"
+  if [ $exit_code -ne 0 ]; then
+      exit_color="${red}"
+  fi
+
+  PS1="${exit_color}\W${reset} ${prompt_color}\$${reset} "
 }
 PROMPT_COMMAND=generate_prompt
