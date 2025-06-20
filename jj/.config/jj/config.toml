@@ -39,3 +39,8 @@ tug = ["bookmark", "move", "--from", "closest_bookmark(@-)", "--to", "@-"]
 [ui]
 default-command = "log"
 #default-command = "wip"
+
+[signing]
+behavior = "own"
+backend = "ssh"
+key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGjTWhql3FHsAAAZWolVjmZzNX5xxXByRb7RX2sgnC1h felix.geisendoerfer+git-commit-signing@datadoghq.com"
