@@ -23,6 +23,7 @@ concat(
 [revset-aliases]
 'closest_bookmark(to)' = 'heads(::to & bookmarks())'
 'wip' = '((trunk()..@):: & mine()) | trunk()'
+'stack' = 'fork_point(@ | trunk())::@'
 "mine()" = """
     author('felix@felixge.de')
   | author('felix@datadoghq.com')
@@ -35,6 +36,7 @@ wip = ["log", "-r", "wip"]
 e = ["edit"]
 # bring nearest bookmark up to recent commit
 tug = ["bookmark", "move", "--from", "closest_bookmark(@-)", "--to", "@-"]
+stack = ["log", "-r", "stack"]
 
 [ui]
 default-command = "log"
