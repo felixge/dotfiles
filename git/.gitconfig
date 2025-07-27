@@ -20,7 +20,6 @@
   enabled = 1
 [core]
   excludesfile = ~/.gitignore
-	hooksPath = /usr/local/dd/global_hooks
 	commitGraph = true
   #pager = diff-so-fancy | less --tabs=4 -RFX
 [push]
@@ -43,8 +42,6 @@
   cmd = kitty kitty +kitten diff $LOCAL $REMOTE
 [log]
   date = iso
-[include]
-  path = .gitconfig.secret
 [http]
 	cookiefile = /Users/felix.geisendoerfer/.gitcookies
 [init]

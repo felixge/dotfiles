@@ -1,0 +1,4 @@
+[tools]
+go = "latest"
+python = "3.10"
+rust = "latest"
