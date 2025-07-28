@@ -2,3 +2,4 @@
 go = "latest"
 python = "3.10"
 rust = "latest"
+fzf = "latest"

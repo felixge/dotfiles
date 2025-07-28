@@ -71,9 +71,6 @@ install_homebrew_packages() {
         mise
         bash-completion@2
     )
-    if is_macos; then
-        brew_packages+=(fzf) # on ubuntu I get: Error: fzf: no bottle available!
-    fi
     brew install "${brew_packages[@]}"
 }
 
