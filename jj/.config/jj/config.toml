@@ -6,6 +6,10 @@ email = "felix@felixge.de"
 --when.repositories = ["~/go/src/github.com/DataDog", "~/go/src/github.com/golang/go"]
 [--scope.user]
 email = "felix.geisendoerfer@datadoghq.com"
+[--scope.signing]
+behavior = "own"
+backend = "ssh"
+key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGjTWhql3FHsAAAZWolVjmZzNX5xxXByRb7RX2sgnC1h felix.geisendoerfer+git-commit-signing@datadoghq.com"
 
 [templates]
 draft_commit_description = '''
@@ -42,8 +46,3 @@ stack = ["log", "-r", "stack"]
 [ui]
 default-command = "log"
 #default-command = "wip"
-
-[signing]
-behavior = "own"
-backend = "ssh"
-key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGjTWhql3FHsAAAZWolVjmZzNX5xxXByRb7RX2sgnC1h felix.geisendoerfer+git-commit-signing@datadoghq.com"
