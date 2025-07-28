@@ -106,6 +106,7 @@ command_exists() {
 setup_bashrc() {
     if ! grep "$DOTFILES_DIR" "$HOME/.bashrc" > /dev/null; then
         echo "-> setup bashrc"
+        echo "export DOTFILES_DIR=\"$DOTFILES_DIR\"" >> "$HOME/.bashrc"
         echo ". $DOTFILES_DIR/bash/.bashrc" >> "$HOME/.bashrc"
     fi
 }

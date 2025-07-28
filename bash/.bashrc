@@ -13,6 +13,11 @@ fi
 # set editors
 alias vim="nvim"
 export EDITOR="nvim"
+if [[ "$OSTYPE" =~ ^linux ]]; then
+    alias dot="$EDITOR $DOTFILES_DIR"
+elif [[ "$OSTYPE" =~ ^darwin ]]; then
+    alias dot="cursor $DOTFILES_DIR"
+fi
 
 # setup a simple prompt
 generate_prompt() {
