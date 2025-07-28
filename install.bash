@@ -66,6 +66,7 @@ install_homebrew_packages() {
         fd
         jq
         gawk
+        unzip
         less
         mise
         bash-completion@2

@@ -13,7 +13,6 @@ fi
 # set editors
 alias vim="nvim"
 export EDITOR="nvim"
-export VISUAL="cursor"
 
 # setup a simple prompt
 generate_prompt() {
