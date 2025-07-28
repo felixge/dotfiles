@@ -65,6 +65,7 @@ install_homebrew_packages() {
         tree
         fd
         jq
+        cloc
         gawk
         unzip
         less
