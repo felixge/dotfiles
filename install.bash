@@ -71,6 +71,8 @@ install_homebrew_packages() {
         unzip
         less
         mise
+        rsync
+        kubectx
         bash-completion@2
     )
     brew install "${brew_packages[@]}"
