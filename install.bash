@@ -64,6 +64,7 @@ install_homebrew_packages() {
         ripgrep
         tree
         fd
+        gh
         jq
         cloc
         gawk
