@@ -60,4 +60,4 @@ eval "$(zoxide init bash)"
 alias j="z" # used to be my alias for fasd
 
 # mise
-eval "$(mise env)"
+eval "$(mise activate bash)"
