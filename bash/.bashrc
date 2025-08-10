@@ -61,3 +61,15 @@ alias j="z" # used to be my alias for fasd
 
 # mise
 eval "$(mise activate bash)"
+
+# timewarrior
+alias tw="timew"
+# rename tag: use as timew-tagrename <oldtag> <newtag>
+function tw-tagrename() {
+  oldtag=$1; shift
+  newtag=$1; shift
+  idlist=$(timew summary "$oldtag" :ids :all | sed -nr 's/.* (@[0-9]+) .*/\1/p')
+
+  timew tag $idlist "$newtag"
+  timew untag $idlist "$oldtag"
+} 
