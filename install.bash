@@ -120,8 +120,13 @@ setup_gitconfig() {
         echo "  path = \"$DOTFILES_DIR/git/.gitconfig\"" >> "$HOME/.gitconfig"
     fi
     if ! grep -E 'includeIf.+DataDog' "$HOME/.gitconfig" > /dev/null; then
-        echo "-> add .gitconfig.datadog include to $HOME/.gitconfig"
+        echo "-> add .gitconfig.datadog include to $HOME/.gitconfig for DataDog"
         echo "[includeIf \"gitdir:~/go/src/github.com/DataDog/**\"]" >> "$HOME/.gitconfig"
+        echo "  path = \"$DOTFILES_DIR/git/.gitconfig.datadog\"" >> "$HOME/.gitconfig"
+    fi
+    if ! grep -E 'includeIf.+open-telemetry' "$HOME/.gitconfig" > /dev/null; then
+        echo "-> add .gitconfig.open-telemetry include to $HOME/.gitconfig for OpenTelemetry"
+        echo "[includeIf \"gitdir:~/go/src/github.com/open-telemetry/**\"]" >> "$HOME/.gitconfig"
         echo "  path = \"$DOTFILES_DIR/git/.gitconfig.datadog\"" >> "$HOME/.gitconfig"
     fi
 }
