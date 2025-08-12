@@ -67,6 +67,7 @@ install_homebrew_packages() {
         gh
         jjui
         jq
+        yq
         cloc
         gawk
         unzip
