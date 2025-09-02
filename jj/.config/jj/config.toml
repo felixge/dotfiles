@@ -46,6 +46,7 @@ gh pr view --web "$(jj bookmark list -r 'closest_bookmark('$ref')' -T 'name')"
 
 [ui]
 default-command = "log"
+bookmark-list-sort-keys = ["committer-date-"]
 #default-command = "wip"
 
 [signing]
