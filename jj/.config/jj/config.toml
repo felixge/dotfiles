@@ -40,7 +40,8 @@ body = ["show", "--no-patch", "-T", "description.remove_prefix(description.first
 stack = ["log", "-r", "stack"]
 # open pr for nearest bookmark
 pr = ["util", "exec", "--", "bash", "-c", """
-gh pr view --web "$(jj bookmark list -r 'closest_bookmark(@-)' -T 'name')"
+ref=${1:-@-}
+gh pr view --web "$(jj bookmark list -r 'closest_bookmark('$ref')' -T 'name')"
 """, ""]
 
 [ui]
