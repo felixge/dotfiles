@@ -20,6 +20,11 @@ concat(
 )
 '''
 
+[template-aliases]
+'format_short_cryptographic_signature(sig)' = '''
+  if(sig, "🔑", "⚠️")
+'''
+
 [revset-aliases]
 'closest_bookmark(to)' = 'heads(::to & bookmarks())'
 'wip' = '((trunk()..@):: & mine()) | trunk()'
@@ -47,7 +52,7 @@ gh pr view --web "$(jj bookmark list -r 'closest_bookmark('$ref')' -T 'name')"
 [ui]
 default-command = "log"
 bookmark-list-sort-keys = ["committer-date-"]
-#default-command = "wip"
+show-cryptographic-signatures = true
 
 [signing]
 behavior = "own"
