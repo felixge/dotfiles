@@ -62,6 +62,7 @@ install_homebrew_packages() {
         zoxide
         neovim
         ripgrep
+        btop
         tree
         fd
         gh
