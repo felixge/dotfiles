@@ -53,6 +53,8 @@ gh pr view --web "$(jj bookmark list -r 'closest_bookmark('$ref')' -T 'name')"
 default-command = "log"
 bookmark-list-sort-keys = ["committer-date-"]
 show-cryptographic-signatures = true
+pager = "delta"
+diff-formatter = ":git"
 
 [signing]
 behavior = "own"

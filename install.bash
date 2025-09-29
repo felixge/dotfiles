@@ -63,6 +63,7 @@ install_homebrew_packages() {
         neovim
         ripgrep
         btop
+        git-delta
         tree
         fd
         gh

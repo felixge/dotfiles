@@ -79,3 +79,10 @@
 [url "git@github.com:"]
 	insteadOf = https://github.com/
 	insteadOf = git://github.com/
+
+[delta]
+  line-numbers = true
+  hyperlinks = true
+  hyperlinks-file-link-format = "cursor://file/{path}:{line}"
+  side-by-side = true
+  navigate = true
