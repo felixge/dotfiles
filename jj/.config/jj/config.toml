@@ -42,7 +42,7 @@ e = ["edit"]
 # bring nearest bookmark up to recent commit
 tug = ["bookmark", "move", "--from", "closest_bookmark(@-)", "--to", "@-"]
 body = ["show", "--no-patch", "-T", "description.remove_prefix(description.first_line()).trim_start()"]
-stack = ["log", "-r", "stack"]
+stack = ["log", "--no-graph", "-r", "stack"]
 # open pr for nearest bookmark
 pr = ["util", "exec", "--", "bash", "-c", """
 ref=${1:-@-}
