@@ -133,6 +133,13 @@ setup_gitconfig() {
         echo "[includeIf \"gitdir:~/go/src/github.com/open-telemetry/**\"]" >> "$HOME/.gitconfig"
         echo "  path = \"$DOTFILES_DIR/git/.gitconfig.datadog\"" >> "$HOME/.gitconfig"
     fi
+    if [[ "$USER" == "bits" ]] && ! grep '# workspace config' "$HOME/.gitconfig" > /dev/null; then
+        echo "-> add workspace config to $HOME/.gitconfig"
+        echo "# workspace config" >> "$HOME/.gitconfig"
+        echo "[delta]" >> "$HOME/.gitconfig"
+        echo "  hyperlinks-file-link-format = "cursor://vscode-remote/ssh-remote+workspace-${HOSTNAME}/{path}:{line}"
+" >> "$HOME/.gitconfig"
+    fi
 }
 
 unminimize_ubuntu() {
