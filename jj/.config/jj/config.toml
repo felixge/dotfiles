@@ -19,11 +19,38 @@ concat(
   diff.git(),
 )
 '''
+git_push_bookmark = """
+  truncate_end(
+    244,
+    separate(
+      "/",
+      "felix.geisendoerfer",
+      jira_issue_prefix(description),
+      first_line_suffix(description),
+    ),
+  )
+"""
 
 [template-aliases]
 'format_short_cryptographic_signature(sig)' = '''
   if(sig, "🔑", "⚠️")
 '''
+
+"first_line_suffix(description)" = """
+  description
+    .first_line()
+    .remove_prefix(jira_issue_prefix(description))
+    .lower()
+    .replace(regex:"[[:^word:]]", "-")
+    .replace(regex:"-+", "-")
+    .replace(regex:"^-|-$", "")
+"""
+
+"jira_issue_prefix(description)" = """
+  description
+    .match(regex:"^[[:upper:]]+-[[:digit:]]+[[:blank:]]+")
+    .replace(regex:"[[:blank:]]+", "")
+"""
 
 [revset-aliases]
 'closest_bookmark(to)' = 'heads(::to & bookmarks())'
