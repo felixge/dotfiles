@@ -77,7 +77,7 @@ gh pr view --web "$(jj bookmark list -r 'closest_bookmark('$ref')' -T 'name')"
 """, ""]
 
 [ui]
-default-command = "log"
+default-command = "status"
 bookmark-list-sort-keys = ["committer-date-"]
 show-cryptographic-signatures = true
 pager = "delta"
