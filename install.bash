@@ -78,6 +78,7 @@ install_homebrew_packages() {
         mise
         rsync
         kubectx
+        magic-wormhole
         bash-completion@2
     )
     brew install "${brew_packages[@]}"
