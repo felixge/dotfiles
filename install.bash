@@ -152,7 +152,7 @@ unminimize_ubuntu() {
 
 stow_dotfiles() {
     echo "-> stow dotfiles"
-    stow -t "$HOME" jj neovim mise
+    stow -t "$HOME" jj neovim mise claude
 }
 
 mise_install() {
