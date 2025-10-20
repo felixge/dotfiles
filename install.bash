@@ -76,6 +76,7 @@ install_homebrew_packages() {
         unzip
         less
         mise
+        uv
         rsync
         kubectx
         magic-wormhole
