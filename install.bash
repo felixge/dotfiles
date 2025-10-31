@@ -83,6 +83,7 @@ install_homebrew_packages() {
         bash-completion@2
     )
     brew install "${brew_packages[@]}"
+    brew install --cask claude-code
 }
 
 trust_github() {
