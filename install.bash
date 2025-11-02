@@ -61,6 +61,7 @@ install_homebrew_packages() {
         tmux
         zoxide
         neovim
+        codex
         ripgrep
         btop
         git-delta
