@@ -171,6 +171,7 @@ install_go_packages() {
         github.com/go-delve/delve/cmd/dlv@latest
         golang.org/x/perf/cmd/benchstat@latest
         golang.org/x/tools/cmd/stress@latest
+        github.com/bokwoon95/wgo@latest
     )
     for package in "${go_packages[@]}"; do
         go install "$package"
