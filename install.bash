@@ -13,6 +13,7 @@ main() {
     unminimize_ubuntu
     stow_dotfiles
     mise_install
+    install_go_packages
     exec bash
 }
 
@@ -162,6 +163,18 @@ mise_install() {
     echo "-> install mise tools"
     mise trust
     mise install
+}
+
+install_go_packages() {
+    echo "-> install go packages"
+    local go_packages=(
+        github.com/go-delve/delve/cmd/dlv@latest
+        golang.org/x/perf/cmd/benchstat@latest
+        golang.org/x/tools/cmd/stress@latest
+    )
+    for package in "${go_packages[@]}"; do
+        go install "$package"
+    done
 }
 
 main "$@"
