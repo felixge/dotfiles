@@ -1,15 +1,15 @@
 {
-  "enabledPlugins": {
-    "document-skills@anthropic-agent-skills": true
-  },
-  "alwaysThinkingEnabled": true,
   "permissions": {
-    "defaultMode": "acceptEdits",
     "allow": [
       "Bash(jj :*)",
       "Bash(go :*)"
     ],
-    "deny": [
-    ]
-  }
+    "deny": [],
+    "defaultMode": "acceptEdits"
+  },
+  "model": "opus",
+  "enabledPlugins": {
+    "document-skills@anthropic-agent-skills": true
+  },
+  "alwaysThinkingEnabled": true
 }

@@ -6,3 +6,6 @@
 
 # don't check in secret git config files
 /git/.gitconfig.*
+/claude/.claude/*
+!/claude/.claude/settings.json
+!/claude/.claude/skills
