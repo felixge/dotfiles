@@ -86,3 +86,4 @@
   hyperlinks-file-link-format = "cursor://file/{path}:{line}"
   side-by-side = true
   navigate = true
+  pager = "less -FRX"
