@@ -54,35 +54,35 @@ install_homebrew() {
 install_homebrew_packages() {
     echo "-> install homebrew packages"
     local brew_packages=(
-        jj
-        stow
-        curl
-        git
-        htop
-        tmux
-        zoxide
-        neovim
-        codex
-        ripgrep
+        bash-completion@2
         btop
-        git-delta
-        tree
+        cloc
+        codex
+        curl
         fd
+        gawk
         gh
+        git
+        git-delta
+        htop
+        jj
         jjui
         jq
-        yq
-        llm
-        cloc
-        gawk
-        unzip
-        less
-        mise
-        uv
-        rsync
         kubectx
+        less
+        llm
         magic-wormhole
-        bash-completion@2
+        mise
+        neovim
+        ripgrep
+        rsync
+        stow
+        tmux
+        tree
+        unzip
+        uv
+        yq
+        zoxide
     )
     brew install "${brew_packages[@]}"
     brew install --cask claude-code
