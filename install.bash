@@ -74,6 +74,7 @@ install_homebrew_packages() {
         magic-wormhole
         mise
         neovim
+	protobuf
         ripgrep
         rsync
         stow
