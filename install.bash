@@ -175,8 +175,9 @@ install_go_packages() {
         github.com/bokwoon95/wgo@latest
     )
     for package in "${go_packages[@]}"; do
-        go install "$package"
+        go install "$package" &
     done
+    wait
 }
 
 main "$@"
