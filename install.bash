@@ -54,6 +54,7 @@ install_homebrew() {
 install_homebrew_packages() {
     echo "-> install homebrew packages"
     local brew_packages=(
+	    protobuf
         bash-completion@2
         btop
         cloc
@@ -74,7 +75,6 @@ install_homebrew_packages() {
         magic-wormhole
         mise
         neovim
-	protobuf
         ripgrep
         rsync
         stow
