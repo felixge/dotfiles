@@ -124,6 +124,9 @@ setup_bashrc() {
 }
 
 setup_gitconfig() {
+    # Ensure .gitconfig exists to avoid grep warnings
+    touch "$HOME/.gitconfig"
+
     if ! grep "$DOTFILES_DIR" "$HOME/.gitconfig" > /dev/null; then
         echo "-> add .gitconfig include to $HOME/.gitconfig"
         echo "[include]" >> "$HOME/.gitconfig"
@@ -139,7 +142,7 @@ setup_gitconfig() {
         echo "[includeIf \"gitdir:~/go/src/github.com/open-telemetry/**\"]" >> "$HOME/.gitconfig"
         echo "  path = \"$DOTFILES_DIR/git/.gitconfig.datadog\"" >> "$HOME/.gitconfig"
     fi
-    if [[ "$USER" == "bits" ]] && ! grep '# workspace config' "$HOME/.gitconfig" > /dev/null; then
+    if [[ "${USER:-}" == "bits" ]] && ! grep '# workspace config' "$HOME/.gitconfig" > /dev/null; then
         echo "-> add workspace config to $HOME/.gitconfig"
         echo "# workspace config" >> "$HOME/.gitconfig"
         echo "[delta]" >> "$HOME/.gitconfig"
