@@ -90,3 +90,9 @@ key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGjTWhql3FHsAAAZWolVjmZzNX5xxXByRb7RX
 
 [git]
 push-branch-prefix = "felixge/push-"
+
+[fsmonitor]
+backend = "watchman"
+[fsmonitor.watchman]
+register-snapshot-trigger = true
+
