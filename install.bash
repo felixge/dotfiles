@@ -167,6 +167,7 @@ mise_install() {
     echo "-> install mise tools"
     mise trust
     mise install
+    mise upgrade
 }
 
 install_go_packages() {
