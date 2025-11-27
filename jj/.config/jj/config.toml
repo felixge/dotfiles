@@ -82,6 +82,7 @@ bookmark-list-sort-keys = ["committer-date-"]
 show-cryptographic-signatures = true
 pager = "delta"
 diff-formatter = ":git"
+diff-editor = ":builtin"
 
 [signing]
 behavior = "own"
