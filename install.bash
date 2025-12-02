@@ -62,6 +62,7 @@ install_homebrew_packages() {
         curl
         fd
         gawk
+        gdb
         gh
         git
         git-delta
