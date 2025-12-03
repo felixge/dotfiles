@@ -62,6 +62,9 @@ alias j="z" # used to be my alias for fasd
 # mise
 eval "$(mise activate bash)"
 
+# direnv
+eval "$(direnv hook bash)"
+
 # timewarrior
 alias tw="timew"
 # rename tag: use as timew-tagrename <oldtag> <newtag>
