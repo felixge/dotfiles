@@ -86,8 +86,8 @@ install_homebrew_packages() {
         yq
         zoxide
     )
-    brew install "${brew_packages[@]}"
-    brew install --cask claude-code
+    brew install -q "${brew_packages[@]}"
+    brew install -q --cask claude-code
 }
 
 trust_github() {
@@ -166,9 +166,9 @@ stow_dotfiles() {
 
 mise_install() {
     echo "-> install mise tools"
-    mise trust
-    mise install
-    mise upgrade
+    mise trust -q
+    mise install -q
+    mise upgrade -q
 }
 
 install_go_packages() {
