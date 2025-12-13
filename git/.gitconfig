@@ -87,3 +87,4 @@
   side-by-side = true
   navigate = true
   pager = "less -FRX"
+  light = true
