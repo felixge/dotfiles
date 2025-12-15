@@ -1,0 +1,14 @@
+[leader.d]
+context = [ "$change_id" ]
+help = "Show interactive diff"
+send = [ "$", "jj show $change_id", "enter" ]
+
+[leader.e]
+context = [ "$file", "$change_id" ]
+help = "Edit file in @"
+send = [ "$", "cursor $file", "enter" ]
+
+[leader.E]
+context = [ "$file", "$change_id" ]
+help = "Edit file in change"
+send = [ "$", "jj edit \"$change_id\" && $EDITOR $file", "enter" ]
