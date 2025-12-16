@@ -11,4 +11,4 @@ send = [ "$", "cursor $file", "enter" ]
 [leader.E]
 context = [ "$file", "$change_id" ]
 help = "Edit file in change"
-send = [ "$", "jj edit \"$change_id\" && $EDITOR $file", "enter" ]
+send = [ "$", "jj edit \"$change_id\" && cursor $file", "enter" ]
