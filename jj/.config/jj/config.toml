@@ -91,6 +91,7 @@ key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGjTWhql3FHsAAAZWolVjmZzNX5xxXByRb7RX
 
 [git]
 push-branch-prefix = "felixge/push-"
+private-commits = '''description(glob:'private:*')'''
 
 [fsmonitor]
 backend = "watchman"
