@@ -87,7 +87,9 @@ install_homebrew_packages() {
         zoxide
     )
     brew install -q "${brew_packages[@]}"
-    brew install -q --cask claude-code keycastr
+    if is_macos; then
+        brew install -q --cask keycastr
+    fi
 }
 
 trust_github() {
