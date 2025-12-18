@@ -34,12 +34,12 @@ git_push_bookmark = """
 [template-aliases]
 'format_short_cryptographic_signature(sig)' = '''
   separate(" ",
-    if(description.starts_with("private:"), "🙊"),
-    if(description.starts_with("wip:"), "🚧"),
-    if(description.starts_with("chore"), "🧹"),
-    if(description.starts_with("fix"), "🐞"),
-    if(description.starts_with("feat"), "🎁"),
-    if(description.starts_with("refactor"), "♻️"),
+    if(description.match(regex:"private[(:]"), "🙊"),
+    if(description.match(regex:"wip[(:]"), "🚧"),
+    if(description.match(regex:"chore[(:]"), "🧹"),
+    if(description.match(regex:"fix[(:]"), "🐞"),
+    if(description.match(regex:"feat[(:]"), "🎁"),
+    if(description.match(regex:"refactor[(:]"), "♻️"),
     if(sig, "🔑", "⚠️"),
   )
 '''
