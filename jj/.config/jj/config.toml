@@ -33,7 +33,15 @@ git_push_bookmark = """
 
 [template-aliases]
 'format_short_cryptographic_signature(sig)' = '''
-  if(sig, "🔑", "⚠️")
+  separate(" ",
+    if(description.starts_with("private:"), "🙊"),
+    if(description.starts_with("wip:"), "🚧"),
+    if(description.starts_with("chore"), "🧹"),
+    if(description.starts_with("fix"), "🐞"),
+    if(description.starts_with("feat"), "🎁"),
+    if(description.starts_with("refactor"), "♻️"),
+    if(sig, "🔑", "⚠️"),
+  )
 '''
 
 "first_line_suffix(description)" = """
