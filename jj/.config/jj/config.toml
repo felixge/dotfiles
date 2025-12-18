@@ -34,7 +34,7 @@ git_push_bookmark = """
 [template-aliases]
 'format_short_cryptographic_signature(sig)' = '''
   separate(" ",
-    if(description.match(regex:"private[(:]"), "🙊"),
+    if(description.match(regex:"private[(:]") || description == "", "🙊"),
     if(description.match(regex:"wip[(:]"), "🚧"),
     if(description.match(regex:"chore[(:]"), "🧹"),
     if(description.match(regex:"fix[(:]"), "🐞"),
