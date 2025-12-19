@@ -32,16 +32,43 @@ git_push_bookmark = """
 """
 
 [template-aliases]
-'format_short_cryptographic_signature(sig)' = '''
+'format_short_cryptographic_signature(sig)' = 'if(sig, "🔑", "⚠️")'
+
+'format_commit_type_emoji(description)' = '''
   separate(" ",
-    if(description.match(regex:"private[(:]") || description == "", "🙊"),
+    if(description.match(regex:"private[(:]"), "🙊"),
     if(description.match(regex:"wip[(:]"), "🚧"),
     if(description.match(regex:"chore[(:]"), "🧹"),
     if(description.match(regex:"fix[(:]"), "🐞"),
     if(description.match(regex:"feat[(:]"), "🎁"),
     if(description.match(regex:"refactor[(:]"), "♻️"),
-    if(sig, "🔑", "⚠️"),
   )
+'''
+
+'builtin_log_compact(commit)' = '''
+if(commit.root(),
+  format_root_commit(commit),
+  label(
+    separate(" ",
+      if(commit.current_working_copy(), "working_copy"),
+      if(commit.immutable(), "immutable", "mutable"),
+      if(commit.conflict(), "conflicted"),
+    ),
+    concat(
+      format_short_commit_header(commit) ++ "\n",
+      separate(" ",
+        if(commit.empty(), empty_commit_marker),
+        if(commit.description(),
+          separate(" ",
+            format_commit_type_emoji(commit.description()),
+            commit.description().first_line(),
+          ),
+          label(if(commit.empty(), "empty"), description_placeholder),
+        ),
+      ) ++ "\n",
+    ),
+  )
+)
 '''
 
 "first_line_suffix(description)" = """
