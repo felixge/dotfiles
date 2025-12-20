@@ -60,6 +60,7 @@ install_homebrew_packages() {
         cloc
         codex
         curl
+        direnv
         fd
         gawk
         gdb
