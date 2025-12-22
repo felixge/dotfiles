@@ -18,7 +18,7 @@ main() {
 }
 
 install_basics() {
-    local commands=(curl git make)
+    local commands=(curl git make ss)
     if is_macos; then
         for command in "${commands[@]}"; do
             if ! command_exists "$command"; then
@@ -28,12 +28,13 @@ install_basics() {
         done
     elif ! command_exists "${commands[@]}"; then
         echo "-> install basics"
-        apt-get -y update
-        apt-get -y install \
+        sudo apt-get -y update
+        sudo apt-get -y install \
             curl \
             git \
             build-essential \
-            man-db
+            man-db \
+            iproute2
     fi
 }
 
@@ -180,6 +181,7 @@ install_go_packages() {
     local go_packages=(
         github.com/bokwoon95/wgo@latest
         github.com/go-delve/delve/cmd/dlv@latest
+        github.com/maruel/panicparse/v2/cmd/pp@latest
         golang.org/x/perf/cmd/benchstat@latest
         golang.org/x/pkgsite/cmd/pkgsite@latest
         golang.org/x/tools/cmd/stress@latest

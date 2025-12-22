@@ -7,7 +7,6 @@
     "deny": [],
     "defaultMode": "acceptEdits"
   },
-  "model": "opus",
   "enabledPlugins": {
     "document-skills@anthropic-agent-skills": true
   },
