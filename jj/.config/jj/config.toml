@@ -97,6 +97,7 @@ if(commit.root(),
   | author('felix.geisendoerfer@datadoghq.com')
   | author('haimuiba@gmail.com')
 """
+'immutable_heads()' = 'builtin_immutable_heads() | present(remote_bookmarks())'
 
 [aliases]
 wip = ["log", "-r", "wip"]
