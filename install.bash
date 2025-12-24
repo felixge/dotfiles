@@ -84,6 +84,7 @@ install_homebrew_packages() {
         tree
         unzip
         uv
+        vhs
         yq
         zoxide
     )
