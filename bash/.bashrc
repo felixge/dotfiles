@@ -76,3 +76,8 @@ function tw-tagrename() {
   timew tag $idlist "$newtag"
   timew untag $idlist "$oldtag"
 } 
+
+# load key for commit signing if exists and is not loaded
+if [ -f ~/.ssh/datadog_git_commit_signing ]; then
+    ssh-add -l 2>/dev/null | grep -q "commit-signing@datadoghq.com" || ssh-add --apple-use-keychain ~/.ssh/datadog_git_commit_signing
+fi
