@@ -87,6 +87,12 @@ if(commit.root(),
     .replace(regex:"[[:blank:]]+", "")
 """
 
+[revsets]
+# via Romain Marcadier: The current working copy, The trunk(), Any local
+# bookmarks I have, And then go down as far as needed to have them all connect
+# to each other (the fork point)
+log = 'fork_point(connected(@ | trunk() | present(bookmarks())))::connected(@ | trunk() | present(bookmarks()))'
+
 [revset-aliases]
 'closest_bookmark(to)' = 'heads(::to & bookmarks())'
 'wip' = '((trunk()..@):: & mine()) | trunk()'
@@ -113,7 +119,7 @@ gh pr view --web "$(jj bookmark list -r 'closest_bookmark('$ref')' -T 'name')"
 """, ""]
 
 [ui]
-default-command = ["log", "-s", "-r", "stack"]
+default-command = ["log"]
 bookmark-list-sort-keys = ["committer-date-"]
 show-cryptographic-signatures = true
 pager = "delta"
