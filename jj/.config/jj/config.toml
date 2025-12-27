@@ -88,10 +88,6 @@ if(commit.root(),
 """
 
 [revsets]
-# via Romain Marcadier: The current working copy, The trunk(), Any local
-# bookmarks I have, And then go down as far as needed to have them all connect
-# to each other (the fork point)
-log = 'fork_point(connected(@ | trunk() | present(bookmarks())))::connected(@ | trunk() | present(bookmarks()))'
 
 [revset-aliases]
 'closest_bookmark(to)' = 'heads(::to & bookmarks())'
@@ -103,7 +99,6 @@ log = 'fork_point(connected(@ | trunk() | present(bookmarks())))::connected(@ | 
   | author('felix.geisendoerfer@datadoghq.com')
   | author('haimuiba@gmail.com')
 """
-'immutable_heads()' = 'builtin_immutable_heads() | present(remote_bookmarks())'
 
 [aliases]
 wip = ["log", "-r", "wip"]
