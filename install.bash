@@ -18,7 +18,7 @@ main() {
 }
 
 install_basics() {
-    local commands=(curl git make ss)
+    local commands=(curl git make)
     if is_macos; then
         for command in "${commands[@]}"; do
             if ! command_exists "$command"; then
