@@ -7,9 +7,10 @@
     "deny": [],
     "defaultMode": "acceptEdits"
   },
+  "model": "opus",
   "enabledPlugins": {
-    "document-skills@anthropic-agent-skills": true
+    "document-skills@anthropic-agent-skills": false,
+    "gopls-lsp@claude-plugins-official": true
   },
-  "alwaysThinkingEnabled": true,
-  "model": "opus"
+  "alwaysThinkingEnabled": true
 }
