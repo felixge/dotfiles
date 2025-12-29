@@ -58,6 +58,7 @@ install_homebrew_packages() {
 	    protobuf
         bash-completion@2
         btop
+        claude-code
         cloc
         codex
         curl
