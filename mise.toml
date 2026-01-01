@@ -1,2 +1,6 @@
 [env]
 RIPGREP_CONFIG_PATH="{{config_root}}/.ripgreprc"
+
+[tools]
+go = "latest"
+node = "latest"
