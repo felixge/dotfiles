@@ -1,3 +1,6 @@
+# mise
+eval "$(mise activate bash)"
+
 # source homebrew env, including completions
 if ! command -v brew >/dev/null 2>&1; then
     for prefix in "/opt/homebrew" "/home/linuxbrew/.linuxbrew"; do
@@ -58,9 +61,6 @@ fi
 # zoxide
 eval "$(zoxide init bash)"
 alias j="z" # used to be my alias for fasd
-
-# mise
-eval "$(mise activate bash)"
 
 # direnv
 eval "$(direnv hook bash)"
