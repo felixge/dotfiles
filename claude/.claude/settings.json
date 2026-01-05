@@ -10,7 +10,10 @@
   "model": "opus",
   "enabledPlugins": {
     "document-skills@anthropic-agent-skills": false,
-    "gopls-lsp@claude-plugins-official": true
+    "gopls-lsp@claude-plugins-official": true,
+    "dd@datadog-claude-plugins": true,
+    "atlassian-remote-mcp@datadog-claude-plugins": true,
+    "go-code-reviewer@datadog-claude-plugins": true
   },
   "alwaysThinkingEnabled": true
 }
