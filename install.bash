@@ -18,7 +18,7 @@ main() {
 }
 
 install_basics() {
-    local commands=(curl git make)
+    local commands=(curl git make ping)
     if is_macos; then
         for command in "${commands[@]}"; do
             if ! command_exists "$command"; then
@@ -30,11 +30,12 @@ install_basics() {
         echo "-> install basics"
         sudo apt-get -y update
         sudo apt-get -y install \
+            build-essential \
             curl \
             git \
-            build-essential \
-            man-db \
-            iproute2
+            iproute2 \
+            iputils-ping \
+            man-db
     fi
 }
 
