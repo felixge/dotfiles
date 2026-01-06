@@ -39,5 +39,13 @@
     "atlassian-remote-mcp@datadog-claude-plugins": true,
     "go-code-reviewer@datadog-claude-plugins": true
   },
-  "alwaysThinkingEnabled": true
+  "alwaysThinkingEnabled": true,
+  "extraKnownMarketplaces": {
+    "datadog-claude-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "DataDog/claude-marketplace"
+      }
+    }
+  }
 }
