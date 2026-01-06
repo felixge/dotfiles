@@ -15,7 +15,7 @@
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
-    "excludedCommands": ["docker", "jj"],
+    "excludedCommands": ["docker:*", "jj:*"],
     "network": {
       "allowUnixSockets": [
         "/var/run/docker.sock"
