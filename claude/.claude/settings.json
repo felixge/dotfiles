@@ -1,4 +1,17 @@
 {
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '\"curl -d \" + (.message | @sh) + \" -H \" + (\"Title: Claude Code (\" + (.cwd | split(\"/\") | last) + \")\" | @sh) + \" http://localhost:7878\"' | sh"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(jj :*)",
