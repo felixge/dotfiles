@@ -12,12 +12,23 @@
       }
     ]
   },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "excludedCommands": ["docker"],
+    "network": {
+      "allowUnixSockets": [
+        "/var/run/docker.sock"
+      ],
+      "allowLocalBinding": true
+    }
+  },
   "permissions": {
-    "allow": [
-      "Bash(jj :*)",
-      "Bash(go :*)"
+    "allow": [],
+    "deny": [
+      "Read(.envrc)",
+      "Read(~/.aws/**)"
     ],
-    "deny": [],
     "defaultMode": "acceptEdits"
   },
   "model": "opus",
