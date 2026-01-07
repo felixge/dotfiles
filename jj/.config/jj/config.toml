@@ -94,10 +94,10 @@ if(commit.root(),
 'wip' = '((trunk()..@):: & mine()) | trunk()'
 'stack' = 'fork_point(@ | trunk())::@'
 "mine()" = """
-    author('felix@felixge.de')
-  | author('felix@datadoghq.com')
-  | author('felix.geisendoerfer@datadoghq.com')
-  | author('haimuiba@gmail.com')
+    author(exact:'felix@felixge.de')
+  | author(exact:'felix@datadoghq.com')
+  | author(exact:'felix.geisendoerfer@datadoghq.com')
+  | author(exact:'haimuiba@gmail.com')
 """
 
 [aliases]
