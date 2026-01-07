@@ -24,7 +24,9 @@
     }
   },
   "permissions": {
-    "allow": [],
+    "allow": [
+      "Skill(*)"
+    ],
     "deny": [
       "Read(.envrc)",
       "Read(~/.aws/**)"
