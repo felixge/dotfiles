@@ -82,6 +82,7 @@ install_homebrew_packages() {
         neovim
         ripgrep
         rsync
+        socat
         stow
         tmux
         tree
@@ -94,6 +95,8 @@ install_homebrew_packages() {
     brew install -q "${brew_packages[@]}"
     if is_macos; then
         brew install -q --cask keycastr
+    else
+        brew install -q bubblewrap
     fi
 }
 
