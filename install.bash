@@ -14,6 +14,7 @@ main() {
     stow_dotfiles
     mise_install
     install_go_packages
+    symlink_go
     exec bash
 }
 
@@ -197,6 +198,12 @@ install_go_packages() {
         go install "$package" &
     done
     wait
+}
+
+symlink_go() {
+    # Hack: Make sure the VS Code Go extension can always find the go binary
+    echo "-> symlink go to /usr/local/bin"
+    sudo ln -sf "$(mise which go)" /usr/local/bin/go
 }
 
 main "$@"
