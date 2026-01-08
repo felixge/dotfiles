@@ -25,9 +25,11 @@
   },
   "permissions": {
     "allow": [
-      "Skill(*)"
+      "Skill(*)",
+      "Bash(jj:*)"
     ],
     "deny": [
+      "Bash(jj git:*)",
       "Read(.envrc)",
       "Read(~/.aws/**)"
     ],
