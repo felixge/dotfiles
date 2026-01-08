@@ -88,17 +88,28 @@ if(commit.root(),
 """
 
 [revsets]
+log-graph-prioritize = 'coalesce(megamerge(), trunk())'
 
 [revset-aliases]
 'closest_bookmark(to)' = 'heads(::to & bookmarks())'
 'wip' = '((trunk()..@):: & mine()) | trunk()'
-'stack' = 'fork_point(@ | trunk())::@'
+#'stack' = 'fork_point(@ | trunk())::@'
 "mine()" = """
     author(exact:'felix@felixge.de')
   | author(exact:'felix@datadoghq.com')
   | author(exact:'felix.geisendoerfer@datadoghq.com')
   | author(exact:'haimuiba@gmail.com')
 """
+
+# stack(x, n) is the set of mutable commits reachable from 'x', with 'n'
+# parents. 'n' is often useful to customize the display and return set for
+# certain operations. 'x' can be used to target the set of 'roots' to traverse,
+# e.g. @ is the current stack.
+'stack()' = 'stack(@)'
+'stack(x)' = 'stack(x, 2)'
+'stack(x, n)' = 'ancestors(reachable(x, mutable()), n)'
+
+'megamerge()' = 'coalesce(present(megamerge), reachable(stack(), merges()))'
 
 [aliases]
 wip = ["log", "-r", "wip"]
