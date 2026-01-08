@@ -58,6 +58,7 @@ install_homebrew_packages() {
     local brew_packages=(
 	    protobuf
         bash-completion@2
+        bat
         btop
         claude-code
         cloc
