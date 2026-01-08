@@ -71,6 +71,7 @@ install_homebrew_packages() {
         gh
         git
         git-delta
+        glow
         htop
         jj
         jjui
