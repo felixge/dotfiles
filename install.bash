@@ -19,7 +19,7 @@ main() {
 }
 
 install_basics() {
-    local commands=(curl git make ping)
+    local commands=(curl git make ping clang)
     if is_macos; then
         for command in "${commands[@]}"; do
             if ! command_exists "$command"; then
@@ -32,6 +32,7 @@ install_basics() {
         sudo apt-get -y update
         sudo apt-get -y install \
             build-essential \
+            clang\
             curl \
             git \
             iproute2 \
