@@ -26,7 +26,9 @@
   "permissions": {
     "allow": [
       "Skill(*)",
-      "Bash(jj:*)"
+      "Bash(jj:*)",
+      "Bash(bzl run //:gazelle:*)",
+      "Bash(bzl build:gazelle:*)"
     ],
     "deny": [
       "Bash(jj git:*)",
