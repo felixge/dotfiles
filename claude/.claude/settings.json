@@ -31,7 +31,8 @@
     "deny": [
       "Bash(jj git:*)",
       "Read(.envrc)",
-      "Read(~/.aws/**)"
+      "Read(~/.aws/**)",
+      "Bash(jj git:*)"
     ],
     "defaultMode": "acceptEdits"
   },
