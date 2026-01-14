@@ -28,7 +28,7 @@
       "Skill(*)",
       "Bash(jj:*)",
       "Bash(bzl run //:gazelle:*)",
-      "Bash(bzl build:gazelle:*)"
+      "Bash(bzl build:*)"
     ],
     "deny": [
       "Bash(jj git:*)",
