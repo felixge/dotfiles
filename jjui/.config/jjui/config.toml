@@ -12,3 +12,8 @@ send = [ "$", "cursor $file", "enter" ]
 context = [ "$file", "$change_id" ]
 help = "Edit file in change"
 send = [ "$", "jj edit \"$change_id\" && cursor $file", "enter" ]
+
+[leader.p]
+context = [ "$change_id" ]
+help = "Open PR"
+send = [ "$", "jj pr \"$change_id\"", "enter" ]
