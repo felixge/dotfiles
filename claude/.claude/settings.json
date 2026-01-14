@@ -25,12 +25,19 @@
   },
   "permissions": {
     "allow": [
-      "Skill(*)",
+      "Skill(jj)",
       "Bash(jj:*)",
       "Bash(bzl run //:gazelle:*)",
       "Bash(bzl build:*)",
+      "Bash(bzl test:*)",
+      "Bash(bzl query:*)",
       "Bash(go test:*)",
-      "Bash(go build:*)"
+      "Bash(go build:*)",
+      "Bash(go get:*)",
+      "Bash(go mod:*)",
+      "Bash(find:*)",
+      "Read(*)",
+      "mcp__datadog__*"
     ],
     "deny": [
       "Bash(jj git:*)",
