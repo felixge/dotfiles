@@ -1,6 +1,3 @@
-# mise
-eval "$(mise activate bash)"
-
 # source homebrew env, including completions
 if ! command -v brew >/dev/null 2>&1; then
     for prefix in "/opt/homebrew" "/home/linuxbrew/.linuxbrew"; do
@@ -12,6 +9,9 @@ if ! command -v brew >/dev/null 2>&1; then
     done
 fi
 [[ -r "$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh" ]] && . "$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh"
+
+# mise (after homebrew so it's in PATH)
+command -v mise &>/dev/null && eval "$(mise activate bash)"
 
 # set editors
 alias vim="nvim"
