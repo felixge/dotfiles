@@ -13,7 +13,7 @@
     ]
   },
   "sandbox": {
-    "enabled": true,
+    "enabled": false,
     "autoAllowBashIfSandboxed": true,
     "excludedCommands": ["docker:*", "jj:*"],
     "network": {
