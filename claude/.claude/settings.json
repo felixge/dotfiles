@@ -32,6 +32,7 @@
       "Bash(bzl test:*)",
       "Bash(bzl query:*)",
       "Bash(go test:*)",
+      "Bash(tee:*)",
       "Bash(go build:*)",
       "Bash(go get:*)",
       "Bash(go mod:*)",
