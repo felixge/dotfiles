@@ -22,6 +22,11 @@ elif [[ "$OSTYPE" =~ ^darwin ]]; then
     alias dot="cursor $DOTFILES_DIR"
 fi
 
+# claude dangerous mode
+function claudd() {
+    claude --dangerously-skip-permissions "$@"
+}
+
 # setup a simple prompt
 generate_prompt() {
     local exit_code=$?
