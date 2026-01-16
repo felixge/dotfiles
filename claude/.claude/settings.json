@@ -34,6 +34,7 @@
       "Bash(go test:*)",
       "Bash(tee:*)",
       "Bash(go build:*)",
+      "Bash(find:*)",
       "Bash(go get:*)",
       "Bash(go mod:*)",
       "Bash(find:*)",
