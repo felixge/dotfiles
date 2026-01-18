@@ -10,6 +10,7 @@ main() {
     trust_github
     setup_bashrc
     setup_gitconfig
+    setup_tmux
     unminimize_ubuntu
     stow_dotfiles
     mise_install
@@ -164,6 +165,16 @@ setup_gitconfig() {
         echo "[delta]" >> "$HOME/.gitconfig"
         echo "  hyperlinks-file-link-format = "cursor://vscode-remote/ssh-remote+workspace-${HOSTNAME}/{path}:{line}"
 " >> "$HOME/.gitconfig"
+    fi
+}
+
+setup_tmux() {
+    # Ensure .tmux.conf exists to avoid grep warnings
+    touch "$HOME/.tmux.conf"
+
+    if ! grep "$DOTFILES_DIR" "$HOME/.tmux.conf" > /dev/null; then
+        echo "-> setup tmux config"
+        echo "source-file \"$DOTFILES_DIR/tmux/.tmux.conf\"" >> "$HOME/.tmux.conf"
     fi
 }
 
