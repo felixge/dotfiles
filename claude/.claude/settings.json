@@ -1,28 +1,4 @@
 {
-  "hooks": {
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "jq -r '\"curl -d \" + (.message | @sh) + \" -H \" + (\"Title: Claude Code (\" + (.cwd | split(\"/\") | last) + \")\" | @sh) + \" http://localhost:7878\"' | sh"
-          }
-        ]
-      }
-    ]
-  },
-  "sandbox": {
-    "enabled": false,
-    "autoAllowBashIfSandboxed": true,
-    "excludedCommands": ["docker:*", "jj:*"],
-    "network": {
-      "allowUnixSockets": [
-        "/var/run/docker.sock"
-      ],
-      "allowLocalBinding": true
-    }
-  },
   "permissions": {
     "allow": [
       "Skill(jj)",
@@ -50,15 +26,29 @@
     "defaultMode": "acceptEdits"
   },
   "model": "opus",
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -r '\"curl -d \" + (.message | @sh) + \" -H \" + (\"Title: Claude Code (\" + (.cwd | split(\"/\") | last) + \")\" | @sh) + \" http://localhost:7878\"' | sh"
+          }
+        ]
+      }
+    ]
+  },
   "enabledPlugins": {
     "document-skills@anthropic-agent-skills": false,
     "gopls-lsp@claude-plugins-official": true,
     "dd@datadog-claude-plugins": true,
     "atlassian-remote-mcp@datadog-claude-plugins": true,
     "go-code-reviewer@datadog-claude-plugins": true,
-    "clangd-lsp@claude-plugins-official": true
+    "clangd-lsp@claude-plugins-official": true,
+    "example-skills@anthropic-agent-skills": true,
+    "agent-browser@agent-browser": true
   },
-  "alwaysThinkingEnabled": true,
   "extraKnownMarketplaces": {
     "datadog-claude-plugins": {
       "source": {
@@ -66,5 +56,20 @@
         "repo": "DataDog/claude-marketplace"
       }
     }
-  }
+  },
+  "sandbox": {
+    "enabled": false,
+    "autoAllowBashIfSandboxed": true,
+    "network": {
+      "allowUnixSockets": [
+        "/var/run/docker.sock"
+      ],
+      "allowLocalBinding": true
+    },
+    "excludedCommands": [
+      "docker:*",
+      "jj:*"
+    ]
+  },
+  "alwaysThinkingEnabled": true
 }
