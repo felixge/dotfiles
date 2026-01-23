@@ -3,6 +3,7 @@ go = "latest"
 python = "3.10"
 rust = "latest"
 fzf = "latest"
+uv = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = ["node"]
