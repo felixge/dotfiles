@@ -195,6 +195,7 @@ mise_install() {
     mise trust -q
     mise install -q
     mise upgrade -q
+    eval "$(mise activate bash)"
 }
 
 install_go_packages() {
