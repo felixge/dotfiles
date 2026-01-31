@@ -1,0 +1,23 @@
+name: Test Install Script
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install and verify
+        run: |
+          exec() { :; }  # no-op to prevent exec bash from replacing shell
+          source install.bash && bash test/verify-install.sh
