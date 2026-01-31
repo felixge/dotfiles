@@ -1,0 +1,13 @@
+FROM ubuntu:24.04
+
+# Homebrew requires non-root user with sudo
+RUN apt-get update && apt-get install -y sudo
+RUN useradd -m -s /bin/bash testuser
+RUN echo 'testuser ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+USER testuser
+WORKDIR /home/testuser/dotfiles
+
+COPY --chown=testuser:testuser . .
+
+RUN bash -c 'exec() { :; }; source install.bash && bash test/verify-install.sh'
