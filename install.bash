@@ -12,8 +12,8 @@ main() {
     setup_gitconfig
     setup_tmux
     unminimize_ubuntu
-    stow_dotfiles
     mise_install
+    stow_dotfiles
     install_go_packages
     symlink_go
     exec bash
