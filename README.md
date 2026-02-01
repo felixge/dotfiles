@@ -5,16 +5,17 @@ These are my dotfiles. I don't recommend you to use them as-is, but rather to se
 ```
 # initial installation
 git clone https://github.com/felixge/dotfiles.git ~/dotfiles
+source dotfiles/install.bash
+```
 
-# install dependencies
-ansible-playbook ansible.yml --ask-become-pass
+## Testing
 
-# install/update dotfiles after adding a new file
-make
+```
+# test installation on ubuntu (docker)
+make test-ubuntu
 
-# add packer for vim, then run :PackerSync in vim
-git clone --depth 1 https://github.com/wbthomason/packer.nvim ~/.local/share/nvim/site/pack/packer/start/packer.nvim
-
+# interactive shell for debugging
+make test-ubuntu-shell
 ```
 
 ## Manual Config
