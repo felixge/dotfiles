@@ -27,6 +27,12 @@ function claudd() {
     claude --dangerously-skip-permissions "$@"
 }
 
+# fix cursor/vscode IPC socket in tmux after restart
+fix-cursor() {
+    export VSCODE_IPC_HOOK_CLI=$(ls -t /tmp/vscode-ipc-*.sock 2>/dev/null | head -1)
+    echo "Updated VSCODE_IPC_HOOK_CLI to: $VSCODE_IPC_HOOK_CLI"
+}
+
 # setup a simple prompt
 generate_prompt() {
     local exit_code=$?
