@@ -23,8 +23,13 @@ elif [[ "$OSTYPE" =~ ^darwin ]]; then
 fi
 
 # claude dangerous mode
-function claudd() {
+function claudee() {
     claude --dangerously-skip-permissions "$@"
+}
+
+# codex dangerous mode
+function codexx() {
+    codex --dangerously-bypass-approvals-and-sandbox "$@"
 }
 
 # fix cursor/vscode IPC socket in tmux after restart
