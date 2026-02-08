@@ -93,7 +93,7 @@ log-graph-prioritize = 'coalesce(megamerge(), trunk())'
 [revset-aliases]
 'closest_bookmark(to)' = 'heads(::to & bookmarks())'
 'wip' = '((trunk()..@):: & mine()) | trunk()'
-#'stack' = 'fork_point(@ | trunk())::@'
+'stack' = 'fork_point(@ | trunk())::@'
 "mine()" = """
     author(exact:'felix@felixge.de')
   | author(exact:'felix@datadoghq.com')
