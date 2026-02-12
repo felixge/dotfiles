@@ -2,26 +2,25 @@
   "permissions": {
     "allow": [
       "Skill(jj)",
-      "Bash(jj:*)",
-      "Bash(bzl run //:gazelle:*)",
-      "Bash(bzl build:*)",
-      "Bash(bzl test:*)",
-      "Bash(bzl query:*)",
-      "Bash(go test:*)",
-      "Bash(tee:*)",
-      "Bash(go build:*)",
-      "Bash(find:*)",
-      "Bash(go get:*)",
-      "Bash(go mod:*)",
-      "Bash(find:*)",
+      "Bash(jj *)",
+      "Bash(bzl run //:gazelle *)",
+      "Bash(bzl build *)",
+      "Bash(bzl test *)",
+      "Bash(bzl query *)",
+      "Bash(go test *)",
+      "Bash(tee *)",
+      "Bash(go build *)",
+      "Bash(find *)",
+      "Bash(go get *)",
+      "Bash(go mod *)",
       "Read(*)",
       "mcp__datadog__*"
     ],
     "deny": [
-      "Bash(jj git:*)",
+      "Bash(jj git *)",
+      "Bash(git *)",
       "Read(.envrc)",
-      "Read(~/.aws/**)",
-      "Bash(jj git:*)"
+      "Read(~/.aws/**)"
     ],
     "defaultMode": "acceptEdits"
   },
