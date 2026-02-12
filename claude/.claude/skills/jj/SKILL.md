@@ -20,6 +20,7 @@ description: Use the jj version control system. Always use it when the user ment
 - `jj new` - Finalize current change and start a new one
 - `jj new -r main` - Start a new change from main
 - `jj squash` - Combine changes with parent
+- `jj squash --from <rev> --into <rev>` - Move changes from one revision into another (note: `-r` and `--into` cannot be combined)
 - `jj squash -i` - Interactive squash (select specific changes)
 - `jj split` - Split current change into multiple parts
 - `jj abandon` - Discard current change
