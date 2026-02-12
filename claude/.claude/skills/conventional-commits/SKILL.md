@@ -51,6 +51,8 @@ All commit messages MUST follow this format:
 11. Breaking changes map to a MAJOR SemVer bump.
 12. Types other than `feat` and `fix` are permitted (the table above is conventional, not exhaustive).
 13. Units of information beyond the spec MUST NOT be treated as different by tooling, except for `BREAKING CHANGE`.
+14. Changes to `SKILL.md` files are **never** `docs`. They are configuration/tooling — use `chore` for maintenance edits or `feat` for new capabilities.
+15. **Scope** should name the broad system or component being changed (e.g. `claude`, `api`, `auth`), not the specific file or sub-skill. Prefer the parent package or module name.
 
 ### Examples
 
