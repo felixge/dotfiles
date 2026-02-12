@@ -2,6 +2,7 @@
   "permissions": {
     "allow": [
       "Skill(jj)",
+      "Skill(conventional-commits)",
       "Bash(jj *)",
       "Bash(bzl run //:gazelle *)",
       "Bash(bzl build *)",
