@@ -1,0 +1,1 @@
+* Never use git. Always use the jj skill instead.

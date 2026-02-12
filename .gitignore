@@ -9,6 +9,7 @@
 /claude/.claude/*
 !/claude/.claude/settings.json
 !/claude/.claude/skills
+!/claude/.claude/CLAUDE.md
 
 # jj exclude repo configs
 jj/.config/jj/repos/*
