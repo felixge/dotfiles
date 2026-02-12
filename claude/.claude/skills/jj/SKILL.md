@@ -1,6 +1,6 @@
 ---
 name: jj
-description: Use the jj version control system. Always use it when the user mentions jj.
+description: Use the jj version control system. Always use this instead of git for all version control operations including commits, diffs, logs, branches, rebasing, pushing, pulling, and any other VCS tasks.
 ---
 
 ## jj
