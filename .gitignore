@@ -10,6 +10,7 @@
 !/claude/.claude/settings.json
 !/claude/.claude/skills
 !/claude/.claude/CLAUDE.md
+!/claude/.claude/statusline-command.sh
 
 # jj exclude repo configs
 jj/.config/jj/repos/*

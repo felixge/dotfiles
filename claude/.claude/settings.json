@@ -71,5 +71,9 @@
       "jj:*"
     ]
   },
-  "alwaysThinkingEnabled": true
+  "alwaysThinkingEnabled": true,
+  "statusLine": {
+    "type": "command",
+    "command": "bash /home/bits/.claude/statusline-command.sh"
+  }
 }
