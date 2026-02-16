@@ -39,6 +39,10 @@
       }
     ]
   },
+  "statusLine": {
+    "type": "command",
+    "command": "bash $HOME/.claude/statusline-command.sh"
+  },
   "enabledPlugins": {
     "document-skills@anthropic-agent-skills": false,
     "gopls-lsp@claude-plugins-official": true,
@@ -72,8 +76,5 @@
     ]
   },
   "alwaysThinkingEnabled": true,
-  "statusLine": {
-    "type": "command",
-    "command": "bash /home/bits/.claude/statusline-command.sh"
-  }
+  "skipDangerousModePermissionPrompt": true
 }
