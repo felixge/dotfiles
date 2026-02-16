@@ -200,6 +200,7 @@ mise_install() {
 
 install_go_packages() {
     echo "-> install go packages"
+    export GOPROXY="https://proxy.golang.org,direct"
     local go_packages=(
         github.com/bokwoon95/wgo@latest
         github.com/go-delve/delve/cmd/dlv@latest
