@@ -92,3 +92,19 @@ Docs:
 ```
 docs: clarify rate-limit behavior in README
 ```
+
+### Prompts
+
+Always include all user prompts from the conversation in the commit message body. List them under a `Prompts:` section with each prompt quoted using `>`:
+
+```
+feat(auth): support OAuth2 PKCE flow
+
+Prompts:
+
+> Add OAuth2 PKCE support to the auth module
+
+> Also handle the token refresh edge case
+```
+
+This section goes after any other body text but before footers (like `BREAKING CHANGE`).
