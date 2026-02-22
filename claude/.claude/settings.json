@@ -51,7 +51,8 @@
     "go-code-reviewer@datadog-claude-plugins": true,
     "clangd-lsp@claude-plugins-official": true,
     "example-skills@anthropic-agent-skills": true,
-    "agent-browser@agent-browser": true
+    "agent-browser@agent-browser": true,
+    "atlassian@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "datadog-claude-plugins": {
