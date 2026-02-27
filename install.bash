@@ -96,6 +96,7 @@ install_homebrew_packages() {
         unzip
         uv
         vhs
+        watchman
         yq
         zoxide
     )
