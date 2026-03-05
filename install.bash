@@ -94,6 +94,7 @@ install_homebrew_packages() {
         stow
         tmux
         tree
+        tree-sitter-cli
         unzip
         uv
         vhs
