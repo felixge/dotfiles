@@ -14,6 +14,7 @@ main() {
     unminimize_ubuntu
     mise_install
     stow_dotfiles
+    install_neovim_plugins
     install_go_packages
     symlink_go
     exec bash
@@ -192,6 +193,11 @@ unminimize_ubuntu() {
 stow_dotfiles() {
     echo "-> stow dotfiles"
     stow --adopt -t "$HOME" jj jjui neovim mise claude codex idea
+}
+
+install_neovim_plugins() {
+    echo "-> install neovim plugins"
+    nvim --headless "+Lazy! install" +qa
 }
 
 mise_install() {
