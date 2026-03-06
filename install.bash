@@ -71,6 +71,7 @@ install_homebrew_packages() {
         curl
         direnv
         fd
+        fzf
         gawk
         gdb
         gh
