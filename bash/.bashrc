@@ -100,6 +100,9 @@ tn() {
 # tmux session picker
 alias ts='tmux attach -t "$(tmux list-sessions -F "#{session_name}" | fzf --reverse)"'
 
+# fzf
+eval "$(fzf --bash)"
+
 # zoxide
 eval "$(zoxide init bash)"
 alias j="z" # used to be my alias for fasd
