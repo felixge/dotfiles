@@ -81,7 +81,7 @@ install_homebrew_packages() {
         glow
         grpcurl
         htop
-	hyperfine
+        hyperfine
         jj
         jjui
         jq
