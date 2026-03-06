@@ -5,4 +5,7 @@
 
 ---@module 'lazy'
 ---@type LazySpec
-return {}
+return {
+  { 'tpope/vim-fugitive' },
+  { 'tpope/vim-rhubarb' },
+}
