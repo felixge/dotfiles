@@ -77,7 +77,14 @@ fi
 # save clipboard image to temp file and copy path to clipboard
 cpaste() {
     local f="$(mktemp /tmp/clipboard-XXXXXX.png)"
-    kitten clipboard -g "$f" 2>/dev/null && echo -n "$f" | kitten clipboard
+    if [ -n "$TMUX" ]; then
+        local session
+        session=$(tmux display-message -p '#S')
+        tmux detach-client -E \
+            "kitten clipboard -g '$f' 2>/dev/null; echo -n '$f' | kitten clipboard 2>/dev/null; tmux attach -t '$session'"
+    else
+        kitten clipboard -g "$f" 2>/dev/null && echo -n "$f" | kitten clipboard
+    fi
 }
 
 # kitty
