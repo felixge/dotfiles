@@ -69,14 +69,15 @@ generate_prompt() {
 }
 export PROMPT_COMMAND=generate_prompt
 
+# save clipboard image to temp file and copy path to clipboard
+cpaste() {
+    local f="$(mktemp /tmp/clipboard-XXXXXX.png)"
+    kitten clipboard -g "$f" 2>/dev/null && echo -n "$f" | kitten clipboard
+}
+
 # kitty
 if [[ "$TERM" == 'xterm-kitty' ]]; then
     alias ssh="kitten ssh"
-    # save clipboard image to temp file (works over kitten ssh)
-    cpaste() {
-        local f="$(mktemp /tmp/clipboard-XXXXXX.png)"
-        kitten clipboard -g "$f" 2>/dev/null && echo -n "$f" | kitten clipboard
-    }
 fi
 
 # tmux session picker
