@@ -193,7 +193,7 @@ unminimize_ubuntu() {
 
 stow_dotfiles() {
     echo "-> stow dotfiles"
-    stow --adopt -t "$HOME" jj jjui neovim mise claude codex idea
+    stow --adopt -t "$HOME" jj jjui neovim mise claude codex idea kitty
 }
 
 install_neovim_plugins() {
