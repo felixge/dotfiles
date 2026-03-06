@@ -89,7 +89,7 @@ P.S. You can delete this when you're done too. It's your config now! :)
 --  NOTE: Must happen before plugins are loaded (otherwise wrong leader will be used)
 vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
-vim.o.background = "light"
+vim.o.background = 'light'
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
 vim.g.have_nerd_font = false
@@ -807,12 +807,12 @@ require('lazy').setup({
     'navarasu/onedark.nvim',
     priority = 1000,
     config = function()
-      require('onedark').setup({
+      require('onedark').setup {
         highlights = {
-          ["Whitespace"] = {fg = '#eaeaea'},
-          ["ColorColumn"] = {bg = '#ff0000'},
+          ['Whitespace'] = { fg = '#eaeaea' },
+          ['ColorColumn'] = { bg = '#ff0000' },
         },
-      })
+      }
       require('onedark').load()
     end,
   },
