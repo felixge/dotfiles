@@ -15,6 +15,8 @@ def handle_result(args, answer, target_window_id, boss):
         "ssh" in " ".join(p.get("cmdline") or [])
         for p in fp
     )
+    with open("/tmp/smart_paste_debug.log", "a") as f:
+        f.write(f"fp={fp}, is_ssh={is_ssh}\n")
     if is_ssh:
         window.paste_bytes(b"cpaste\r")
     else:

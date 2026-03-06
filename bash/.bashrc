@@ -81,9 +81,9 @@ cpaste() {
         local session
         session=$(tmux display-message -p '#S')
         tmux detach-client -E \
-            "kitten clipboard -g '$f' 2>/dev/null; echo -n '$f' | kitten clipboard 2>/dev/null; tmux attach -t '$session'"
+            "kitten clipboard -g '$f' 2>/dev/null; tmux send-keys -t '$session' -l '$f'; tmux attach -t '$session'"
     else
-        kitten clipboard -g "$f" 2>/dev/null && echo -n "$f" | kitten clipboard
+        kitten clipboard -g "$f" 2>/dev/null && echo "$f"
     fi
 }
 
