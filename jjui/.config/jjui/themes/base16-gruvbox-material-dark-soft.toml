@@ -1,0 +1,83 @@
+## tinted-jjui (https://github.com/vic/tinted-jjui)
+# Scheme name: Gruvbox Material Dark, Soft
+# Scheme author: Mayush Kumar (https://github.com/MayushKumar), sainnhe (https://github.com/sainnhe/gruvbox-material-vscode)
+# Template author: Victor Borja <vborja@apache.org> (https://github.com/vic)
+
+
+
+"text"      = { fg = "#ddc7a1", bg = "#32302f" }
+"dimmed"    = { fg = "#7c6f64", bg = "#32302f" }
+"title"     = { fg = "#7daea3", bold = true }
+"shortcut"  = { fg = "#d3869b" }
+"matched"   = { fg = "#d8a657" }
+"border"    = { fg = "#7c6f64" }
+"selected"  = { bg = "#3c3836", fg = "#ddc7a1", bold = true }
+
+"source_marker" = { bg = "#89b482", fg = "#32302f", bold = true }
+"target_marker" = { bg = "#a9b665", fg = "#32302f", bold = true }
+
+"status" = { bg = "#3c3836" }
+"status title" = { fg = "#32302f", bg = "#7daea3", bold = true }
+
+"revset title" = { fg = "#7daea3", bold = true }
+"revset text" = { fg = "#ddc7a1", bold = true }
+"revset completion text" = { fg = "#ddc7a1" }
+"revset completion matched" = { fg = "#d8a657", bold = true }
+"revset completion dimmed" = { fg = "#7c6f64" }
+"revset completion selected" = { bg = "#5a524c", fg = "#ddc7a1" }
+
+"revisions" = { fg = "#ddc7a1" }
+"revisions selected" = { bg = "#3c3836"}
+"revisions dimmed" = { fg = "#7c6f64" }
+"revisions details selected" = { bg = "#5a524c" }
+"oplog selected" = { bold = true }
+
+"evolog" = { fg = "#ddc7a1" }
+"evolog selected" = { bg = "#5a524c", fg = "#ddc7a1", bold = true }
+
+"menu" = { bg = "#32302f" }
+"menu title" = { fg = "#32302f", bg = "#d3869b", bold = true }
+"menu shortcut" = { fg = "#d3869b" }
+"menu matched" = { fg = "#d8a657", bold = true }
+"menu dimmed" = { fg = "#7c6f64" }
+"menu border" = { fg = "#3c3836" }
+"menu selected" = { bg = "#5a524c", fg = "#ddc7a1" }
+
+"help" = { bg = "#32302f" }
+"help title" = { fg = "#a9b665", bold = true, underline = true }
+"help border" = { fg = "#3c3836" }
+
+"preview" = { fg = "#ddc7a1" }
+"preview border" = { fg = "#3c3836" }
+
+"confirmation" = { bg = "#32302f" }
+"confirmation text" = { fg = "#7daea3", bold = true }
+"confirmation dimmed" = { fg = "#7c6f64" }
+"confirmation border" = { fg = "#ea6962", bold = true }
+"confirmation selected" = { bg = "#5a524c", fg = "#ddc7a1" }
+
+"undo" = { bg = "#32302f" }
+"undo confirmation dimmed" = { fg = "#7c6f64" }
+"undo confirmation selected" = { bg = "#5a524c", fg = "#ddc7a1" }
+
+"success" = { fg = "#a9b665", bold = true }
+"error" = { fg = "#ea6962", bold = true }
+"revisions rebase source_marker" = { bold = true }
+"revisions rebase target_marker" = { bold = true }
+"status shortcut" = { fg = "#d3869b" }
+"status dimmed" = { fg = "#7c6f64" }
+
+"details" = { fg = "#ddc7a1" }
+"details selected" = { bold = true }
+"completion" = { fg = "#ddc7a1" }
+"completion selected" = { bold = true }
+"rebase" = { bold = true }
+
+"workspace" = { fg = "#7daea3" }
+"branch" = { fg = "#e78a4e" }
+"commit" = { fg = "#a9b665" }
+"file" = { fg = "#d8a657" }
+"change" = { fg = "#ea6962" }
+"bookmark" = { fg = "#d3869b" }
+
+

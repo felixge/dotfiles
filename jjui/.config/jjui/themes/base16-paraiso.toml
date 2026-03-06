@@ -1,0 +1,83 @@
+## tinted-jjui (https://github.com/vic/tinted-jjui)
+# Scheme name: Paraiso
+# Scheme author: Jan T. Sott
+# Template author: Victor Borja <vborja@apache.org> (https://github.com/vic)
+
+
+
+"text"      = { fg = "#a39e9b", bg = "#2f1e2e" }
+"dimmed"    = { fg = "#776e71", bg = "#2f1e2e" }
+"title"     = { fg = "#06b6ef", bold = true }
+"shortcut"  = { fg = "#815ba4" }
+"matched"   = { fg = "#fec418" }
+"border"    = { fg = "#776e71" }
+"selected"  = { bg = "#41323f", fg = "#a39e9b", bold = true }
+
+"source_marker" = { bg = "#5bc4bf", fg = "#2f1e2e", bold = true }
+"target_marker" = { bg = "#48b685", fg = "#2f1e2e", bold = true }
+
+"status" = { bg = "#41323f" }
+"status title" = { fg = "#2f1e2e", bg = "#06b6ef", bold = true }
+
+"revset title" = { fg = "#06b6ef", bold = true }
+"revset text" = { fg = "#a39e9b", bold = true }
+"revset completion text" = { fg = "#a39e9b" }
+"revset completion matched" = { fg = "#fec418", bold = true }
+"revset completion dimmed" = { fg = "#776e71" }
+"revset completion selected" = { bg = "#4f424c", fg = "#a39e9b" }
+
+"revisions" = { fg = "#a39e9b" }
+"revisions selected" = { bg = "#41323f"}
+"revisions dimmed" = { fg = "#776e71" }
+"revisions details selected" = { bg = "#4f424c" }
+"oplog selected" = { bold = true }
+
+"evolog" = { fg = "#a39e9b" }
+"evolog selected" = { bg = "#4f424c", fg = "#a39e9b", bold = true }
+
+"menu" = { bg = "#2f1e2e" }
+"menu title" = { fg = "#2f1e2e", bg = "#815ba4", bold = true }
+"menu shortcut" = { fg = "#815ba4" }
+"menu matched" = { fg = "#fec418", bold = true }
+"menu dimmed" = { fg = "#776e71" }
+"menu border" = { fg = "#41323f" }
+"menu selected" = { bg = "#4f424c", fg = "#a39e9b" }
+
+"help" = { bg = "#2f1e2e" }
+"help title" = { fg = "#48b685", bold = true, underline = true }
+"help border" = { fg = "#41323f" }
+
+"preview" = { fg = "#a39e9b" }
+"preview border" = { fg = "#41323f" }
+
+"confirmation" = { bg = "#2f1e2e" }
+"confirmation text" = { fg = "#06b6ef", bold = true }
+"confirmation dimmed" = { fg = "#776e71" }
+"confirmation border" = { fg = "#ef6155", bold = true }
+"confirmation selected" = { bg = "#4f424c", fg = "#a39e9b" }
+
+"undo" = { bg = "#2f1e2e" }
+"undo confirmation dimmed" = { fg = "#776e71" }
+"undo confirmation selected" = { bg = "#4f424c", fg = "#a39e9b" }
+
+"success" = { fg = "#48b685", bold = true }
+"error" = { fg = "#ef6155", bold = true }
+"revisions rebase source_marker" = { bold = true }
+"revisions rebase target_marker" = { bold = true }
+"status shortcut" = { fg = "#815ba4" }
+"status dimmed" = { fg = "#776e71" }
+
+"details" = { fg = "#a39e9b" }
+"details selected" = { bold = true }
+"completion" = { fg = "#a39e9b" }
+"completion selected" = { bold = true }
+"rebase" = { bold = true }
+
+"workspace" = { fg = "#06b6ef" }
+"branch" = { fg = "#f99b15" }
+"commit" = { fg = "#48b685" }
+"file" = { fg = "#fec418" }
+"change" = { fg = "#ef6155" }
+"bookmark" = { fg = "#815ba4" }
+
+

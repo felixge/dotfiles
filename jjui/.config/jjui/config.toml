@@ -1,3 +1,7 @@
+[ui.theme]
+light = "custom-light"
+dark = "custom-light"
+
 [leader.d]
 context = [ "$change_id" ]
 help = "Show interactive diff"

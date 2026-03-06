@@ -1,0 +1,83 @@
+## tinted-jjui (https://github.com/vic/tinted-jjui)
+# Scheme name: One Light
+# Scheme author: Daniel Pfeifer (http://github.com/purpleKarrot)
+# Template author: Victor Borja <vborja@apache.org> (https://github.com/vic)
+
+
+
+"text"      = { fg = "#383a42", bg = "#fafafa" }
+"dimmed"    = { fg = "#a0a1a7", bg = "#fafafa" }
+"title"     = { fg = "#4078f2", bold = true }
+"shortcut"  = { fg = "#a626a4" }
+"matched"   = { fg = "#c18401" }
+"border"    = { fg = "#a0a1a7" }
+"selected"  = { bg = "#f0f0f1", fg = "#383a42", bold = true }
+
+"source_marker" = { bg = "#0184bc", fg = "#fafafa", bold = true }
+"target_marker" = { bg = "#50a14f", fg = "#fafafa", bold = true }
+
+"status" = { bg = "#f0f0f1" }
+"status title" = { fg = "#fafafa", bg = "#4078f2", bold = true }
+
+"revset title" = { fg = "#4078f2", bg = "#f0f0f1", bold = true }
+"revset text" = { fg = "#383a42", bold = true }
+"revset completion text" = { fg = "#383a42" }
+"revset completion matched" = { fg = "#c18401", bold = true }
+"revset completion dimmed" = { fg = "#a0a1a7" }
+"revset completion selected" = { bg = "#202227", fg = "#e5e5e6" }
+
+"revisions" = { fg = "#383a42" }
+"revisions selected" = { bg = "#e5e5e6"}
+"revisions dimmed" = { fg = "#a0a1a7" }
+"revisions details selected" = { bg = "#696c77" }
+"oplog selected" = { bold = true }
+
+"evolog" = { fg = "#383a42" }
+"evolog selected" = { bg = "#202227", fg = "#f0f0f1", bold = true }
+
+"menu" = { bg = "#fafafa" }
+"menu title" = { fg = "#fafafa", bg = "#a626a4", bold = true }
+"menu shortcut" = { fg = "#a626a4" }
+"menu matched" = { fg = "#c18401", bold = true }
+"menu dimmed" = { fg = "#a0a1a7" }
+"menu border" = { fg = "#f0f0f1" }
+"menu selected" = { bg = "#202227", fg = "#f0f0f1" }
+
+"help" = { bg = "#fafafa" }
+"help title" = { fg = "#50a14f", bold = true, underline = true }
+"help border" = { fg = "#f0f0f1" }
+
+"preview" = { fg = "#383a42" }
+"preview border" = { fg = "#f0f0f1" }
+
+"confirmation" = { bg = "#fafafa" }
+"confirmation text" = { fg = "#4078f2", bold = true }
+"confirmation dimmed" = { fg = "#a0a1a7" }
+"confirmation border" = { fg = "#ca1243", bold = true }
+"confirmation selected" = { bg = "#202227", fg = "#f0f0f1" }
+
+"undo" = { bg = "#fafafa" }
+"undo confirmation dimmed" = { fg = "#a0a1a7" }
+"undo confirmation selected" = { bg = "#202227", fg = "#f0f0f1" }
+
+"success" = { fg = "#50a14f", bold = true }
+"error" = { fg = "#ca1243", bold = true }
+"revisions rebase source_marker" = { bold = true }
+"revisions rebase target_marker" = { bold = true }
+"status shortcut" = { fg = "#a626a4" }
+"status dimmed" = { fg = "#a0a1a7" }
+
+"details" = { fg = "#383a42" }
+"details selected" = { bold = true }
+"completion" = { fg = "#383a42" }
+"completion selected" = { bold = true }
+"rebase" = { bold = true }
+
+"workspace" = { fg = "#4078f2" }
+"branch" = { fg = "#d75f00" }
+"commit" = { fg = "#50a14f" }
+"file" = { fg = "#c18401" }
+"change" = { fg = "#ca1243" }
+"bookmark" = { fg = "#a626a4" }
+
+
