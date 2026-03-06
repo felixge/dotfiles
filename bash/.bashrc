@@ -69,6 +69,11 @@ generate_prompt() {
 }
 export PROMPT_COMMAND=generate_prompt
 
+# ensure kitten is in PATH on remote machines (e.g. new tmux windows after kitten ssh)
+if [ -d "$HOME/.local/share/kitty-ssh-kitten/kitty/bin" ]; then
+    export PATH="$HOME/.local/share/kitty-ssh-kitten/kitty/bin:$PATH"
+fi
+
 # save clipboard image to temp file and copy path to clipboard
 cpaste() {
     local f="$(mktemp /tmp/clipboard-XXXXXX.png)"
