@@ -616,9 +616,23 @@ require('lazy').setup({
       --  Feel free to add/remove any LSPs that you want here. They will automatically be installed.
       --  See `:help lsp-config` for information about keys and how to configure
       ---@type table<string, vim.lsp.Config>
+      local go_root_markers = { 'go.work', 'go.mod', '.git' }
+
+      local function is_dd_gopls_file(fname)
+        return fname:find('/github%.com/DataDog/dd%-source/') ~= nil
+          or fname:find('/github%.com/DataDog/dd%-go/') ~= nil
+      end
+
       local servers = {
         -- clangd = {},
-        gopls = {},
+        gopls = {
+          root_dir = function(bufnr, cb)
+            if is_dd_gopls_file(vim.api.nvim_buf_get_name(bufnr)) then
+              return
+            end
+            cb(vim.fs.root(bufnr, go_root_markers))
+          end,
+        },
         -- pyright = {},
         -- rust_analyzer = {},
         --
@@ -678,6 +692,21 @@ require('lazy').setup({
         vim.lsp.config(name, server)
         vim.lsp.enable(name)
       end
+
+      -- Use dd-gopls for dd-source and dd-go
+      vim.lsp.config('dd_gopls', {
+        cmd = { 'dd-gopls' },
+        cmd_env = {
+          GOPLS_DISABLE_MODULE_LOADS = 1,
+        },
+        filetypes = { 'go', 'gomod', 'gowork', 'gotmpl' },
+        root_dir = function(bufnr, cb)
+          if is_dd_gopls_file(vim.api.nvim_buf_get_name(bufnr)) then
+            cb(vim.fs.root(bufnr, go_root_markers))
+          end
+        end,
+      })
+      vim.lsp.enable('dd_gopls')
     end,
   },
 
