@@ -92,6 +92,11 @@ if [[ "$TERM" == 'xterm-kitty' ]]; then
     alias ssh="kitten ssh"
 fi
 
+# tmux: auto-name new sessions after current directory
+tn() {
+    tmux new-session -s "$(basename "$PWD")" "$@"
+}
+
 # tmux session picker
 alias ts='tmux attach -t "$(tmux list-sessions -F "#{session_name}" | fzf --reverse)"'
 
