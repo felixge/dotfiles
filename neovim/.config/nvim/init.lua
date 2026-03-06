@@ -84,6 +84,18 @@ I hope you enjoy your Neovim journey,
 P.S. You can delete this when you're done too. It's your config now! :)
 --]]
 
+-- Workaround for https://github.com/neovim/neovim/issues/28058
+-- On macOS, the LSP file watcher (watch.watch) errors on nonexistent paths
+-- that gopls tries to watch (e.g. vendor/ in a go.work workspace).
+local make_client_capabilities = vim.lsp.protocol.make_client_capabilities
+function vim.lsp.protocol.make_client_capabilities()
+  local caps = make_client_capabilities()
+  if caps.workspace then
+    caps.workspace.didChangeWatchedFiles = nil
+  end
+  return caps
+end
+
 -- Set <space> as the leader key
 -- See `:help mapleader`
 --  NOTE: Must happen before plugins are loaded (otherwise wrong leader will be used)
