@@ -74,8 +74,8 @@ if [[ "$TERM" == 'xterm-kitty' ]]; then
     alias ssh="kitten ssh"
     # save clipboard image to temp file (works over kitten ssh)
     cpaste() {
-        local f="/tmp/clipboard-$(date +%s%N).png"
-        kitten clipboard -g "$f" 2>/dev/null && echo "$f"
+        local f="$(mktemp /tmp/clipboard-XXXXXX.png)"
+        kitten clipboard -g "$f" 2>/dev/null && echo -n "$f" | kitten clipboard
     }
 fi
 
