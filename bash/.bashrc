@@ -74,6 +74,9 @@ if [[ "$TERM" == 'xterm-kitty' ]]; then
     alias ssh="kitten ssh"
 fi
 
+# tmux session picker
+alias ts='tmux attach -t "$(tmux list-sessions -F "#{session_name}" | fzf --reverse)"'
+
 # zoxide
 eval "$(zoxide init bash)"
 alias j="z" # used to be my alias for fasd
