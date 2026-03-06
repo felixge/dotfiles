@@ -36,6 +36,7 @@ install_basics() {
             build-essential \
             clang\
             curl \
+            file \
             git \
             iproute2 \
             iputils-ping \
