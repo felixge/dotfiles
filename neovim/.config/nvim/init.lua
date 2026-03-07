@@ -181,6 +181,13 @@ vim.api.nvim_create_autocmd({ 'FocusGained', 'BufEnter', 'CursorHold' }, {
   group = vim.api.nvim_create_augroup('auto-reload', { clear = true }),
   command = 'silent! checktime',
 })
+-- Poll for file changes even when unfocused (e.g. another tmux pane)
+local reload_timer = vim.uv.new_timer()
+reload_timer:start(1000, 1000, vim.schedule_wrap(function()
+  if vim.fn.getcmdwintype() == '' then
+    vim.cmd 'silent! checktime'
+  end
+end))
 
 -- Auto-save files on navigation, buffer switch, etc.
 vim.o.autowriteall = true
