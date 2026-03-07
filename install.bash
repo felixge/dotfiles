@@ -112,6 +112,9 @@ install_homebrew_packages() {
     else
         brew install -q bubblewrap
     fi
+    if is_datadog; then
+        brew install -q datadog/tap/dd-auth
+    fi
 }
 
 trust_github() {
@@ -126,6 +129,10 @@ is_macos() {
     else
         return 1
     fi
+}
+
+is_datadog() {
+    [ -e "$HOME/dd" ]
 }
 
 command_exists() {
