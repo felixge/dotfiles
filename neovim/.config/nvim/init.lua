@@ -659,7 +659,11 @@ require('lazy').setup({
         },
         pyright = {},
         rust_analyzer = {},
-        ts_ls = {},
+        ts_ls = {
+          init_options = {
+            maxTsServerMemory = 16384,
+          },
+        },
 
         stylua = {}, -- Used to format Lua code
 
