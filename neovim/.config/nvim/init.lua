@@ -661,7 +661,17 @@ require('lazy').setup({
         rust_analyzer = {},
         ts_ls = {
           init_options = {
-            maxTsServerMemory = 16384,
+            maxTsServerMemory = 32768,
+          },
+          settings = {
+            typescript = {
+              tsserver = {
+                watchOptions = {
+                  excludeDirectories = { '**/node_modules', '**/.yarn', '**/.sarif' },
+                  excludeFiles = { '.pnp.cjs' },
+                },
+              },
+            },
           },
         },
 
