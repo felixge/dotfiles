@@ -182,6 +182,14 @@ vim.api.nvim_create_autocmd({ 'FocusGained', 'BufEnter', 'CursorHold' }, {
   command = 'silent! checktime',
 })
 
+-- Auto-save files on navigation, buffer switch, etc.
+vim.o.autowriteall = true
+-- Auto-save all buffers when focus is lost
+vim.api.nvim_create_autocmd('FocusLost', {
+  group = vim.api.nvim_create_augroup('auto-save', { clear = true }),
+  command = 'silent! wa',
+})
+
 -- if performing an operation that would fail due to unsaved changes in the buffer (like `:q`),
 -- instead raise a dialog asking if you wish to save the current file(s)
 -- See `:help 'confirm'`
