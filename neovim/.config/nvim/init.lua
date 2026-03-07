@@ -90,9 +90,7 @@ P.S. You can delete this when you're done too. It's your config now! :)
 local make_client_capabilities = vim.lsp.protocol.make_client_capabilities
 function vim.lsp.protocol.make_client_capabilities()
   local caps = make_client_capabilities()
-  if caps.workspace then
-    caps.workspace.didChangeWatchedFiles = nil
-  end
+  if caps.workspace then caps.workspace.didChangeWatchedFiles = nil end
   return caps
 end
 
@@ -162,6 +160,11 @@ vim.o.splitbelow = true
 --   and `:help lua-guide-options`
 vim.o.list = true
 vim.opt.listchars = { tab = '» ', trail = '·', nbsp = '␣' }
+
+-- Render tabs as 2 spaces
+vim.o.shiftwidth = 2
+vim.o.tabstop = 2
+vim.o.softtabstop = 2
 
 -- Preview substitutions live, as you type!
 vim.o.inccommand = 'split'
@@ -644,18 +647,13 @@ require('lazy').setup({
       ---@type table<string, vim.lsp.Config>
       local go_root_markers = { 'go.work', 'go.mod', '.git' }
 
-      local function is_dd_gopls_file(fname)
-        return fname:find('/github%.com/DataDog/dd%-source/') ~= nil
-          or fname:find('/github%.com/DataDog/dd%-go/') ~= nil
-      end
+      local function is_dd_gopls_file(fname) return fname:find '/github%.com/DataDog/dd%-source/' ~= nil or fname:find '/github%.com/DataDog/dd%-go/' ~= nil end
 
       local servers = {
         -- clangd = {},
         gopls = {
           root_dir = function(bufnr, cb)
-            if is_dd_gopls_file(vim.api.nvim_buf_get_name(bufnr)) then
-              return
-            end
+            if is_dd_gopls_file(vim.api.nvim_buf_get_name(bufnr)) then return end
             cb(vim.fs.root(bufnr, go_root_markers))
           end,
         },
@@ -722,12 +720,10 @@ require('lazy').setup({
         },
         filetypes = { 'go', 'gomod', 'gowork', 'gotmpl' },
         root_dir = function(bufnr, cb)
-          if is_dd_gopls_file(vim.api.nvim_buf_get_name(bufnr)) then
-            cb(vim.fs.root(bufnr, go_root_markers))
-          end
+          if is_dd_gopls_file(vim.api.nvim_buf_get_name(bufnr)) then cb(vim.fs.root(bufnr, go_root_markers)) end
         end,
       })
-      vim.lsp.enable('dd_gopls')
+      vim.lsp.enable 'dd_gopls'
     end,
   },
 
@@ -934,7 +930,25 @@ require('lazy').setup({
     branch = 'main',
     -- [[ Configure Treesitter ]] See `:help nvim-treesitter-intro`
     config = function()
-      local parsers = { 'bash', 'c', 'diff', 'go', 'html', 'javascript', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'python', 'query', 'rust', 'tsx', 'typescript', 'vim', 'vimdoc' }
+      local parsers = {
+        'bash',
+        'c',
+        'diff',
+        'go',
+        'html',
+        'javascript',
+        'lua',
+        'luadoc',
+        'markdown',
+        'markdown_inline',
+        'python',
+        'query',
+        'rust',
+        'tsx',
+        'typescript',
+        'vim',
+        'vimdoc',
+      }
       require('nvim-treesitter').install(parsers)
       vim.api.nvim_create_autocmd('FileType', {
         callback = function(args)
