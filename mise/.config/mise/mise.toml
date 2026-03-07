@@ -1,5 +1,6 @@
 [tools]
 go = "latest"
+node = "latest"
 python = "3.10"
 rust = "latest"
 uv = "latest"

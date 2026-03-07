@@ -16,6 +16,7 @@ main() {
     stow_dotfiles
     install_neovim_plugins
     install_go_packages
+    install_npm_packages
     symlink_go
     exec bash
 }
@@ -226,6 +227,11 @@ install_go_packages() {
         go install "$package" &
     done
     wait
+}
+
+install_npm_packages() {
+    echo "-> install npm packages"
+    npm install -g markserv --silent 2>&1 | grep -v "^Reshimming "
 }
 
 symlink_go() {
