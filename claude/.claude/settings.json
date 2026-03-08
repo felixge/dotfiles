@@ -72,7 +72,8 @@
     "clangd-lsp@claude-plugins-official": true,
     "example-skills@anthropic-agent-skills": true,
     "agent-browser@agent-browser": true,
-    "atlassian@claude-plugins-official": true
+    "atlassian@claude-plugins-official": true,
+    "pyright-lsp@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "datadog-claude-plugins": {
