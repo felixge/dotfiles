@@ -803,6 +803,7 @@ require('lazy').setup({
       formatters_by_ft = {
         lua = { 'stylua' },
         go = { 'goimports' },
+        json = { 'jq' },
         -- Conform can also run multiple formatters sequentially
         python = { "isort", "black" },
         --
@@ -980,6 +981,7 @@ require('lazy').setup({
         'go',
         'html',
         'javascript',
+        'json',
         'lua',
         'luadoc',
         'markdown',
