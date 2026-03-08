@@ -66,6 +66,7 @@ install_homebrew_packages() {
         atlassian-labs/acli/acli
         bash-completion@2
         bat
+        black
         btop
         claude-code
         cloc
@@ -83,6 +84,7 @@ install_homebrew_packages() {
         grpcurl
         htop
         hyperfine
+        isort
         jj
         jjui
         jq
