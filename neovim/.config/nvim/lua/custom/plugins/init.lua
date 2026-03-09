@@ -8,6 +8,7 @@
 return {
   { 'tpope/vim-fugitive' },
   { 'tpope/vim-rhubarb' },
+  { 'tpope/vim-surround' },
   {
     'qadzek/link.vim',
     ft = 'markdown',
