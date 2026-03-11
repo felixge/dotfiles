@@ -12,9 +12,7 @@ return {
   {
     'qadzek/link.vim',
     ft = 'markdown',
-    init = function()
-      vim.g.link_heading = ''
-    end,
+    init = function() vim.g.link_heading = '' end,
     config = function()
       vim.api.nvim_create_autocmd('BufWritePre', {
         pattern = '*.md',
@@ -56,15 +54,15 @@ return {
       {
         'hrsh7th/nvim-cmp',
         config = function()
-          local cmp = require('cmp')
-          cmp.setup({
-            mapping = cmp.mapping.preset.insert({
-              ['<C-y>'] = cmp.mapping.confirm({ select = true }),
+          local cmp = require 'cmp'
+          cmp.setup {
+            mapping = cmp.mapping.preset.insert {
+              ['<C-y>'] = cmp.mapping.confirm { select = true },
               ['<C-n>'] = cmp.mapping.select_next_item(),
               ['<C-p>'] = cmp.mapping.select_prev_item(),
               ['<C-e>'] = cmp.mapping.abort(),
-            }),
-          })
+            },
+          }
         end,
       },
     },
