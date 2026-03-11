@@ -3,4 +3,4 @@
 " show hidden files in NERDTree
 let g:NERDTreeShowHidden = 1
 " show hidden files in Telescope
-nnoremap <leader>p <cmd>Telescope find_files hidden=true<cr>
+lua vim.keymap.set('n', '<leader>sf', function() require('telescope.builtin').find_files { hidden = true } end, { desc = '[S]earch [F]iles (hidden)' })

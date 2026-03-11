@@ -104,6 +104,9 @@ vim.o.background = 'light'
 -- Set to true if you have a Nerd Font installed and selected in the terminal
 vim.g.have_nerd_font = false
 
+-- Load project-local .nvimrc files (e.g. for per-repo Telescope settings)
+vim.o.exrc = true
+
 -- [[ Setting options ]]
 -- See `:help vim.o`
 -- NOTE: You can change these options as you wish!
