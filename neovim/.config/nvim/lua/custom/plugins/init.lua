@@ -73,6 +73,14 @@ return {
       require('obsidian').setup(opts)
     end,
     opts = {
+      ui = {
+        checkboxes = {
+          [' '] = { char = '󰄱', hl_group = 'ObsidianTodo', order = 1 },
+          ['x'] = { char = '', hl_group = 'ObsidianDone', order = 2 },
+          ['~'] = { char = '󰰱', hl_group = 'ObsidianTilde', order = 3 },
+          ['!'] = { char = '', hl_group = 'ObsidianImportant', order = 4 },
+        },
+      },
       workspaces = {
         {
           name = 'no-vault',
