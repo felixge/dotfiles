@@ -16,7 +16,13 @@
       "Bash(go get *)",
       "Bash(go mod *)",
       "Read(*)",
-      "mcp__datadog__*"
+      "mcp__datadog__*",
+      "mcp__plugin_atlassian_atlassian__get*",
+      "mcp__plugin_atlassian_atlassian__search",
+      "mcp__plugin_atlassian_atlassian__search*",
+      "mcp__plugin_atlassian_atlassian__lookup*",
+      "mcp__plugin_atlassian_atlassian__fetch",
+      "mcp__plugin_atlassian_atlassian__atlassianUserInfo"
     ],
     "deny": [
       "Bash(jj git push *)",
