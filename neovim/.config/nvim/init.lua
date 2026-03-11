@@ -274,6 +274,12 @@ vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right win
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
+-- Move lines up/down with Cmd+Opt+Arrow (Kitty remaps to Ctrl+Arrow)
+vim.keymap.set('n', '<C-Up>', ':m .-2<CR>==', { desc = 'Move line up', silent = true })
+vim.keymap.set('n', '<C-Down>', ':m .+1<CR>==', { desc = 'Move line down', silent = true })
+vim.keymap.set('v', '<C-Up>', ":m '<-2<CR>gv=gv", { desc = 'Move selection up', silent = true })
+vim.keymap.set('v', '<C-Down>', ":m '>+1<CR>gv=gv", { desc = 'Move selection down', silent = true })
+
 -- NOTE: Some terminals have colliding keymaps or are not able to send distinct keycodes
 -- vim.keymap.set("n", "<C-S-h>", "<C-w>H", { desc = "Move window to the left" })
 -- vim.keymap.set("n", "<C-S-l>", "<C-w>L", { desc = "Move window to the right" })
