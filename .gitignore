@@ -6,11 +6,6 @@
 
 # don't check in secret git config files
 /git/.gitconfig.*
-/claude/.claude/*
-!/claude/.claude/settings.json
-!/claude/.claude/skills
-!/claude/.claude/CLAUDE.md
-!/claude/.claude/statusline-command.sh
 
 # jj exclude repo configs
 jj/.config/jj/repos/*
