@@ -71,6 +71,7 @@ return {
       require('obsidian').setup(opts)
     end,
     opts = {
+      note_id_func = function(title) return title end,
       ui = {
         checkboxes = {
           [' '] = { char = '󰄱', hl_group = 'ObsidianTodo', order = 1 },
