@@ -13,6 +13,8 @@
       "Bash(go build *)",
       "Bash(find *)",
       "Bash(ls *)",
+      "Bash(head *)",
+      "Bash(tail *)",
       "Bash(sed *)",
       "Bash(go get *)",
       "Bash(go mod *)",
