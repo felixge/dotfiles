@@ -12,6 +12,7 @@
       "Bash(tee *)",
       "Bash(go build *)",
       "Bash(find *)",
+      "Bash(ls *)",
       "Bash(sed *)",
       "Bash(go get *)",
       "Bash(go mod *)",
