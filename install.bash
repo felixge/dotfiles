@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-set -eu
 
 DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 main() {
+    set -eu
     install_basics
     install_homebrew
     install_homebrew_packages
@@ -320,4 +320,7 @@ symlink_go() {
     sudo ln -sf "$go_bin" "$target"
 }
 
-main "$@"
+# Only run main when executed directly, not when sourced.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi
