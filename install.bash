@@ -237,7 +237,7 @@ stow_file_adopt() {
 
 install_neovim_plugins() {
     echo "-> install neovim plugins"
-    quiet_run nvim --headless  "+Lazy! clean" "+Lazy! restore" "+Lazy! install" +qa
+    quiet_run nvim --headless  "+Lazy! restore" "+Lazy! clean" "+Lazy! install" +qa
     quiet_run nvim --headless "+MasonToolsUpdateSync" +qa
 }
 
