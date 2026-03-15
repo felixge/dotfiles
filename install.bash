@@ -207,7 +207,24 @@ unminimize_ubuntu() {
 stow_dotfiles() {
     echo "-> stow dotfiles"
     mkdir -p "$HOME/.claude"
-    stow --adopt -t "$HOME" git jj jjui neovim mise claude codex idea kitty
+    stow_file_adopt git/.gitignore
+    stow --adopt -t "$HOME" jj jjui neovim mise claude codex idea kitty
+}
+
+stow_file_adopt() {
+    local rel_path="$1"
+    local src="$DOTFILES_DIR/$rel_path"
+    local dst="$HOME/${rel_path#*/}"
+
+    if [ -L "$dst" ]; then
+        return
+    fi
+
+    mkdir -p "$(dirname "$dst")"
+    if [ -e "$dst" ]; then
+        cp "$dst" "$src"
+    fi
+    ln -sf "$src" "$dst"
 }
 
 install_neovim_plugins() {
