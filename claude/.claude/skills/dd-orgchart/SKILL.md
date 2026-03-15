@@ -1,18 +1,20 @@
 ---
 name: dd-orgchart
 description: >-
-  Generate an org chart for a Datadog manager showing all recursive reports.
-  Use when the user asks to see an org chart, team structure, or who reports
-  to someone.
+  Answer questions about the Datadog org structure using Workday data in
+  Snowflake. Use when the user asks about org charts, team structure, who
+  reports to someone, headcount, titles, or any people/org question.
+allowed_tools:
+  - Bash(snowsql *)
 ---
 
 ## Datadog Org Chart
 
-Build a recursive org chart from the Workday data in Snowflake.
+Answer questions about the Datadog org structure using Workday data in Snowflake.
 
 ### Data Source
 
-Use `REPORTING.GENERAL.DIM_WORKDAY_WORKER_PUBLIC` which contains:
+Table: `REPORTING.GENERAL.DIM_WORKDAY_WORKER_PUBLIC`
 
 | Column | Description |
 |--------|-------------|
@@ -24,28 +26,24 @@ Use `REPORTING.GENERAL.DIM_WORKDAY_WORKER_PUBLIC` which contains:
 | `cost_center` | Cost center |
 | `is_active` | Whether employee is currently active |
 
-### Query
+### Running Queries
 
-Use the Snowflake MCP `run_snowflake_query` tool.
+Use the `snowsql` CLI with flags for clean parseable output:
 
-**Step 1** — Find the root person:
-
-```sql
-SELECT employee_id, name, business_title, manager_id, team
-FROM REPORTING.GENERAL.DIM_WORKDAY_WORKER_PUBLIC
-WHERE name ILIKE '%<name>%' AND is_active = TRUE
+```bash
+snowsql -q "<SQL>" -o output_format=json -o header=true -o timing=false -o friendly=false 2>/dev/null
 ```
 
-If multiple matches, ask the user to disambiguate.
+### Common Queries
 
-**Step 2** — Recursive org chart query (replace `<ID>` with the employee_id):
+**Recursive org tree** (replace `<name>` with the person's name):
 
 ```sql
 WITH RECURSIVE org_tree AS (
     SELECT employee_id, name, business_title, manager_id, team,
            is_active, 0 AS depth, name AS path
     FROM REPORTING.GENERAL.DIM_WORKDAY_WORKER_PUBLIC
-    WHERE employee_id = <ID>
+    WHERE name ILIKE '%<name>%' AND is_active = TRUE
     UNION ALL
     SELECT e.employee_id, e.name, e.business_title, e.manager_id, e.team,
            e.is_active, t.depth + 1, t.path || ' > ' || e.name
@@ -58,59 +56,34 @@ FROM org_tree
 ORDER BY path
 ```
 
+If the base case matches multiple people, ask the user to disambiguate.
+
+**Headcount by location** (replace `<name>` with the person's name):
+
+```sql
+WITH RECURSIVE org_tree AS (
+    SELECT employee_id, name, business_title, manager_id, team,
+           is_active, location_id, 0 AS depth
+    FROM REPORTING.GENERAL.DIM_WORKDAY_WORKER_PUBLIC
+    WHERE name ILIKE '%<name>%' AND is_active = TRUE
+    UNION ALL
+    SELECT e.employee_id, e.name, e.business_title, e.manager_id, e.team,
+           e.is_active, e.location_id, t.depth + 1
+    FROM REPORTING.GENERAL.DIM_WORKDAY_WORKER_PUBLIC e
+    JOIN org_tree t ON e.manager_id = t.employee_id
+    WHERE e.is_active = TRUE AND e.employee_id != e.manager_id
+)
+SELECT location_id, COUNT(*) AS headcount
+FROM org_tree
+WHERE depth > 0
+GROUP BY location_id
+ORDER BY headcount DESC
+```
+
 ### Output
 
-Default output is a **radial Graphviz diagram** rendered as PDF. Also supports text tree output if requested.
+Adapt output to what the user asked for — a count, a list, a text tree, etc.
 
-#### Graphviz Radial Diagram (default)
+If the user asks for a **visual diagram or chart**, read and follow `GRAPHVIZ.md` in this skill directory.
 
-Generate a `.dot` file and render with `twopi` (Graphviz radial layout engine):
-
-```bash
-twopi -Tpdf orgchart.dot -o orgchart.pdf
-```
-
-**Structure:**
-- Use `graph` (undirected) with `layout=twopi`, `overlap=false`, `ranksep=2.5`
-- Global node style: `shape=box, style="filled,rounded", fontname="Helvetica", fontsize=10`
-- Root node: larger fontsize (12), thicker border (`penwidth=2`)
-
-**Color by title** — assign a distinct `fillcolor` to each unique `business_title`. Use a palette with good contrast, e.g.:
-
-| Title | Fill | Font |
-|-------|------|------|
-| Director | `#7B1FA2` | white |
-| Senior Staff Engineer | `#1565C0` | white |
-| Manager | `#00897B` | white |
-| Staff Engineer | `#42A5F5` | white |
-| Engineering Lead | `#EF6C00` | white |
-| Senior Software Engineer | `#2E7D32` | white |
-| Software Engineer | `#66BB6A` | white |
-| Software Engineer II | `#9CCC65` | black |
-| Intern | `#EC407A` | white |
-| Applied Scientist | `#FFA000` | black |
-
-Adapt colors for whatever titles appear in the data.
-
-**Report counts** — for every person who has reports, add the count to their label:
-- If they only have direct reports: `(N reports)`
-- If they have indirect reports too: `(N direct, M total)`
-
-**Legend** — add a legend node using an HTML table label:
-
-```dot
-legend [shape=none, margin=0, label=<
-    <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="6">
-        <TR><TD COLSPAN="2" BGCOLOR="white"><B>Legend</B></TD></TR>
-        <TR><TD BGCOLOR="#color">  </TD><TD BGCOLOR="white">Title Name</TD></TR>
-        ...
-    </TABLE>
->];
-```
-
-**Total headcount** — note the total number of people in the chart title/heading.
-
-#### Text Tree (if requested)
-
-Render as an indented tree using box-drawing characters (`├──`, `└──`, `│`).
-Include name, title, and team. Show a total headcount at the end.
+For a **text tree**, render using box-drawing characters (`├──`, `└──`, `│`) with name, title, and team. Show total headcount at the end.
