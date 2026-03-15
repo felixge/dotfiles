@@ -242,7 +242,12 @@ install_go_packages() {
 
 install_npm_packages() {
     echo "-> install npm packages"
-    npm install -g markserv --silent 2>&1 | grep -v "^Reshimming "
+    local output
+    if ! output=$(npm install -g markserv 2>&1); then
+        echo "$output"
+        return 1
+    fi
+}
 }
 
 symlink_go() {
