@@ -17,6 +17,7 @@ main() {
     install_neovim_plugins
     install_go_packages
     install_npm_packages
+    setup_claude_mcp
     symlink_go
     exec bash
 }
@@ -248,6 +249,46 @@ install_npm_packages() {
         return 1
     fi
 }
+
+setup_claude_mcp() {
+    echo "-> setup claude mcp servers"
+
+    # datadog
+    claude_mcp_add datadog -t http \
+        'https://mcp.datad0g.com/api/unstable/mcp-server/mcp?toolsets=core,profiling'
+    claude_mcp_add datadog-staging -t http \
+        'https://mcp.datad0g.com/api/unstable/mcp-server/mcp?toolsets=core,profiling'
+
+    # chrome-devtools (local npx, no auth)
+    claude_mcp_add chrome-devtools -- npx -y chrome-devtools-mcp@latest
+
+    # snowflake (see Confluence: "Snowflake for MCP")
+    if [ -z "${SNOWFLAKE_ACCOUNT:-}" ] || [ ! -f "$HOME/.config/mcp/snowflake-config.yaml" ]; then
+        echo "   skipping snowflake mcp (see Confluence: 'Snowflake for MCP')"
+    else
+        claude_mcp_add snowflake -t stdio \
+            -e SNOWFLAKE_ACCOUNT="$SNOWFLAKE_ACCOUNT" \
+            -e SNOWFLAKE_USER="$(whoami)@datadoghq.com" \
+            -e SNOWFLAKE_DATABASE=REPORTING \
+            -- \
+            uvx \
+                --python 3.12 \
+                --python-preference=managed \
+                --from git+https://github.com/Snowflake-Labs/mcp \
+                mcp-server-snowflake \
+                    --service-config-file "~/.config/mcp/snowflake-config.yaml" \
+                    --authenticator externalbrowser \
+                    --transport stdio \
+                    --user "${USER}@datadoghq.com"
+    fi
+}
+
+claude_mcp_add() {
+    # Usage: claude_mcp_add <name> <add-flags...>
+    # Removes existing server first to ensure config is up to date.
+    local name="$1"
+    claude mcp remove --scope user "$name" &>/dev/null || true
+    claude mcp add --scope user "$@" &>/dev/null
 }
 
 symlink_go() {
