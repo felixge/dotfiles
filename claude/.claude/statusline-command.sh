@@ -21,6 +21,7 @@ loc_added=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
 loc_removed=$(echo "$input" | jq -r '.cost.total_lines_removed // 0')
 cost=$(echo "$input" | jq -r '.cost.total_cost_usd // empty')
 duration=$(echo "$input" | jq -r '.cost.total_api_duration_ms // empty')
+session_duration=$(echo "$input" | jq -r '.cost.total_duration_ms // empty')
 
 # If no context usage yet, show model name only
 if [ -z "$used_pct" ]; then
@@ -60,11 +61,27 @@ if [ -n "$cost" ]; then
     cost_str=$(printf '$%.2f' "$cost")
 fi
 
-# Format duration as seconds
+# Format milliseconds to human-readable duration
+fmt_duration() {
+    local ms="$1"
+    local s=$(echo "$ms / 1000" | bc -l)
+    if [ "$(echo "$s < 60" | bc -l)" -eq 1 ]; then
+        printf "%.1fs" "$s"
+    elif [ "$(echo "$s < 3600" | bc -l)" -eq 1 ]; then
+        printf "%.1fm" "$(echo "$s / 60" | bc -l)"
+    else
+        printf "%.1fh" "$(echo "$s / 3600" | bc -l)"
+    fi
+}
+
 duration_str=""
 if [ -n "$duration" ]; then
-    duration_s=$(printf "%.1f" "$(echo "$duration / 1000" | bc -l)")
-    duration_str="${duration_s}s"
+    duration_str=$(fmt_duration "$duration")
+fi
+
+session_str=""
+if [ -n "$session_duration" ]; then
+    session_str=$(fmt_duration "$session_duration")
 fi
 
 # Output
@@ -72,4 +89,4 @@ printf "${bold}${magenta}%s${reset} " "$model_name"
 printf "${bar_color}%s${dim}%s${reset} ${bar_color}%d%%${reset}" "$bar_filled" "$bar_empty" "$used_pct_int"
 printf " ${dim}│${reset} ${green}+%s${reset}${dim}/${reset}${red}-%s${reset}" "$loc_added" "$loc_removed"
 printf " ${dim}│${reset} ${yellow}%s${reset}" "$cost_str"
-printf " ${dim}│${reset} ${cyan}%s${reset}" "$duration_str"
+printf " ${dim}│${reset} ${cyan}%s${reset} ${dim}(%s)${reset}" "$session_str" "$duration_str"
