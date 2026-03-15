@@ -111,7 +111,7 @@ install_homebrew_packages() {
     )
     brew install -q "${brew_packages[@]}"
     if is_macos; then
-        brew install -q --cask keycastr
+        brew install -q --cask keycastr snowflake-snowsql
     else
         brew install -q bubblewrap
     fi

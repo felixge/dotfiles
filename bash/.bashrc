@@ -24,6 +24,7 @@ if [[ "$OSTYPE" =~ ^linux ]]; then
     alias dot="$EDITOR $DOTFILES_DIR"
 elif [[ "$OSTYPE" =~ ^darwin ]]; then
     alias dot="cursor $DOTFILES_DIR"
+    alias snowsql="/Applications/SnowSQL.app/Contents/MacOS/snowsql"
 fi
 
 # claude dangerous mode
