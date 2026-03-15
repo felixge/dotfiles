@@ -139,6 +139,14 @@ is_datadog() {
     [ -e "$HOME/dd" ]
 }
 
+quiet_run() {
+    local output
+    if ! output=$("$@" 2>&1); then
+        echo "$output"
+        return 1
+    fi
+}
+
 command_exists() {
     local commands=("$@")
     local missing=0
@@ -229,8 +237,8 @@ stow_file_adopt() {
 
 install_neovim_plugins() {
     echo "-> install neovim plugins"
-    nvim --headless "+Lazy! install" "+Lazy! restore" +qa
-    nvim --headless "+MasonToolsUpdateSync" +qa
+    quiet_run nvim --headless "+Lazy! install" "+Lazy! restore" +qa
+    quiet_run nvim --headless "+MasonToolsUpdateSync" +qa
 }
 
 mise_install() {
@@ -260,11 +268,7 @@ install_go_packages() {
 
 install_npm_packages() {
     echo "-> install npm packages"
-    local output
-    if ! output=$(npm install -g markserv 2>&1); then
-        echo "$output"
-        return 1
-    fi
+    quiet_run npm install -g markserv
 }
 
 setup_claude_mcp() {
