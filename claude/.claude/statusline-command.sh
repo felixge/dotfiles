@@ -61,16 +61,21 @@ if [ -n "$cost" ]; then
     cost_str=$(printf '$%.2f' "$cost")
 fi
 
-# Format milliseconds to human-readable duration
+# Format milliseconds to human-readable duration (pure bash, no bc dependency)
 fmt_duration() {
     local ms="$1"
-    local s=$(echo "$ms / 1000" | bc -l)
-    if [ "$(echo "$s < 60" | bc -l)" -eq 1 ]; then
-        printf "%.1fs" "$s"
-    elif [ "$(echo "$s < 3600" | bc -l)" -eq 1 ]; then
-        printf "%.1fm" "$(echo "$s / 60" | bc -l)"
+    local total_s=$(( ms / 1000 ))
+    local frac=$(( (ms % 1000) / 100 ))
+    if [ "$total_s" -lt 60 ]; then
+        printf "%d.%ds" "$total_s" "$frac"
+    elif [ "$total_s" -lt 3600 ]; then
+        local mins=$(( total_s / 60 ))
+        local min_frac=$(( (total_s % 60) * 10 / 60 ))
+        printf "%d.%dm" "$mins" "$min_frac"
     else
-        printf "%.1fh" "$(echo "$s / 3600" | bc -l)"
+        local hrs=$(( total_s / 3600 ))
+        local hr_frac=$(( (total_s % 3600) * 10 / 3600 ))
+        printf "%d.%dh" "$hrs" "$hr_frac"
     fi
 }
 
