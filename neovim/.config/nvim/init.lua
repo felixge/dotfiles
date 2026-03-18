@@ -162,7 +162,7 @@ vim.o.splitbelow = true
 --   See `:help lua-options`
 --   and `:help lua-guide-options`
 vim.o.list = true
-vim.opt.listchars = { tab = '» ', trail = '·', nbsp = '␣' }
+vim.opt.listchars = { tab = '» ', trail = '·', nbsp = '␣', space = '·' }
 
 -- Render tabs as 2 spaces
 vim.o.shiftwidth = 2
