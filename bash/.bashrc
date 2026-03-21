@@ -103,7 +103,7 @@ tn() {
 }
 
 # tmux session picker
-alias ts='tmux attach -t "$(tmux list-sessions -F "#{session_name}" | fzf --reverse)"'
+alias ts='tmux attach -t "$(tmux list-sessions -F "#{session_last_attached} #{session_name}" | sort -rn | awk "{print \$2}" | fzf --reverse)"'
 
 # fzf
 eval "$(fzf --bash)"
