@@ -20,7 +20,10 @@ return {
       })
       vim.api.nvim_create_autocmd('FileType', {
         pattern = 'markdown',
-        callback = function(ev) vim.keymap.set('n', 'gx', '<cmd>LinkOpen<cr>', { buffer = ev.buf, desc = 'Open link under cursor' }) end,
+        callback = function(ev)
+          vim.b.link_skip_line = '!\\['
+          vim.keymap.set('n', 'gx', '<cmd>LinkOpen<cr>', { buffer = ev.buf, desc = 'Open link under cursor' })
+        end,
       })
     end,
   },
