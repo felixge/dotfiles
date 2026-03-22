@@ -118,6 +118,9 @@ install_homebrew_packages() {
     fi
     if is_datadog; then
         brew install -q datadog/tap/dd-auth
+        if is_macos; then
+            brew install -q --cask datadog/tap/datadog-workspaces
+        fi
     fi
 }
 
