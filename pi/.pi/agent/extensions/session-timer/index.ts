@@ -127,9 +127,8 @@ export default function (pi: ExtensionAPI) {
 					if (totalCacheRead) parts.push(theme.fg("dim", `R${formatTokens(totalCacheRead)}`));
 					if (totalCacheWrite) parts.push(theme.fg("dim", `W${formatTokens(totalCacheWrite)}`));
 
-					const usingSubscription = ctx.model ? ctx.modelRegistry.isUsingOAuth(ctx.model) : false;
-					if (totalCost || usingSubscription) {
-						parts.push(theme.fg("warning", `$${totalCost.toFixed(3)}${usingSubscription ? " (sub)" : ""}`));
+					if (totalCost) {
+						parts.push(theme.fg("warning", `$${totalCost.toFixed(3)}`));
 					}
 
 					const contextDisplay =
