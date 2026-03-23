@@ -217,7 +217,7 @@ unminimize_ubuntu() {
 
 stow_dotfiles() {
     echo "-> stow dotfiles"
-    mkdir -p "$HOME/.claude" "$HOME/.pi"
+    mkdir -p "$HOME/.claude" "$HOME/.pi/agent"
     stow_file_adopt git/.gitignore
     stow --adopt -t "$HOME" jj jjui neovim mise claude codex idea kitty pi
 }
