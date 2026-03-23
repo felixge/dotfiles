@@ -10,7 +10,7 @@
     "openai-codex/gpt-5.4"
   ],
   "defaultThinkingLevel": "high",
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "enableSkillCommands": true,
   "skills": [
     "~/.claude/skills"
