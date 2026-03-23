@@ -12,5 +12,10 @@
   "defaultThinkingLevel": "high",
   "hideThinkingBlock": true,
   "enableSkillCommands": true,
-  "skills": ["~/.claude/skills"]
+  "skills": [
+    "~/.claude/skills"
+  ],
+  "packages": [
+    "npm:pi-mcp-adapter"
+  ]
 }

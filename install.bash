@@ -17,6 +17,7 @@ main() {
     install_neovim_plugins
     install_go_packages
     install_npm_packages
+    install_pi_packages
     setup_claude_mcp
     symlink_go
     exec bash
@@ -272,6 +273,11 @@ install_go_packages() {
 install_npm_packages() {
     echo "-> install npm packages"
     quiet_run npm install -g markserv @mariozechner/pi-coding-agent
+}
+
+install_pi_packages() {
+    echo "-> install pi packages"
+    pi update
 }
 
 setup_claude_mcp() {
