@@ -9,5 +9,6 @@
     "anthropic/claude-haiku-4-5",
     "openai-codex/gpt-5.4"
   ],
-  "defaultThinkingLevel": "high"
+  "defaultThinkingLevel": "high",
+  "hideThinkingBlock": true
 }
