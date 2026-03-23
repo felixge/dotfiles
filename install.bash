@@ -217,9 +217,9 @@ unminimize_ubuntu() {
 
 stow_dotfiles() {
     echo "-> stow dotfiles"
-    mkdir -p "$HOME/.claude"
+    mkdir -p "$HOME/.claude" "$HOME/.pi"
     stow_file_adopt git/.gitignore
-    stow --adopt -t "$HOME" jj jjui neovim mise claude codex idea kitty
+    stow --adopt -t "$HOME" jj jjui neovim mise claude codex idea kitty pi
 }
 
 stow_file_adopt() {
@@ -271,7 +271,7 @@ install_go_packages() {
 
 install_npm_packages() {
     echo "-> install npm packages"
-    quiet_run npm install -g markserv
+    quiet_run npm install -g markserv @mariozechner/pi-coding-agent
 }
 
 setup_claude_mcp() {
