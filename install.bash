@@ -247,6 +247,10 @@ install_neovim_plugins() {
 
 mise_install() {
     echo "-> install mise tools"
+    # Avoid GitHub API rate limits for mise's aqua backend
+    if [ -z "${GITHUB_TOKEN:-}" ] && command -v gh &>/dev/null; then
+        export GITHUB_TOKEN=$(gh auth token 2>/dev/null)
+    fi
     mise trust -q
     mise install -q
     mise upgrade -q
