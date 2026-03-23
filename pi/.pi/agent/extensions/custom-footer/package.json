@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "session-timer",
+  "name": "custom-footer",
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "*"
   },

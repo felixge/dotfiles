@@ -1,5 +1,5 @@
 /**
- * Session Timer Extension
+ * Custom Footer Extension
  *
  * Replaces the default footer with a custom one that shows elapsed session time
  * on the stats line (line 2), next to token counts and cost.
@@ -16,7 +16,7 @@ import type { AssistantMessage } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
-const ENTRY_TYPE = "session-timer";
+const ENTRY_TYPE = "custom-footer";
 
 interface TimerEntry {
 	elapsedMs: number;
