@@ -276,7 +276,7 @@ install_go_packages() {
 
 install_npm_packages() {
     echo "-> install npm packages"
-    quiet_run npm install -g markserv @mariozechner/pi-coding-agent
+    quiet_run npm install -g markserv @mariozechner/pi-coding-agent mcporter
 }
 
 install_pi_packages() {
