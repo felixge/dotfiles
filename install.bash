@@ -18,7 +18,7 @@ main() {
     install_go_packages
     install_npm_packages
     install_pi_packages
-    setup_claude_mcp
+    setup_mcporter
     symlink_go
     exec bash
 }
@@ -218,7 +218,7 @@ unminimize_ubuntu() {
 
 stow_dotfiles() {
     echo "-> stow dotfiles"
-    mkdir -p "$HOME/.claude" "$HOME/.pi/agent"
+    mkdir -p "$HOME/.claude" "$HOME/.pi/agent" "$HOME/.mcporter/daemon"
     stow_file_adopt git/.gitignore
     stow --adopt -t "$HOME" jj jjui neovim mise claude codex idea kitty pi
 }
@@ -284,45 +284,68 @@ install_pi_packages() {
     pi update
 }
 
-setup_claude_mcp() {
-    echo "-> setup claude mcp servers"
+setup_mcporter() {
+    echo "-> setup mcporter config"
+    mkdir -p "$HOME/.mcporter"
 
-    # datadog
-    claude_mcp_add datadog -t http \
-        'https://mcp.datad0g.com/api/unstable/mcp-server/mcp?toolsets=core,profiling'
-    claude_mcp_add datadog-staging -t http \
-        'https://mcp.datad0g.com/api/unstable/mcp-server/mcp?toolsets=core,profiling'
+    # Remove legacy claude mcp servers (migrated to mcporter)
+    for name in datadog datadog-staging chrome-devtools snowflake; do
+        claude mcp remove "$name" &>/dev/null || true
+    done
 
-    # chrome-devtools (local npx, no auth)
-    claude_mcp_add chrome-devtools -- npx -y chrome-devtools-mcp@latest
-
-    # snowflake (see Confluence: "Snowflake for MCP")
-    if [ -z "${SNOWFLAKE_ACCOUNT:-}" ] || [ ! -f "$HOME/.config/mcp/snowflake-config.yaml" ]; then
-        echo "   skipping snowflake mcp (see Confluence: 'Snowflake for MCP')"
+    local snowflake_block=""
+    if [ -n "${SNOWFLAKE_ACCOUNT:-}" ] && [ -f "$HOME/.config/mcp/snowflake-config.yaml" ]; then
+        local user_email
+        user_email="$(whoami)@datadoghq.com"
+        snowflake_block=$(cat <<SNOWFLAKE
+,
+    "snowflake": {
+      "command": "uvx",
+      "args": [
+        "--python", "3.12",
+        "--python-preference=managed",
+        "--from", "git+https://github.com/Snowflake-Labs/mcp",
+        "mcp-server-snowflake",
+        "--service-config-file", "~/.config/mcp/snowflake-config.yaml",
+        "--authenticator", "externalbrowser",
+        "--transport", "stdio",
+        "--user", "${user_email}"
+      ],
+      "env": {
+        "SNOWFLAKE_ACCOUNT": "${SNOWFLAKE_ACCOUNT}",
+        "SNOWFLAKE_USER": "${user_email}",
+        "SNOWFLAKE_DATABASE": "REPORTING"
+      }
+    }
+SNOWFLAKE
+)
     else
-        claude_mcp_add snowflake -t stdio \
-            -e SNOWFLAKE_ACCOUNT="$SNOWFLAKE_ACCOUNT" \
-            -e SNOWFLAKE_USER="$(whoami)@datadoghq.com" \
-            -e SNOWFLAKE_DATABASE=REPORTING \
-            -- \
-            uvx \
-                --python 3.12 \
-                --python-preference=managed \
-                --from git+https://github.com/Snowflake-Labs/mcp \
-                mcp-server-snowflake \
-                    --service-config-file "~/.config/mcp/snowflake-config.yaml" \
-                    --authenticator externalbrowser \
-                    --transport stdio \
-                    --user "${USER}@datadoghq.com"
+        echo "   skipping snowflake mcp (see Confluence: 'Snowflake for MCP')"
     fi
-}
 
-claude_mcp_add() {
-    # Usage: claude_mcp_add <name> <add-flags...>
-    # Removes existing server first to ensure config is up to date.
-    local name="$1"
-    claude mcp remove --scope user "$name" &>/dev/null || true
-    claude mcp add --scope user "$@" &>/dev/null
+    cat > "$HOME/.mcporter/mcporter.json" <<EOF
+{
+  "mcpServers": {
+    "atlassian": {
+      "baseUrl": "https://mcp.atlassian.com/v1/mcp",
+      "auth": "oauth"
+    },
+    "datadog": {
+      "baseUrl": "https://mcp.datadoghq.com/api/unstable/mcp-server/mcp?toolsets=core,profiling",
+      "auth": "oauth"
+    },
+    "datadog-staging": {
+      "baseUrl": "https://mcp.datad0g.com/api/unstable/mcp-server/mcp?toolsets=core,profiling",
+      "auth": "oauth"
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"]
+    }${snowflake_block}
+  },
+  "imports": []
+}
+EOF
 }
 
 symlink_go() {
