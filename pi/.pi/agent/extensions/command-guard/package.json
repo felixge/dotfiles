@@ -1,0 +1,7 @@
+{
+  "name": "command-guard",
+  "private": true,
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "^0.62.0"
+  }
+}

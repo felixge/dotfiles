@@ -9,3 +9,4 @@
 
 # jj exclude repo configs
 jj/.config/jj/repos/*
+node_modules/
