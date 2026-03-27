@@ -341,6 +341,10 @@ SNOWFLAKE
     "chrome-devtools": {
       "command": "npx",
       "args": ["-y", "chrome-devtools-mcp@latest"]
+    },
+    "google-workspace": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://google-workspace-mcp-server-834963730936.us-central1.run.app/mcp"]
     }${snowflake_block}
   },
   "imports": []
