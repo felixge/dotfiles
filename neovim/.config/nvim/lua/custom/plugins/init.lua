@@ -6,6 +6,12 @@
 ---@module 'lazy'
 ---@type LazySpec
 return {
+  {
+    'OXY2DEV/markview.nvim',
+    lazy = false,
+    dependencies = { 'nvim-treesitter/nvim-treesitter' },
+    opts = {},
+  },
   { 'tpope/vim-fugitive' },
   { 'tpope/vim-rhubarb' },
   { 'tpope/vim-surround' },
