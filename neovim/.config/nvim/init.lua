@@ -1005,6 +1005,7 @@ require('lazy').setup({
         'query',
         'rust',
         'tsx',
+        'toml',
         'typescript',
         'vim',
         'vimdoc',
