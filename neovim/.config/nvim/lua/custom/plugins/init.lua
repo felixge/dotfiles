@@ -11,6 +11,14 @@ return {
     lazy = false,
     dependencies = { 'nvim-treesitter/nvim-treesitter' },
     opts = {},
+    config = function(_, opts)
+      require('markview').setup(opts)
+
+      local checkboxes = require('markview.extras.checkboxes')
+      checkboxes.setup {}
+
+      vim.keymap.set({ 'n', 'v' }, '<CR>', '<cmd>Checkbox toggle<cr>', { desc = 'Checkbox Toggle' })
+    end,
   },
   { 'tpope/vim-fugitive' },
   { 'tpope/vim-rhubarb' },
