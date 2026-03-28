@@ -2,22 +2,52 @@
 light = "custom-light"
 dark = "custom-light"
 
-[leader.d]
-context = [ "$change_id" ]
-help = "Show interactive diff"
-send = [ "$", "jj show $change_id", "enter" ]
+[[actions]]
+name = "show-diff"
+lua = '''
+jj_interactive("show", context.change_id())
+'''
 
-[leader.e]
-context = [ "$file", "$change_id" ]
-help = "Edit file in @"
-send = [ "$", "cursor $file", "enter" ]
+[[bindings]]
+action = "show-diff"
+seq = ["\\", "d"]
+scope = "revisions"
+desc = "Show interactive diff"
 
-[leader.E]
-context = [ "$file", "$change_id" ]
-help = "Edit file in change"
-send = [ "$", "jj edit \"$change_id\" && cursor $file", "enter" ]
+[[actions]]
+name = "edit-file-at"
+lua = '''
+exec_shell("cursor " .. context.file())
+'''
 
-[leader.p]
-context = [ "$change_id" ]
-help = "Open PR"
-send = [ "$", "jj pr \"$change_id\"", "enter" ]
+[[bindings]]
+action = "edit-file-at"
+seq = ["\\", "e"]
+scope = "revisions.details"
+desc = "Edit file in @"
+
+[[actions]]
+name = "edit-file-in-change"
+lua = '''
+local cid = context.change_id()
+local f = context.file()
+exec_shell("jj edit '" .. cid .. "' && cursor '" .. f .. "'")
+'''
+
+[[bindings]]
+action = "edit-file-in-change"
+seq = ["\\", "E"]
+scope = "revisions.details"
+desc = "Edit file in change"
+
+[[actions]]
+name = "open-pr"
+lua = '''
+jj_interactive("pr", context.change_id())
+'''
+
+[[bindings]]
+action = "open-pr"
+seq = ["\\", "p"]
+scope = "revisions"
+desc = "Open PR"
