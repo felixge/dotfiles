@@ -709,6 +709,7 @@ require('lazy').setup({
             cb(vim.fs.root(bufnr, go_root_markers))
           end,
         },
+        marksman = {},
         pyright = {},
         rust_analyzer = {},
         ts_ls = {
