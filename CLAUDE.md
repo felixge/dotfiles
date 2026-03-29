@@ -39,12 +39,10 @@ kitty/              - Kitty terminal config
                                powerline tab bar, Cmd+D split, Cmd+T tab, Cmd+Enter fullscreen
   .config/kitty/zoom.py       Zoom kitten (Cmd+Shift+Enter)
 mise/               - mise tool version manager (Go, Node)
-neovim/             - Neovim config (Kickstart-based, light theme via onedark)
-  .config/nvim/init.lua        Leader=Space, LSP (gopls, dd-gopls for DataDog, lua_ls), format on save,
-                               Telescope, blink.cmp, conform.nvim, which-key, gitsigns (inline blame),
-                               mini.nvim (ai, surround, statusline), neo-tree, treesitter
-  .config/nvim/lua/custom/     Custom plugins (vim-fugitive, vim-rhubarb)
-  .config/nvim/lua/kickstart/  Kickstart plugin modules (neo-tree, gitsigns keymaps)
+neovim/             - Neovim config (LazyVim-based)
+  .config/nvim/init.lua        Bootstraps lazy.nvim + LazyVim
+  .config/nvim/lua/config/     LazyVim config (lazy.lua bootstrap)
+  .config/nvim/lua/plugins/    Plugin overrides/extras (colorscheme, snacks)
 ripgrep/            - Ripgrep config (.ripgreprc)
 tmux/               - tmux config
   .tmux.conf                   Light theme, mouse, 1-based windows, kitty passthrough,
