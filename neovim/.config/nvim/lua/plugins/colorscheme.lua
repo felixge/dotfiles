@@ -6,7 +6,6 @@ return {
       require("onedark").setup({
         highlights = {
           ["Whitespace"] = { fg = "#eaeaea" },
-          ["ColorColumn"] = { bg = "#f0f0f0" },
         },
       })
       require("onedark").load()
