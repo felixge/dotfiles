@@ -19,6 +19,12 @@ end
 vim.keymap.set({ 'n', 'v' }, '<leader>yr', yank_path ':.', { desc = '[Y]ank [R]elative path' })
 vim.keymap.set({ 'n', 'v' }, '<leader>yp', yank_path ':p', { desc = '[Y]ank absolute [P]ath' })
 
+-- Move lines up/down with Cmd+Opt+Arrow (Kitty remaps to Ctrl+Arrow)
+vim.keymap.set('n', '<C-Up>', ':m .-2<CR>==', { desc = 'Move line up', silent = true })
+vim.keymap.set('n', '<C-Down>', ':m .+1<CR>==', { desc = 'Move line down', silent = true })
+vim.keymap.set('v', '<C-Up>', ":m '<-2<CR>gv=gv", { desc = 'Move selection up', silent = true })
+vim.keymap.set('v', '<C-Down>', ":m '>+1<CR>gv=gv", { desc = 'Move selection down', silent = true })
+
 -- Close any open floating windows (e.g. LSP hover docs)
 vim.keymap.set('n', '<Esc>', function()
   for _, win in ipairs(vim.api.nvim_list_wins()) do
