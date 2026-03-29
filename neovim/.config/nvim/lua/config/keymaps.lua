@@ -19,6 +19,22 @@ end
 vim.keymap.set({ 'n', 'v' }, '<leader>yr', yank_path ':.', { desc = '[Y]ank [R]elative path' })
 vim.keymap.set({ 'n', 'v' }, '<leader>yp', yank_path ':p', { desc = '[Y]ank absolute [P]ath' })
 
+-- Toggle markdown checkboxes with Enter
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = 'markdown',
+  callback = function(ev)
+    vim.keymap.set('n', '<CR>', function()
+      local line = vim.api.nvim_get_current_line()
+      local new_line = line:gsub('%- %[([%s xX])%]', function(state)
+        return state:match '[xX]' and '- [ ]' or '- [x]'
+      end)
+      if new_line ~= line then
+        vim.api.nvim_set_current_line(new_line)
+      end
+    end, { buffer = ev.buf, desc = 'Toggle markdown checkbox' })
+  end,
+})
+
 -- Close any open floating windows (e.g. LSP hover docs)
 vim.keymap.set('n', '<Esc>', function()
   for _, win in ipairs(vim.api.nvim_list_wins()) do
