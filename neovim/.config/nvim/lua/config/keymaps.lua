@@ -18,3 +18,13 @@ end
 
 vim.keymap.set({ 'n', 'v' }, '<leader>yr', yank_path ':.', { desc = '[Y]ank [R]elative path' })
 vim.keymap.set({ 'n', 'v' }, '<leader>yp', yank_path ':p', { desc = '[Y]ank absolute [P]ath' })
+
+-- Close any open floating windows (e.g. LSP hover docs)
+vim.keymap.set('n', '<Esc>', function()
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    local ok, cfg = pcall(vim.api.nvim_win_get_config, win)
+    if ok and cfg.relative ~= '' then
+      pcall(vim.api.nvim_win_close, win, false)
+    end
+  end
+end, { desc = 'Close floating windows' })
