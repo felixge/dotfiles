@@ -43,6 +43,7 @@ neovim/             - Neovim config (LazyVim-based)
   .config/nvim/init.lua        Bootstraps lazy.nvim + LazyVim
   .config/nvim/lua/config/     LazyVim config (lazy.lua bootstrap)
   .config/nvim/lua/plugins/    Plugin overrides/extras (colorscheme, snacks)
+  .bak/config-2026-03-29/nvim/ Backup of the old vim config (referred to as "old vim config")
 ripgrep/            - Ripgrep config (.ripgreprc)
 tmux/               - tmux config
   .tmux.conf                   Light theme, mouse, 1-based windows, kitty passthrough,
