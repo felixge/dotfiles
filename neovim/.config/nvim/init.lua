@@ -198,11 +198,13 @@ vim.api.nvim_create_autocmd({ 'FocusGained', 'BufEnter', 'CursorHold' }, {
 })
 -- Poll for file changes even when unfocused (e.g. another tmux pane)
 local reload_timer = vim.uv.new_timer()
-reload_timer:start(1000, 1000, vim.schedule_wrap(function()
-  if vim.fn.getcmdwintype() == '' then
-    vim.cmd 'silent! checktime'
-  end
-end))
+reload_timer:start(
+  1000,
+  1000,
+  vim.schedule_wrap(function()
+    if vim.fn.getcmdwintype() == '' then vim.cmd 'silent! checktime' end
+  end)
+)
 
 -- Auto-save files on navigation, buffer switch, etc.
 vim.o.autowriteall = true
@@ -826,7 +828,7 @@ require('lazy').setup({
         go = { 'goimports' },
         json = { 'jq' },
         -- Conform can also run multiple formatters sequentially
-        python = { "isort", "black" },
+        python = { 'isort', 'black' },
         --
         -- You can use 'stop_after_first' to run the first available formatter from the list
         -- javascript = { "prettierd", "prettier", stop_after_first = true },
@@ -962,7 +964,6 @@ require('lazy').setup({
       --  - yinq - [Y]ank [I]nside [N]ext [Q]uote
       --  - ci'  - [C]hange [I]nside [']quote
       require('mini.ai').setup { n_lines = 500 }
-
 
       -- Simple and easy statusline.
       --  You could remove this setup call if you don't like it,
