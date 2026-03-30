@@ -3,8 +3,8 @@ return {
   opts = {
     image = {
       doc = {
-        inline = false, -- don't render images automatically inline
-        float = true, -- show float on CursorMoved over an image
+        inline = true, -- don't render images automatically inline
+        float = false, -- show float on CursorMoved over an image
       },
     },
   },
