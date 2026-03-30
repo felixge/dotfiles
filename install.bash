@@ -86,6 +86,7 @@ install_homebrew_packages() {
         grpcurl
         htop
         hyperfine
+        imagemagick
         isort
         jj
         jjui
