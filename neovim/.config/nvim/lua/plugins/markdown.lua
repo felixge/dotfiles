@@ -21,6 +21,12 @@ return {
     end,
   },
   {
+    "iamcco/markdown-preview.nvim",
+    keys = {
+      { "<localleader>p", "<cmd>MarkdownPreview<cr>", ft = "markdown", desc = "Markdown preview" },
+    },
+  },
+  {
     "HakonHarnes/img-clip.nvim",
     event = "VeryLazy",
     opts = {},
