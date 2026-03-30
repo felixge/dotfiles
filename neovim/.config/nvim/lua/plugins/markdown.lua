@@ -5,6 +5,19 @@ return {
     opts = {},
     keys = {
       { "<leader>p", "<cmd>PasteImage<cr>", desc = "Paste image from system clipboard" },
+      {
+        "<leader>P",
+        function()
+          Snacks.picker.files({
+            ft = { "jpg", "jpeg", "png", "webp" },
+            confirm = function(self, item, _)
+              self:close()
+              require("img-clip").paste_image({}, "./" .. item.file)
+            end,
+          })
+        end,
+        desc = "Pick image from files",
+      },
     },
   },
   {
