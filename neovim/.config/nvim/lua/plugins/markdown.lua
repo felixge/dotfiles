@@ -4,19 +4,18 @@ return {
     enabled = false,
   },
   {
-    'qadzek/link.vim',
-    ft = 'markdown',
-    init = function() vim.g.link_heading = '' end,
+    "qadzek/link.vim",
+    ft = "markdown",
+    init = function()
+      vim.g.link_heading = ""
+      vim.g.link_use_default_mappings = 1
+    end,
     config = function()
-      vim.api.nvim_create_autocmd('BufWritePre', {
-        pattern = '*.md',
-        callback = function() vim.cmd 'LinkConvertAll' end,
-      })
-      vim.api.nvim_create_autocmd('FileType', {
-        pattern = 'markdown',
+      vim.api.nvim_create_autocmd("FileType", {
+        pattern = "markdown",
         callback = function(ev)
-          vim.b.link_skip_line = '!\\['
-          vim.keymap.set('n', 'gx', '<cmd>LinkOpen<cr>', { buffer = ev.buf, desc = 'Open link under cursor' })
+          vim.b.link_skip_line = "!\\["
+          vim.keymap.set("n", "gx", "<cmd>LinkOpen<cr>", { buffer = ev.buf, desc = "Open link under cursor" })
         end,
       })
     end,
