@@ -25,7 +25,21 @@ vim.keymap.set('n', '<C-Down>', ':m .+1<CR>==', { desc = 'Move line down', silen
 vim.keymap.set('v', '<C-Up>', ":m '<-2<CR>gv=gv", { desc = 'Move selection up', silent = true })
 vim.keymap.set('v', '<C-Down>', ":m '>+1<CR>gv=gv", { desc = 'Move selection down', silent = true })
 
--- Close any open floating windows (e.g. LSP hover docs)
+-- Open file under cursor in Finder (macOS)
+vim.keymap.set('n', 'gF', function()
+  local file = vim.fn.expand '<cfile>'
+  local abs
+  if file:sub(1, 1) == '/' then
+    abs = file
+  else
+    abs = vim.fn.fnamemodify(vim.fn.expand '%:p:h' .. '/' .. file, ':p')
+  end
+  if vim.fn.filereadable(abs) == 0 and vim.fn.isdirectory(abs) == 0 then
+    vim.notify('gF: not found: ' .. abs, vim.log.levels.WARN)
+    return
+  end
+  vim.fn.jobstart({ 'open', '-R', abs }, { detach = true })
+end, { desc = 'Open file under cursor in Finder' })
 vim.keymap.set('n', '<Esc>', function()
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     local ok, cfg = pcall(vim.api.nvim_win_get_config, win)
