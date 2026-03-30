@@ -1,5 +1,9 @@
 return {
   {
+    "MeanderingProgrammer/render-markdown.nvim",
+    enabled = false,
+  },
+  {
     'qadzek/link.vim',
     ft = 'markdown',
     init = function() vim.g.link_heading = '' end,
