@@ -4,8 +4,7 @@
 local go_root_markers = { "go.work", "go.mod", ".git" }
 
 local function is_dd_gopls_file(fname)
-  return fname:find("/github%.com/DataDog/dd%-source/") ~= nil
-    or fname:find("/github%.com/DataDog/dd%-go/") ~= nil
+  return fname:find("/github%.com/DataDog/dd%-source/") ~= nil or fname:find("/github%.com/DataDog/dd%-go/") ~= nil
 end
 
 return {
