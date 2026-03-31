@@ -1,3 +1,7 @@
+-- Resolve /-prefixed paths as repo-relative (matching GitHub behavior).
+-- Used by gf and other file-navigation commands.
+vim.opt_local.includeexpr = "v:lua.require'config.markdown'.includeexpr(v:fname)"
+
 -- Rename image under cursor and update all *.md references via grug-far.
 -- %:h in the input expands to the current buffer's directory.
 local function rename_image_at_cursor()
