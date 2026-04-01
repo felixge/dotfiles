@@ -99,7 +99,9 @@ fi
 
 # tmux: auto-name new sessions after current directory
 tn() {
-    tmux new-session -s "$(basename "$PWD")" "$@"
+    local session
+    session="$(basename "$PWD")"
+    tmux new-session -s "$session" "$@" 2>/dev/null || tmux attach -t "$session"
 }
 
 # tmux session picker
