@@ -35,6 +35,14 @@ vim.keymap.set('n', 'gF', function()
     abs = vim.fn.fnamemodify(vim.fn.expand '%:p:h' .. '/' .. file, ':p')
   end
   if vim.fn.filereadable(abs) == 0 and vim.fn.isdirectory(abs) == 0 then
+    if file:sub(1, 1) ~= '/' then
+      local cwd_abs = vim.fn.fnamemodify(vim.fn.getcwd() .. '/' .. file, ':p')
+      if vim.fn.filereadable(cwd_abs) == 1 or vim.fn.isdirectory(cwd_abs) == 1 then
+        abs = cwd_abs
+      end
+    end
+  end
+  if vim.fn.filereadable(abs) == 0 and vim.fn.isdirectory(abs) == 0 then
     vim.notify('gF: not found: ' .. abs, vim.log.levels.WARN)
     return
   end
