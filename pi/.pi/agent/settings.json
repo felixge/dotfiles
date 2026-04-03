@@ -17,7 +17,6 @@
     "~/.claude/skills"
   ],
   "packages": [
-    "npm:pi-web-access",
-    "npm:@plannotator/pi-extension"
+    "npm:pi-web-access"
   ]
 }
