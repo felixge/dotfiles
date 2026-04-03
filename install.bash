@@ -269,6 +269,7 @@ install_go_packages() {
         golang.org/x/perf/cmd/benchstat@latest
         golang.org/x/pkgsite/cmd/pkgsite@latest
         golang.org/x/tools/cmd/stress@latest
+        honnef.co/go/tools/cmd/staticcheck@latest
     )
     for package in "${go_packages[@]}"; do
         go install "$package" &
