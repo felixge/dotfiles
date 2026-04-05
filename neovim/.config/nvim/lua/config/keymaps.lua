@@ -49,10 +49,11 @@ vim.keymap.set('n', 'gF', function()
   vim.fn.jobstart({ 'open', '-R', abs }, { detach = true })
 end, { desc = 'Open file under cursor in Finder' })
 vim.keymap.set('n', '<Esc>', function()
+  vim.cmd('nohlsearch')
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     local ok, cfg = pcall(vim.api.nvim_win_get_config, win)
     if ok and cfg.relative ~= '' then
       pcall(vim.api.nvim_win_close, win, false)
     end
   end
-end, { desc = 'Close floating windows' })
+end, { desc = 'Clear hlsearch and close floating windows' })
