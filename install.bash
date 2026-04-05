@@ -83,6 +83,7 @@ install_homebrew_packages() {
         git
         git-delta
         glow
+        golangci-lint
         grpcurl
         htop
         hyperfine
