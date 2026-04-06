@@ -1,6 +1,7 @@
 return {
   "folke/snacks.nvim",
   opts = {
+    scroll = { enabled = false },
     image = {
       doc = {
         inline = true, -- don't render images automatically inline
