@@ -3,6 +3,7 @@
 -- Add any additional options here
 vim.o.background = "light"
 vim.opt.relativenumber = false
+vim.opt.wrap = true
 
 -- Load project-local .nvimrc files (e.g. for per-repo Telescope settings)
 vim.o.exrc = true
