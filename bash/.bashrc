@@ -11,7 +11,6 @@ fi
 [[ -r "$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh" ]] && . "$HOMEBREW_PREFIX/etc/profile.d/bash_completion.sh"
 
 # mise (after homebrew so it's in PATH)
-command -v mise &>/dev/null && eval "$(mise activate bash --shims)"
 command -v mise &>/dev/null && eval "$(mise activate bash)"
 
 # markserv: suppress node deprecation warnings
