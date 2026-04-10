@@ -98,6 +98,7 @@ install_homebrew_packages() {
         magic-wormhole
         mise
         neovim
+        nono
         pyright
         ripgrep
         rsync
