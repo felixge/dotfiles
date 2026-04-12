@@ -9,6 +9,9 @@ return {
         enabled = false,
       },
     },
+    keymap = {
+      ["<Tab>"] = { "select_and_accept", "fallback" },
+    },
     sources = {
       providers = {
         buffer = {
