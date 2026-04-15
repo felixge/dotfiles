@@ -10,7 +10,7 @@
     "openai-codex/gpt-5.4",
     "google/gemini-3.1-pro-preview"
   ],
-  "defaultThinkingLevel": "high",
+  "defaultThinkingLevel": "xhigh",
   "hideThinkingBlock": false,
   "enableSkillCommands": true,
   "skills": [
