@@ -153,9 +153,11 @@ export default function (pi: ExtensionAPI) {
 						statsLeftWidth = visibleWidth(statsLeft);
 					}
 
-					// Right side: model name
+					// Right side: model name + thinking level
+					const thinkingLevel = pi.getThinkingLevel();
+					const thinkingColor = `thinking${thinkingLevel[0].toUpperCase()}${thinkingLevel.slice(1)}` as const;
 					const modelName = ctx.model?.id || "no-model";
-					const rightSide = theme.fg("muted", modelName);
+					const rightSide = `${theme.fg("muted", modelName)} ${theme.fg("dim", "(")}${theme.fg(thinkingColor, thinkingLevel)}${theme.fg("dim", ")")}`;
 					const rightSideWidth = visibleWidth(rightSide);
 					const minPadding = 2;
 					const totalNeeded = statsLeftWidth + minPadding + rightSideWidth;
