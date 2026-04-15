@@ -16,7 +16,5 @@
   "skills": [
     "~/.claude/skills"
   ],
-  "packages": [
-    "npm:pi-web-access"
-  ]
+  "packages": []
 }
