@@ -8,6 +8,9 @@ return {
         float = false, -- show float on CursorMoved over an image
       },
     },
+    scratch = {
+      ft = "markdown", -- always markdown, ignore current buffer's filetype
+    },
   },
   keys = {
     {
