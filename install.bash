@@ -357,6 +357,41 @@ SNOWFLAKE
 EOF
 }
 
+fetch_repositories() {
+    echo "-> fetch jj repositories in ~/go/src"
+
+    local repos=()
+    while IFS= read -r repo; do
+        repos+=("$repo")
+    done < <(find "$HOME/go/src" -mindepth 4 -maxdepth 4 -type d -name .jj 2>/dev/null | sed 's|/\.jj$||')
+
+    if [ ${#repos[@]} -eq 0 ]; then
+        return
+    fi
+
+    # Parallel but bounded. GIT_SSH_COMMAND disables SSH ControlMaster to avoid
+    # `mux_client_request_session: Session open refused by peer` races when many
+    # fetches hit github.com at once; scoped to xargs, so no restore needed.
+    printf '%s\n' "${repos[@]}" \
+        | GIT_SSH_COMMAND='ssh -o ControlMaster=no -o ControlPath=none' \
+          xargs -n1 -P 16 -I {} bash -c '
+            repo="$1"
+            cd "$repo" || exit 0
+            # Skip repos with no git remotes.
+            if [ -z "$(jj git remote list 2>/dev/null)" ]; then
+                exit 0
+            fi
+            # --ignore-working-copy bypasses the snapshot, so large files in
+            # the working copy do not abort the fetch.
+            if output=$(jj --ignore-working-copy git fetch 2>&1); then
+                :
+            else
+                echo "   failed: $repo"
+                echo "$output" | sed "s/^/      /"
+            fi
+        ' _ {}
+}
+
 symlink_go() {
     # Hack: Make sure the VS Code Go extension can always find the go binary
     echo "-> symlink go to /usr/local/bin"

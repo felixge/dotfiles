@@ -51,3 +51,7 @@ tmux/               - tmux config
 ```
 
 Root files: `install.bash` (bootstrap script), `Makefile` (test targets), `mise.toml` (tool versions), `.ripgreprc`, `.nvimrc` (legacy).
+
+## Troubleshooting
+
+- `fetch_repositories` (bash function in `install.bash`) failures — see [docs/fetch_repositories.md](docs/fetch_repositories.md) for `jj git fetch` errors like `cannot lock ref … File exists`, tag D/F conflicts, and `master@origin` no longer existing.
