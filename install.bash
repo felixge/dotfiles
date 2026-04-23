@@ -105,6 +105,7 @@ install_homebrew_packages() {
         socat
         stow
         tmux
+        trafilatura
         tree
         tree-sitter-cli
         unzip

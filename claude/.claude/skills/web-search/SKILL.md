@@ -29,6 +29,10 @@ The script prints one result per block: title, URL, optional published date, and
 ./search.sh --json "datadog dash 2024 announcements" | jq '.data[] | select(.t==0) | .url'
 ```
 
+## Fetching Result Pages
+
+Search results only include titles, URLs, and snippets. When the user asks for details that aren't in the snippet (summarize, quote, extract, etc.), use the **web-fetch** skill on the relevant result URL(s) to get the full page as markdown without flooding the context with HTML.
+
 ## Notes
 
 - Requires `KAGI_TOKEN` in the environment (Kagi Search API token, from <https://kagi.com/settings/api>).
