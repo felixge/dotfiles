@@ -21,7 +21,14 @@ When this skill is invoked, **fetch immediately** with the URL the user provided
 ./fetch.sh --stdout <url>           # print to stdout (use only for known-small pages)
 ```
 
-On success the script prints the output path and line count. Always check the line count before reading — large pages should be read with `offset`/`limit` or filtered with `rg`.
+On success the script prints the output path, line count, and which extractor was used (`trafilatura` or `curl+pandoc`). Always check the line count before reading — large pages should be read with `offset`/`limit` or filtered with `rg`.
+
+## Extraction Strategy
+
+1. **Primary: trafilatura** — clean article extraction, strips nav/sidebars/ads/footers.
+2. **Fallback: `curl` + `pandoc -f html -t gfm-raw_html --wrap=none`** — triggered automatically when trafilatura returns empty (e.g. Jekyll/minimalist blogs, pages whose DOM trafilatura's heuristics don't like). For `--format html` the fallback just writes the raw HTML.
+
+Both extractors run transparently; the caller doesn't need to retry. If the fallback also produces nothing, the page is likely JS-rendered (SPA) or blocked — the script exits non-zero with a diagnostic.
 
 ## Examples
 
@@ -43,6 +50,7 @@ rg -n 'installation|install' /tmp/web-fetch-ab12cd.md   # find relevant section
 
 - Requires `trafilatura` on `PATH` (installed via Homebrew in `install.bash`).
 - `trafilatura -o` expects a **directory**, not a file — the wrapper uses shell redirection internally to avoid this footgun.
-- Trafilatura strips boilerplate (nav, sidebars, ads, footers) and keeps only article content. For pages where that's too aggressive (e.g. docs indexes, forum threads), try `--format html` or fall back to `curl -sL <url> | pandoc -f html -t gfm-raw_html --wrap=none -o /tmp/page.md`.
-- If extraction yields empty output, the page may be JS-rendered (SPA). Trafilatura can't execute JS — in that case tell the user and suggest an alternative (e.g. a reader-mode URL, the chrome-devtools MCP, or a specific API).
+- Trafilatura strips boilerplate (nav, sidebars, ads, footers) and keeps only article content. For pages where that's too aggressive (e.g. docs indexes, forum threads), the `curl+pandoc` fallback preserves more structure — or use `--format html` to get raw HTML for structured scraping.
+- If both extractors yield empty output, the page is likely JS-rendered (SPA). Trafilatura and pandoc can't execute JS — in that case tell the user and suggest an alternative (e.g. a reader-mode URL, the chrome-devtools MCP, or a specific API).
+- Fallback requires `pandoc` (for markdown/txt). Installed via Homebrew.
 - Never pipe raw HTML to stdout in a tool call — it will flood the context. Always write to a file first.
