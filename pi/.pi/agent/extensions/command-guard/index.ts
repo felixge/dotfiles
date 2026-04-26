@@ -155,6 +155,9 @@ export default function(pi: ExtensionAPI) {
     );
 
     if (choice !== "Allow — run the command") {
+      // Abort the agent turn so control returns to the user instead of
+      // letting the agent see the block reason as a tool result and continue.
+      ctx.abort();
       return {
         block: true,
         reason: `Command blocked by user. Issues: ${violations.map((v) => v.name).join(", ")}`,
