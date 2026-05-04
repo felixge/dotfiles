@@ -19,7 +19,6 @@ main() {
     install_npm_packages
     install_pi_packages
     setup_mcporter
-    symlink_go
     exec bash
 }
 
@@ -393,17 +392,6 @@ fetch_repositories() {
         ' _ {}
 }
 
-symlink_go() {
-    # Hack: Make sure the VS Code Go extension can always find the go binary
-    echo "-> symlink go to /usr/local/bin"
-    local target="/usr/local/bin/go"
-    local go_bin
-    go_bin="$(mise which go)"
-    if [ "$(readlink "$target" 2>/dev/null)" = "$go_bin" ]; then
-        return
-    fi
-    sudo ln -sf "$go_bin" "$target"
-}
 
 # Only run main when executed directly, not when sourced.
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
