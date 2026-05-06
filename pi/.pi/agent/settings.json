@@ -16,5 +16,6 @@
   "skills": [
     "~/.claude/skills"
   ],
-  "packages": []
+  "packages": [],
+  "transport": "websocket-cached"
 }
