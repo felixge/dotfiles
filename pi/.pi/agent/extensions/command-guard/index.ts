@@ -108,7 +108,11 @@ const rules: Rule[] = [
   {
     name: "env-dump",
     description: "Dumping all environment variables (may contain secrets)",
-    test: (cmd) => /\benv\b(?!\s+-)|\bprintenv\b(?!\s+\w)|\bset\b\s*$/.test(cmd),
+    test: (cmd) => {
+      // `go env` prints Go configuration, not the process environment.
+      const withoutGoEnv = cmd.replace(/\bgo\s+env\b(?:\s+[^;&|\n]*)?/g, "");
+      return /\benv\b(?!\s+-)|\bprintenv\b(?!\s+\w)|\bset\b\s*$/.test(withoutGoEnv);
+    },
   },
 
   // --- Docker destructive ---
