@@ -122,6 +122,8 @@ install_homebrew_packages() {
         brew install -q bubblewrap
     fi
     if is_datadog; then
+        # Tap via SSH to avoid Homebrew prompting for a GitHub username over HTTPS.
+        brew tap datadog/tap git@github.com:DataDog/homebrew-tap.git
         brew install -q datadog/tap/dd-auth datadog/tap/ddoc
         if is_macos; then
             brew install -q --cask datadog/tap/datadog-workspaces
