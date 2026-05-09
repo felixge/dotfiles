@@ -124,7 +124,9 @@ install_homebrew_packages() {
     if is_datadog; then
         # Tap via SSH to avoid Homebrew prompting for a GitHub username over HTTPS.
         brew tap datadog/tap git@github.com:DataDog/homebrew-tap.git
-        brew install -q datadog/tap/dd-auth datadog/tap/ddoc
+        # ddoc builds from source on some machines and can take a very long time.
+        # brew install -q datadog/tap/ddoc
+        brew install -q datadog/tap/dd-auth
         if is_macos; then
             brew install -q --cask datadog/tap/datadog-workspaces
         fi
