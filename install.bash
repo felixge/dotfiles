@@ -272,6 +272,7 @@ install_go_packages() {
         github.com/bokwoon95/wgo@latest
         github.com/go-delve/delve/cmd/dlv@latest
         github.com/maruel/panicparse/v2/cmd/pp@latest
+        github.com/mvm-sh/mvm@latest
         golang.org/x/perf/cmd/benchstat@latest
         golang.org/x/pkgsite/cmd/pkgsite@latest
         golang.org/x/tools/cmd/stress@latest
