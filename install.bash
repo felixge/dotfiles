@@ -115,6 +115,7 @@ install_homebrew_packages() {
         zoxide
     )
     brew install -q "${brew_packages[@]}"
+    brew install -q datadog-labs/pack/pup
     brew install -q anomalyco/tap/opencode
     if is_macos; then
         brew install -q pngpaste
