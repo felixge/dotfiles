@@ -36,6 +36,22 @@ function codexx() {
     codex --dangerously-bypass-approvals-and-sandbox "$@"
 }
 
+# Fix stale SSH agent forwarding sockets in tmux on remote hosts.
+# SSH creates a per-connection socket, but old tmux panes keep the old value.
+# On remote SSH sessions, keep a stable symlink pointing at a live forwarded
+# agent socket with identities, and have tmux/new shells use the stable path.
+if [ -n "$SSH_CONNECTION" ]; then
+    mkdir -p "$HOME/.ssh"
+    stable_ssh_auth_sock="$HOME/.ssh/ssh_auth_sock"
+    if [ -S "$SSH_AUTH_SOCK" ] && [ "$SSH_AUTH_SOCK" != "$stable_ssh_auth_sock" ] && SSH_AUTH_SOCK="$SSH_AUTH_SOCK" ssh-add -l >/dev/null 2>&1; then
+        ln -sfn "$SSH_AUTH_SOCK" "$stable_ssh_auth_sock"
+    fi
+    if [ -S "$stable_ssh_auth_sock" ]; then
+        export SSH_AUTH_SOCK="$stable_ssh_auth_sock"
+    fi
+    unset stable_ssh_auth_sock
+fi
+
 # fix cursor/vscode IPC socket in tmux after restart
 fix-cursor() {
     export VSCODE_IPC_HOOK_CLI=$(ls -t /tmp/vscode-ipc-*.sock 2>/dev/null | head -1)
