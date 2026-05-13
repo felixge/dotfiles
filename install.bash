@@ -101,6 +101,7 @@ install_homebrew_packages() {
         pyright
         ripgrep
         rsync
+        silicon
         socat
         stow
         tmux
