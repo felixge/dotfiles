@@ -5,7 +5,7 @@ description: >-
   Snowflake. Use when the user asks about org charts, team structure, who
   reports to someone, headcount, titles, or any people/org question.
 allowed_tools:
-  - Bash(snowsql *)
+  - Bash(mcporter *)
 ---
 
 ## Datadog Org Chart
@@ -28,11 +28,16 @@ Table: `REPORTING.GENERAL.DIM_WORKDAY_WORKER_PUBLIC`
 
 ### Running Queries
 
-Use the `snowsql` CLI with flags for clean parseable output:
+Use the Snowflake MCP server via `mcporter` for clean JSON output:
 
 ```bash
-snowsql -q "<SQL>" -o output_format=json -o header=true -o timing=false -o friendly=false 2>/dev/null
+mcporter call snowflake.run_snowflake_query statement="<SQL>" --output json
 ```
+
+Notes:
+- Prefer `key=value` argument style for SQL containing quotes; it is less error-prone than function-call style.
+- Wrap string literals inside the SQL with single quotes.
+- The MCP server may print startup logs on stderr; the JSON result is on stdout.
 
 ### Common Queries
 
