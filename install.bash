@@ -283,6 +283,10 @@ install_go_packages() {
     for package in "${go_packages[@]}"; do
         go install "$package" &
     done
+    for command_dir in "$DOTFILES_DIR"/tools/*; do
+        [ -d "$command_dir" ] || continue
+        (cd "$command_dir" && go install .) &
+    done
     wait
 }
 
