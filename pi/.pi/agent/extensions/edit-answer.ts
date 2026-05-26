@@ -50,7 +50,7 @@ export default function (pi: ExtensionAPI) {
     handler: async (_args, ctx) => editAnswer(ctx),
   });
 
-  pi.registerShortcut("ctrl+v", {
+  pi.registerShortcut("ctrl+a", {
     description: "Open latest assistant answer in $EDITOR",
     handler: async (ctx) => editAnswer(ctx),
   });
