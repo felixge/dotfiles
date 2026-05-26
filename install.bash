@@ -98,6 +98,7 @@ install_homebrew_packages() {
         mise
         neovim
         nono
+        poppler
         pyright
         ripgrep
         rsync
