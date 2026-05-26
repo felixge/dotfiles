@@ -260,6 +260,9 @@ install_neovim_plugins() {
 
 mise_install() {
     echo "-> install mise tools"
+    # Homebrew may upgrade gpg while an older keyboxd/gpg-agent is still running,
+    # causing mise's Node signature verification to fail with "No public key".
+    command -v gpgconf &>/dev/null && gpgconf --kill all || true
     # Avoid GitHub API rate limits for mise's aqua backend
     if [ -z "${GITHUB_TOKEN:-}" ] && command -v gh &>/dev/null; then
         export GITHUB_TOKEN=$(gh auth token 2>/dev/null)
