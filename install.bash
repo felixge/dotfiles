@@ -118,8 +118,7 @@ install_homebrew_packages() {
         zoxide
     )
     brew install -q "${brew_packages[@]}"
-    brew install -q datadog-labs/pack/pup
-    brew install -q anomalyco/tap/opencode
+    brew install -q datadog-labs/pack/pup anomalyco/tap/opencode
     if is_macos; then
         brew install -q pngpaste
         brew install -q --cask keycastr kitty
@@ -133,7 +132,7 @@ install_homebrew_packages() {
         # brew install -q datadog/tap/ddoc
         brew install -q datadog/tap/dd-auth
         if is_macos; then
-            brew install -q --cask datadog/tap/datadog-workspaces
+            brew install -q --cask datadog/tap/bzl datadog/tap/datadog-workspaces
         fi
     fi
 }
