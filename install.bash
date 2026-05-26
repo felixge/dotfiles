@@ -6,8 +6,9 @@ main() {
     set -eu
     install_basics
     install_homebrew
-    install_homebrew_packages
     trust_github
+    trust_homebrew_taps
+    install_homebrew_packages
     setup_bashrc
     setup_gitconfig
     setup_tmux
@@ -59,6 +60,25 @@ install_homebrew() {
         NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     fi
     eval "$($HOMEBREW_PREFIX/bin/brew shellenv)"
+    export HOMEBREW_NO_ASK=1
+}
+
+trust_homebrew_taps() {
+    if ! brew help trust > /dev/null 2>&1; then
+        return
+    fi
+
+    echo "-> trust homebrew taps"
+    brew trust -q --tap \
+        anomalyco/tap \
+        atlassian-labs/acli \
+        datadog-labs/pack
+
+    if is_datadog; then
+        # Tap via SSH to avoid Homebrew prompting for a GitHub username over HTTPS.
+        brew tap datadog/tap git@github.com:DataDog/homebrew-tap.git
+        brew trust -q --tap datadog/tap
+    fi
 }
 
 install_homebrew_packages() {
@@ -126,8 +146,6 @@ install_homebrew_packages() {
         brew install -q bubblewrap
     fi
     if is_datadog; then
-        # Tap via SSH to avoid Homebrew prompting for a GitHub username over HTTPS.
-        brew tap datadog/tap git@github.com:DataDog/homebrew-tap.git
         # ddoc builds from source on some machines and can take a very long time.
         # brew install -q datadog/tap/ddoc
         brew install -q datadog/tap/dd-auth
