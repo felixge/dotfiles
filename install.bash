@@ -17,6 +17,7 @@ main() {
     install_neovim_plugins
     install_go_packages
     install_npm_packages
+    install_pi_local_extensions
     install_pi_packages
     setup_mcporter
     exec bash
@@ -224,7 +225,7 @@ setup_tmux() {
 unminimize_ubuntu() {
     if grep "minimized" "$(which man)" > /dev/null; then
         echo "-> unminimizing ubuntu install"
-        yes | DEBIAN_FRONTEND=noninteractive unminimize
+        yes | DEBIAN_FRONTEND=noninteractive sudo -E unminimize
     fi
 }
 
@@ -295,6 +296,11 @@ install_go_packages() {
 install_npm_packages() {
     echo "-> install npm packages"
     quiet_run npm install -g markserv @earendil-works/pi-coding-agent mcporter @mermaid-js/mermaid-cli
+}
+
+install_pi_local_extensions() {
+    echo "-> install pi local extensions"
+    (cd "$HOME/.pi/agent/extensions" && quiet_run npm ci --omit=dev)
 }
 
 install_pi_packages() {

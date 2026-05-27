@@ -1,0 +1,8 @@
+{
+  "private": true,
+  "name": "felix-pi-extensions",
+  "dependencies": {
+    "markdown-it": "14.1.1",
+    "shiki": "4.0.2"
+  }
+}
