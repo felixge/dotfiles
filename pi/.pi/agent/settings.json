@@ -8,7 +8,8 @@
     "anthropic/claude-haiku-4-5",
     "google/gemini-3.1-pro-preview",
     "anthropic/claude-opus-4-7",
-    "openai-codex/gpt-5.5"
+    "openai-codex/gpt-5.5",
+    "anthropic/claude-fable-5"
   ],
   "defaultThinkingLevel": "low",
   "hideThinkingBlock": false,
