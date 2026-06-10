@@ -17,6 +17,8 @@
   "skills": [
     "~/.claude/skills"
   ],
-  "packages": [],
+  "packages": [
+    "npm:pi-subagents"
+  ],
   "transport": "websocket-cached"
 }
