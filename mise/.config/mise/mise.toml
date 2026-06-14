@@ -4,6 +4,7 @@ node = "latest"
 python = "3.10"
 rust = "latest"
 uv = "latest"
+watchexec = "latest"
 
 [settings]
 idiomatic_version_file_enable_tools = ["node"]
