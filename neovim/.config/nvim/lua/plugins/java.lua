@@ -37,6 +37,7 @@ local function jdtls_definition()
     local client = ctx.client_id and vim.lsp.get_client_by_id(ctx.client_id)
     vim.lsp.util.show_document({ uri = uri, range = range }, client and client.offset_encoding or "utf-16", {
       focus = true,
+      reuse_win = false,
     })
   end)
 end
