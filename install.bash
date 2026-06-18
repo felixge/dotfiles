@@ -85,6 +85,8 @@ install_homebrew_packages() {
     echo "-> install homebrew packages"
     local brew_packages=(
 	    protobuf
+        agg
+        asciinema
         atlassian-labs/acli/acli
         bash-completion@2
         bat
