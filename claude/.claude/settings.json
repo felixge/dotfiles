@@ -129,12 +129,12 @@
     "document-skills@anthropic-agent-skills": false,
     "gopls-lsp@claude-plugins-official": true,
     "dd@datadog-claude-plugins": true,
-    "atlassian-remote-mcp@datadog-claude-plugins": true,
+    "atlassian-remote-mcp@datadog-claude-plugins": false,
     "go-code-reviewer@datadog-claude-plugins": true,
     "clangd-lsp@claude-plugins-official": true,
     "example-skills@anthropic-agent-skills": true,
     "agent-browser@agent-browser": true,
-    "atlassian@claude-plugins-official": true,
+    "atlassian@claude-plugins-official": false,
     "pyright-lsp@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
