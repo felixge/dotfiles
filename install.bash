@@ -372,8 +372,9 @@ SNOWFLAKE
     cat > "$HOME/.mcporter/mcporter.json" <<EOF
 {
   "mcpServers": {
-    "atlassian": {
-      "baseUrl": "https://mcp.atlassian.com/v1/mcp",
+    "datadog-atlassian": {
+      "description": "Datadog Atlassian MCP Server for Jira and Confluence (Cloud ID enforced).",
+      "baseUrl": "https://atlassian-mcp-server-834963730936.us-central1.run.app/mcp",
       "auth": "oauth"
     },
     "datadog": {
