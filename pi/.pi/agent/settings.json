@@ -1,14 +1,15 @@
 {
-  "lastChangelogVersion": "0.79.6",
+  "lastChangelogVersion": "0.80.6",
   "theme": "light",
-  "defaultProvider": "anthropic",
-  "defaultModel": "claude-opus-4-8",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.6-sol",
   "enabledModels": [
     "anthropic/claude-sonnet-4-6",
     "anthropic/claude-haiku-4-5",
     "openai-codex/gpt-5.5",
     "anthropic/claude-fable-5",
-    "anthropic/claude-opus-4-8"
+    "anthropic/claude-opus-4-8",
+    "openai-codex/gpt-5.6-sol"
   ],
   "defaultThinkingLevel": "xhigh",
   "hideThinkingBlock": false,
