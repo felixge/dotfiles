@@ -108,6 +108,7 @@ e = ["edit"]
 tug = ["bookmark", "move", "--from", "closest_bookmark(@-)", "--to", "@-"]
 body = ["show", "--no-patch", "-T", "description.remove_prefix(description.first_line()).trim_start()"]
 stack = ["log", "--no-graph", "-r", "stack"]
+delta = ["--config", "ui.pager=delta", "--config", "ui.diff-formatter=:git"]
 # open pr for nearest bookmark
 up = ["util", "exec", "--", "bash", "-c", "jj git fetch && jj new 'trunk()'", ""]
 pr = ["util", "exec", "--", "bash", "-c", """
@@ -119,8 +120,6 @@ gh pr view --web "$(jj bookmark list -r 'closest_bookmark('$ref')' -T 'name')"
 default-command = ["log"]
 bookmark-list-sort-keys = ["committer-date-"]
 show-cryptographic-signatures = true
-pager = "delta"
-diff-formatter = ":git"
 diff-editor = ":builtin"
 
 [signing]
