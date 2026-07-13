@@ -18,7 +18,6 @@ Each top-level directory is a "stow package" — its contents mirror `$HOME` str
 ```
 bash/               - Shell config
   .bashrc                      Homebrew, mise, zoxide (j alias), direnv, nvim as vim, prompt, tmux helpers (tn, ts)
-  .git.bash, .go.bash, ...     Topic-specific shell config
 claude/             - Claude Code settings, permissions, skills, hooks
   .claude/CLAUDE.md            Global instructions (use jj not git)
   .claude/settings.json        Permissions (jj allowed, git denied), model (opus), plugins, hooks, ntfy notifications
@@ -43,7 +42,6 @@ neovim/             - Neovim config (LazyVim-based)
   .config/nvim/init.lua        Bootstraps lazy.nvim + LazyVim
   .config/nvim/lua/config/     LazyVim config (lazy.lua bootstrap)
   .config/nvim/lua/plugins/    Plugin overrides/extras (colorscheme, snacks)
-  .bak/config-2026-03-29/nvim/ Backup of the old vim config (referred to as "old vim config")
 ripgrep/            - Ripgrep config (.ripgreprc)
 tmux/               - tmux config
   .tmux.conf                   Light theme, mouse, 1-based windows, kitty passthrough,
