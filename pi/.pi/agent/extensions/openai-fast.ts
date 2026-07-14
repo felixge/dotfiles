@@ -25,7 +25,7 @@ function isEligible(ctx: ExtensionContext): boolean {
 }
 
 export default function (pi: ExtensionAPI) {
-  let enabled = false;
+  let enabled = true;
 
   function updateStatus(ctx: ExtensionContext): void {
     if (ctx.hasUI) {
@@ -34,7 +34,7 @@ export default function (pi: ExtensionAPI) {
   }
 
   pi.on("session_start", (_event, ctx) => {
-    enabled = false;
+    enabled = true;
     updateStatus(ctx);
   });
 
