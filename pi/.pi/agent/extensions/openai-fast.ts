@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const STATUS_KEY = "openai-fast";
+const STATUS_EVENT = "openai-fast:status";
 const SUPPORTED_MODELS = new Set([
   "gpt-5.4",
   "gpt-5.5",
@@ -28,9 +29,11 @@ export default function (pi: ExtensionAPI) {
   let enabled = true;
 
   function updateStatus(ctx: ExtensionContext): void {
+    const eligible = isEligible(ctx);
     if (ctx.hasUI) {
-      ctx.ui.setStatus(STATUS_KEY, enabled && isEligible(ctx) ? "fast" : undefined);
+      ctx.ui.setStatus(STATUS_KEY, enabled && eligible ? "fast" : undefined);
     }
+    pi.events.emit(STATUS_EVENT, { enabled, eligible });
   }
 
   pi.on("session_start", (_event, ctx) => {

@@ -14,12 +14,18 @@
 
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { truncateToWidth } from "@mariozechner/pi-tui";
 
 const ENTRY_TYPE = "custom-footer";
+const FAST_STATUS_EVENT = "openai-fast:status";
 
 interface TimerEntry {
 	elapsedMs: number;
+}
+
+interface FastStatus {
+	enabled: boolean;
+	eligible: boolean;
 }
 
 export default function (pi: ExtensionAPI) {
@@ -28,6 +34,15 @@ export default function (pi: ExtensionAPI) {
 	let accumulatedMs = 0;
 	let resumeStart = Date.now();
 	let timer: ReturnType<typeof setInterval> | undefined;
+	let fastStatus: FastStatus | undefined;
+	let requestRender: (() => void) | undefined;
+
+	pi.events.on(FAST_STATUS_EVENT, (data) => {
+		const status = data as Partial<FastStatus>;
+		if (typeof status.enabled !== "boolean" || typeof status.eligible !== "boolean") return;
+		fastStatus = { enabled: status.enabled, eligible: status.eligible };
+		requestRender?.();
+	});
 
 	function totalElapsed(): number {
 		return accumulatedMs + (Date.now() - resumeStart);
@@ -72,14 +87,17 @@ export default function (pi: ExtensionAPI) {
 		resumeStart = Date.now();
 
 		ctx.ui.setFooter((tui, theme, footerData) => {
-			const unsub = footerData.onBranchChange(() => tui.requestRender());
-			timer = setInterval(() => tui.requestRender(), 1000);
+			const render = () => tui.requestRender();
+			requestRender = render;
+			const unsub = footerData.onBranchChange(render);
+			timer = setInterval(render, 1000);
 
 			return {
 				dispose: () => {
 					unsub();
 					if (timer) clearInterval(timer);
 					timer = undefined;
+					if (requestRender === render) requestRender = undefined;
 				},
 				invalidate() {},
 				render(width: number): string[] {
@@ -97,7 +115,7 @@ export default function (pi: ExtensionAPI) {
 					if (sessionName) pwdLine += theme.fg("dim", " • ") + theme.fg("accent", sessionName);
 					pwdLine = truncateToWidth(pwdLine, width, theme.fg("dim", "…"));
 
-					// Line 2: stats + elapsed time + model
+					// Line 2: model + thinking/fast status + usage stats
 					let totalInput = 0;
 					let totalOutput = 0;
 					let totalCacheRead = 0;
@@ -120,8 +138,22 @@ export default function (pi: ExtensionAPI) {
 					const contextPercentValue = contextUsage?.percent ?? 0;
 					const contextPercent = contextUsage?.percent !== null ? contextPercentValue.toFixed(1) : "?";
 
-					// Build colored stat parts
-					const parts: string[] = [];
+					const thinkingLevel = pi.getThinkingLevel();
+					const thinkingColor = `thinking${thinkingLevel[0].toUpperCase()}${thinkingLevel.slice(1)}` as Parameters<
+						typeof theme.fg
+					>[0];
+					const modelName = ctx.model?.id || "no-model";
+					let modelStatus = theme.fg(thinkingColor, thinkingLevel);
+					if (fastStatus?.eligible) {
+						const fastMode = fastStatus.enabled
+							? theme.fg("success", "fast:on")
+							: theme.fg("dim", "fast:off");
+						modelStatus += theme.fg("dim", ", ") + fastMode;
+					}
+
+					const parts: string[] = [
+						`${theme.fg("muted", modelName)} ${theme.fg("dim", "(")}${modelStatus}${theme.fg("dim", ")")}`,
+					];
 					if (totalInput) parts.push(theme.fg("accent", `↑${formatTokens(totalInput)}`));
 					if (totalOutput) parts.push(theme.fg("success", `↓${formatTokens(totalOutput)}`));
 					if (totalCacheRead) parts.push(theme.fg("dim", `R${formatTokens(totalCacheRead)}`));
@@ -143,40 +175,9 @@ export default function (pi: ExtensionAPI) {
 						parts.push(theme.fg("dim", contextDisplay));
 					}
 
-					// Add elapsed time with clock icon
 					parts.push(theme.fg("accent", `⏱ ${formatDuration(totalElapsed())}`));
 
-					let statsLeft = parts.join(theme.fg("dim", " "));
-					let statsLeftWidth = visibleWidth(statsLeft);
-					if (statsLeftWidth > width) {
-						statsLeft = truncateToWidth(statsLeft, width, "…");
-						statsLeftWidth = visibleWidth(statsLeft);
-					}
-
-					// Right side: model name + thinking level
-					const thinkingLevel = pi.getThinkingLevel();
-					const thinkingColor = `thinking${thinkingLevel[0].toUpperCase()}${thinkingLevel.slice(1)}` as const;
-					const modelName = ctx.model?.id || "no-model";
-					const rightSide = `${theme.fg("muted", modelName)} ${theme.fg("dim", "(")}${theme.fg(thinkingColor, thinkingLevel)}${theme.fg("dim", ")")}`;
-					const rightSideWidth = visibleWidth(rightSide);
-					const minPadding = 2;
-					const totalNeeded = statsLeftWidth + minPadding + rightSideWidth;
-
-					let statsLine: string;
-					if (totalNeeded <= width) {
-						const padding = " ".repeat(width - statsLeftWidth - rightSideWidth);
-						statsLine = statsLeft + padding + rightSide;
-					} else {
-						const available = width - statsLeftWidth - minPadding;
-						if (available > 0) {
-							const truncRight = truncateToWidth(rightSide, available, "");
-							const padding = " ".repeat(Math.max(0, width - statsLeftWidth - visibleWidth(truncRight)));
-							statsLine = statsLeft + padding + truncRight;
-						} else {
-							statsLine = statsLeft;
-						}
-					}
-
+					const statsLine = truncateToWidth(parts.join(theme.fg("dim", " ")), width, "…");
 					return [pwdLine, statsLine];
 				},
 			};
