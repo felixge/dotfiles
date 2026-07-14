@@ -1,36 +1,47 @@
 ---
 name: jj-split
-description: Interactively split a jj commit into multiple commits using the builtin TUI diff editor via tmux.
+description: Split a jj commit into logical commits by rebuilding them from its parent, verifying the final tree, then abandoning the original commit.
 ---
 
-# jj split via tmux
+# Split a jj commit by reconstruction
 
-Split a commit into N commits by running `jj split -m "<message>"` repeatedly (N-1 times), using tmux to drive the builtin TUI diff editor for file selection.
+Prefer rebuilding commits over `jj split`, especially when logical changes overlap files or hunks.
 
 ## Steps
 
-1. Find the existing bash pane in the current tmux session: `tmux list-panes -t <session> -F "#{pane_index} #{pane_current_command}"`
-2. For each split, send: `tmux send-keys -t <session>:<window>.<pane> 'jj split -m "<message>"' Enter`
-3. Wait for the TUI to appear, then capture: `tmux capture-pane -t <target> -p`
-4. Navigate with `j`/`k`, select files with `Space`, confirm with `c`
-5. After the last split, describe the remaining commit: `jj describe -m "<message>"`
+1. Record the source commit and inspect its descendants:
+   ```bash
+   old=<revision>
+   jj log -r "$old::"
+   ```
+2. Start a fresh change from its parent:
+   ```bash
+   jj new "$old-"
+   ```
+3. Recreate each logical change in order and commit it:
+   ```bash
+   # Apply one logical subset.
+   jj diff
+   jj commit -m "<conventional commit message>"
+   ```
+4. For the final change, copying completed files from the source is often simplest:
+   ```bash
+   jj restore --from "$old" path/to/file...
+   jj commit -m "<conventional commit message>"
+   ```
+5. Verify the rebuilt tip has no tree differences from the source:
+   ```bash
+   test -z "$(jj diff --from "$old" --to @- --summary)"
+   ```
+6. Only after verification, abandon the source commit:
+   ```bash
+   jj abandon "$old"
+   jj st
+   ```
 
-## TUI keybindings
+## Rules
 
-- `j`/`k` — navigate down/up between files
-- `Space` — toggle selection on focused item
-- `c` — confirm and finish split
-- `h`/`l` — collapse/expand file to see hunks
-
-## Key details
-
-- `-m` sets the description for the selected (first) commit, so vim never opens.
-- The remaining commit keeps the original description (usually empty).
-- All files start unselected — select only what goes into the first commit.
-- Always `sleep` between `send-keys` and `capture-pane` to let the TUI render.
-- Format all commit messages (`-m` and `jj describe`) using the [conventional-commits](../conventional-commits/SKILL.md) skill.
-
-## Related Skills
-
-- [jj](../jj/SKILL.md) — Full jj command reference (split, describe, squash, etc.)
-- [conventional-commits](../conventional-commits/SKILL.md) — Commit message format for `-m` flags and `jj describe`
+- Split by intent, not file boundaries.
+- Keep the source commit until tree equality is proven.
+- Do not abandon unrelated descendants; rebase or reconstruct them separately.
+- Use [Conventional Commits](../conventional-commits/SKILL.md) for every new description.
