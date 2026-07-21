@@ -104,17 +104,6 @@ const rules: Rule[] = [
     test: (cmd) => /\bbrew\s+(uninstall|remove)\b/.test(cmd),
   },
 
-  // --- Environment variable exposure ---
-  {
-    name: "env-dump",
-    description: "Dumping all environment variables (may contain secrets)",
-    test: (cmd) => {
-      // `go env` prints Go configuration, not the process environment.
-      const withoutGoEnv = cmd.replace(/\bgo\s+env\b(?:\s+[^;&|\n]*)?/g, "");
-      return /\benv\b(?!\s+-)|\bprintenv\b(?!\s+\w)|\bset\b\s*$/.test(withoutGoEnv);
-    },
-  },
-
   // --- Docker destructive ---
   {
     name: "docker-system-prune",
