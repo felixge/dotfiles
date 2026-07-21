@@ -1,24 +1,22 @@
 {
-  "lastChangelogVersion": "0.80.6",
+  "lastChangelogVersion": "0.82.1",
   "theme": "light",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-sol",
   "enabledModels": [
-    "anthropic/claude-sonnet-4-6",
-    "anthropic/claude-haiku-4-5",
-    "openai-codex/gpt-5.5",
-    "anthropic/claude-fable-5",
-    "anthropic/claude-opus-4-8",
-    "openai-codex/gpt-5.6-sol"
+    "openai-codex/gpt-5.6-sol",
+    "ai-gw-anthropic-1m/anthropic/claude-opus-5",
+    "openai-codex/gpt-5.6-luna"
   ],
-  "defaultThinkingLevel": "xhigh",
   "hideThinkingBlock": false,
+  "defaultThinkingLevel": "high",
   "enableSkillCommands": true,
   "skills": [
     "~/.claude/skills"
   ],
   "packages": [
-    "npm:pi-subagents"
+    "npm:pi-subagents",
+    "../../go/src/github.com/ddoghq-sandbox/datadog-pi-packages/packages/refresh-models"
   ],
   "transport": "websocket-cached"
 }
