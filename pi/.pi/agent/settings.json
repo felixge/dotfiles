@@ -15,7 +15,6 @@
     "~/.claude/skills"
   ],
   "packages": [
-    "npm:pi-subagents",
     "../../go/src/github.com/ddoghq-sandbox/datadog-pi-packages/packages/refresh-models"
   ],
   "transport": "websocket-cached"
