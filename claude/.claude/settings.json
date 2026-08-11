@@ -119,6 +119,18 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash '/Users/felix.geisendoerfer/.claude/hooks/herdr-agent-state.sh' session",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   },
   "statusLine": {
@@ -135,7 +147,8 @@
     "example-skills@anthropic-agent-skills": true,
     "agent-browser@agent-browser": true,
     "atlassian@claude-plugins-official": false,
-    "pyright-lsp@claude-plugins-official": true
+    "pyright-lsp@claude-plugins-official": true,
+    "dodo@datadog-dodo": true
   },
   "extraKnownMarketplaces": {
     "datadog-claude-plugins": {
