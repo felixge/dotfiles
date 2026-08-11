@@ -7,6 +7,13 @@ email = "felix@felixge.de"
 [--scope.user]
 email = "felix.geisendoerfer@datadoghq.com"
 
+[[--scope]]
+--when.repositories = ["/Users/felix.geisendoerfer/go"]
+[--scope.fsmonitor]
+backend = "none"
+[--scope.fsmonitor.watchman]
+register-snapshot-trigger = false
+
 [templates]
 draft_commit_description = 'builtin_draft_commit_description_with_diff'
 git_push_bookmark = """
