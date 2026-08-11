@@ -317,7 +317,7 @@ install_go_packages() {
 
 install_npm_packages() {
     echo "-> install npm packages"
-    quiet_run npm install -g markserv @earendil-works/pi-coding-agent mcporter @mermaid-js/mermaid-cli
+    quiet_run npm install -g markserv @earendil-works/pi-coding-agent mcporter @mermaid-js/mermaid-cli difit
 }
 
 install_pi_local_extensions() {
