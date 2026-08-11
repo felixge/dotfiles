@@ -11,5 +11,6 @@
 jj/.config/jj/repos/*
 node_modules/
 
-# don't want this in my dotfiles
-pi/.pi/agent/extensions/trajectory
+# ignore auto-installed pi extensions
+/pi/.pi/agent/extensions/trajectory
+/pi/.pi/agent/extensions/herdr-agent-state.ts
