@@ -3,7 +3,16 @@ name = "Felix Geisendörfer"
 email = "felix@felixge.de"
 
 [[--scope]]
---when.repositories = ["~/go/src/github.com/DataDog", "~/go/src/github.com/golang/go", "~/go/src/github.com/open-telemetry", "~/go/src/golang.org"]
+--when.repositories = [
+  "~/go/src/github.com/DataDog",
+  "~/go/src/github.com/golang/go",
+  "~/go/src/github.com/open-telemetry",
+  "~/go/src/golang.org",
+  "/Users/felix.geisendoerfer/go/src/github.com/DataDog",
+  "/Users/felix.geisendoerfer/go/src/github.com/golang/go",
+  "/Users/felix.geisendoerfer/go/src/github.com/open-telemetry",
+  "/Users/felix.geisendoerfer/go/src/golang.org",
+]
 [--scope.user]
 email = "felix.geisendoerfer@datadoghq.com"
 
