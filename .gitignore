@@ -10,3 +10,6 @@
 # jj exclude repo configs
 jj/.config/jj/repos/*
 node_modules/
+
+# don't want this in my dotfiles
+pi/.pi/agent/extensions/trajectory
