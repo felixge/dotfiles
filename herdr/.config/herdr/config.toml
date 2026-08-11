@@ -1,0 +1,17 @@
+onboarding = false
+
+[ui.toast]
+delivery = "herdr"
+
+[ui]
+show_agent_labels_on_pane_borders = true
+
+[ui.sidebar.agents]
+rows = [
+  ["state_icon", "workspace"],
+  ["pane", "tab"],
+]
+
+[theme]
+name = "one-light"
+auto_switch = false
