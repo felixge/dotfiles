@@ -1,9 +1,32 @@
 ---
 name: difit
-description: Launch and refresh difit for a jj change. Use when the user asks for difit or a diff view.
+description: Use when the user asks for difit, a diff view, or to review a single file.
 ---
 
 # difit
+
+## Complex operations
+
+When asked to use difit for operations beyond launching or refreshing a diff, load the installed project's README first. Locate it without hard-coding the installation path:
+
+```bash
+find "$(npm root -g)/difit" -maxdepth 1 -name README.md -print -quit
+```
+
+## Launch a standalone file
+
+When the user asks to review a single file outside a repository, render it as a newly added file and detach difit with `nohup`. Do not use difit's `--background` flag with stdin because it can discard the piped diff.
+
+```bash
+file='<path>'
+name=$(basename "$file")
+port=4966
+diff -u --label "a/$name" /dev/null --label "b/$name" "$file" |
+  nohup difit - --port "$port" --keep-alive >/dev/null 2>&1 &
+pid=$!
+```
+
+Report `http://localhost:<port>` using the selected port. Remember the file, PID, and port. To refresh after editing the file, stop the remembered PID and repeat this launch procedure on the same port.
 
 ## Launch a jj change
 
