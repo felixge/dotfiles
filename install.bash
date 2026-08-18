@@ -253,7 +253,7 @@ stow_dotfiles() {
     echo "-> stow dotfiles"
     mkdir -p "$HOME/.claude" "$HOME/.pi/agent" "$HOME/.mcporter/daemon"
     stow_file_adopt git/.gitignore
-    stow --adopt -t "$HOME" jj jjui neovim mise claude codex idea kitty pi herdr
+    stow --adopt -t "$HOME" bin jj jjui neovim mise claude codex idea kitty pi herdr
 }
 
 stow_file_adopt() {

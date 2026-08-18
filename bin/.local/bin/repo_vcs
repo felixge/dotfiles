@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+# Detect whether a directory is in a jj or Git repository.
+cd -- "${1:-.}" || exit 1
+
+if jj --ignore-working-copy root >/dev/null 2>&1; then
+    echo jj
+elif git rev-parse --git-dir >/dev/null 2>&1; then
+    echo git
+else
+    echo none
+fi
