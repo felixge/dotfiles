@@ -1,13 +1,18 @@
-# Conversational Style
+# Writing Style
 
-* Keep answers short and concise
-* No emojis in commits, issues, PR comments, or code
-* No fluff or cheerful filler text
-* Do not use lots of EM dashes when writing prose
-* Do not use subagents unless explicitly requested.
+* Be short and concise, no fluff or filler text.
+* DO NOT use emoji
+* DO NOT use EM dashes
+
+# Status Updates
+
+* Emit status messages on a regular basis. Especially when encountering problems, before starting long-running processes or when you might need help.
 
 # Source Control
 
-* Do not use source control commands unless the task requires them.
-* Never use git. Always use the jj skill instead.
-* When committing: load the jj and conventional-commits skills, then run `jj diff` and `jj commit`. Do not use `jj log` when committing.
+* Auto-commit changes you make.
+* Ammend commits or split into smaller commits when it makes sense.
+
+# Herdr
+
+* For herdr operations or questions, run `herdr --skill`.

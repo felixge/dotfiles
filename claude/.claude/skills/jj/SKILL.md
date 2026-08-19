@@ -26,6 +26,13 @@ in `@` (the working-copy commit) until you finalize them.
   move automatically when the target commit is rewritten, but do **not** advance
   when you create new commits.
 
+### Avoid common Git assumptions
+
+- `jj diff` has no Git-style `--check`; use `jj diff` or `jj diff --stat`.
+- `--stat` and `--summary` are mutually exclusive.
+- Put revisions in `-r <rev>` and paths after the command, e.g. `jj show -r @- -- path`.
+- Run jj inside the repository; otherwise it reports that no jj repo exists.
+
 ## Common Commands
 
 ### Viewing State
