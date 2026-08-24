@@ -26,6 +26,7 @@ export interface AgentManagerOptions {
 }
 
 export interface SpawnRequest {
+	name?: string;
 	prompt: string;
 	model: string;
 	thinking: AgentRunConfig["thinking"];
@@ -55,6 +56,7 @@ function errorMessage(error: unknown): string {
 function cloneSnapshot(run: ManagedRun): AgentSnapshot {
 	return Object.freeze({
 		id: run.id,
+		name: run.name,
 		prompt: run.prompt,
 		model: run.model,
 		thinking: run.thinking,

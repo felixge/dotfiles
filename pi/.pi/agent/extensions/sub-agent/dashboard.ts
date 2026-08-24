@@ -3,7 +3,7 @@ import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi, type 
 import type { AgentManager } from "./manager.ts";
 import type { AgentSnapshot, AgentStatus } from "./types.ts";
 import { isTerminalStatus } from "./types.ts";
-import { formatDuration, formatUsage, shortModel } from "./render.ts";
+import { formatAgentLabel, formatDuration, formatUsage, shortModel } from "./render.ts";
 
 function statusLabel(status: AgentStatus): string {
 	switch (status) {
@@ -35,6 +35,11 @@ function sortRuns(runs: AgentSnapshot[]): AgentSnapshot[] {
 		.filter((run) => isTerminalStatus(run.status))
 		.sort((left, right) => (right.endedAt ?? right.createdAt) - (left.endedAt ?? left.createdAt));
 	return [...active, ...terminal];
+}
+
+function padColumn(value: string, width: number): string {
+	const clipped = truncateToWidth(value, width, "");
+	return clipped + " ".repeat(Math.max(0, width - visibleWidth(clipped)));
 }
 
 class AgentsDashboard {
@@ -121,7 +126,7 @@ class AgentsDashboard {
 		const runs = this.runs();
 		const lines = [
 			` ${this.theme.fg("accent", this.theme.bold("Sub-agents"))}`,
-			this.theme.fg("dim", " STATUS ID      ELAPSED   MODEL/THINKING       CURRENT"),
+			this.theme.fg("dim", ` STATUS ${"AGENT".padEnd(24)} ELAPSED   MODEL/THINKING       CURRENT`),
 		];
 		if (runs.length === 0) lines.push(this.theme.fg("muted", " No sub-agents in this session"));
 
@@ -134,7 +139,8 @@ class AgentsDashboard {
 			const elapsed = formatDuration((run.endedAt ?? Date.now()) - (run.startedAt ?? run.createdAt));
 			const model = `${shortModel(run.model)}/${run.thinking}`;
 			const coloredStatus = this.theme.fg(statusColor(run.status), statusLabel(run.status).padEnd(6));
-			const line = `${selected ? this.theme.fg("accent", ">") : " "} ${coloredStatus} ${this.theme.fg("accent", run.id.padEnd(7))} ${elapsed.padEnd(9)} ${model.padEnd(20)} ${run.currentActivity ?? run.status}`;
+			const agent = this.theme.fg("accent", padColumn(formatAgentLabel(run), 24));
+			const line = `${selected ? this.theme.fg("accent", ">") : " "} ${coloredStatus} ${agent} ${elapsed.padEnd(9)} ${model.padEnd(20)} ${run.currentActivity ?? run.status}`;
 			lines.push(selected ? this.theme.bg("selectedBg", truncateToWidth(line, width)) : truncateToWidth(line, width));
 		}
 		lines.push(this.theme.fg("dim", " Up/Down select  Enter details  x cancel  Esc close"));
@@ -146,7 +152,9 @@ class AgentsDashboard {
 		if (!run) return [this.theme.fg("muted", " No selected sub-agent")];
 		const elapsed = formatDuration((run.endedAt ?? Date.now()) - (run.startedAt ?? run.createdAt));
 		const lines: string[] = [
-			` ${this.theme.fg("accent", this.theme.bold(`Sub-agent ${run.id}`))}`,
+			` ${this.theme.fg("accent", this.theme.bold("Sub-agent"))}`,
+			` ID: ${run.id}`,
+			...(run.name ? [` Name: ${run.name}`] : []),
 			` Status: ${this.theme.fg(statusColor(run.status), run.status)}`,
 			` Model: ${run.model}`,
 			` Thinking: ${run.thinking}`,
@@ -191,7 +199,7 @@ export async function showAgentsDashboard(ctx: ExtensionCommandContext, manager:
 		(tui, theme, _keybindings, done) => {
 			let dashboard: AgentsDashboard;
 			const requestCancel = (run: AgentSnapshot) => {
-				void ctx.ui.confirm("Cancel sub-agent?", `${run.id}: ${run.prompt.slice(0, 160)}`).then((confirmed) => {
+				void ctx.ui.confirm("Cancel sub-agent?", `${formatAgentLabel(run)}: ${run.prompt.slice(0, 160)}`).then((confirmed) => {
 					if (confirmed) manager.cancel(run.id);
 					tui.requestRender();
 				});

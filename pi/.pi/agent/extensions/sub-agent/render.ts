@@ -55,6 +55,10 @@ export function shortModel(model: string): string {
 	return model.split("/").at(-1) ?? model;
 }
 
+export function formatAgentLabel(agent: { id: string; name?: string }): string {
+	return agent.name ? `${agent.name} (${agent.id})` : agent.id;
+}
+
 export function preview(value: string, length = 80): string {
 	const singleLine = value.replace(/\s+/gu, " ").trim();
 	return singleLine.length > length ? `${singleLine.slice(0, length - 3)}...` : singleLine;
@@ -80,12 +84,13 @@ export function formatWaitProgress(snapshots: readonly AgentSnapshot[]): string 
 	return snapshots
 		.map((run) => {
 			const elapsed = formatDuration((run.endedAt ?? Date.now()) - (run.startedAt ?? run.createdAt));
-			return `${run.id} ${run.status} ${elapsed}${run.currentActivity ? `: ${run.currentActivity}` : ""}`;
+			return `${formatAgentLabel(run)} ${run.status} ${elapsed}${run.currentActivity ? `: ${run.currentActivity}` : ""}`;
 		})
 		.join("\n");
 }
 
 interface SpawnCallArgs {
+	name?: string;
 	prompt?: string;
 	model?: string;
 	thinking?: string;
@@ -107,6 +112,7 @@ export function renderSpawnCall(args: SpawnCallArgs, theme: Theme): Text {
 	].join(" | ");
 	const text =
 		theme.fg("toolTitle", theme.bold("agent_spawn ")) +
+		(args.name ? `${theme.fg("accent", preview(args.name, 40))} ` : "") +
 		theme.fg("dim", preview(args.prompt ?? "...")) +
 		"\n" +
 		theme.fg("muted", configuration);
@@ -118,7 +124,7 @@ export function renderSpawnResult(result: ToolResultLike<SpawnToolDetails>, _opt
 	if (!run) return new Text(result.content[0]?.text ?? "Could not start sub-agent", 0, 0);
 	const state = run.status === "running" ? "started" : run.status;
 	return new Text(
-		`${theme.fg(run.status === "running" ? "success" : "warning", run.id)} ${theme.fg("muted", state)} ` +
+		`${theme.fg(run.status === "running" ? "success" : "warning", formatAgentLabel(run))} ${theme.fg("muted", state)} ` +
 			theme.fg("dim", `${shortModel(run.model)}/${run.thinking} ${run.access}`),
 		0,
 		0,
@@ -148,7 +154,7 @@ export function renderWaitResult(
 			(details?.snapshots ?? [])
 				.map((run) => {
 					const color = run.status === "failed" ? "error" : run.status === "completed" ? "success" : "warning";
-					return `${theme.fg(color, run.id)} ${theme.fg("muted", run.status)}${run.currentActivity ? ` ${theme.fg("dim", run.currentActivity)}` : ""}`;
+					return `${theme.fg(color, formatAgentLabel(run))} ${theme.fg("muted", run.status)}${run.currentActivity ? ` ${theme.fg("dim", run.currentActivity)}` : ""}`;
 				})
 				.join("\n") || theme.fg("muted", "waiting"),
 			0,
@@ -179,7 +185,7 @@ export function renderWaitResult(
 		const color = item.status === "completed" ? "success" : item.status === "failed" ? "error" : "muted";
 		container.addChild(
 			new Text(
-				`${theme.fg(color, theme.bold(`${item.id} ${item.status}`))} ${theme.fg("dim", `${shortModel(item.model)}/${item.thinking} ${formatDuration(item.elapsedMs)}`)}`,
+				`${theme.fg(color, theme.bold(`${formatAgentLabel(item)} ${item.status}`))} ${theme.fg("dim", `${shortModel(item.model)}/${item.thinking} ${formatDuration(item.elapsedMs)}`)}`,
 				0,
 				0,
 			),
@@ -198,6 +204,7 @@ export function waitResultFromSnapshot(run: AgentSnapshot): WaitResult {
 	if (!isTerminal(run.status)) throw new Error(`Sub-agent ${run.id} is not terminal`);
 	return {
 		id: run.id,
+		...(run.name ? { name: run.name } : {}),
 		status: run.status,
 		output: run.finalOutput ?? "",
 		...(run.error ? { error: run.error } : {}),

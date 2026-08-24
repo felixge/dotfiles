@@ -19,6 +19,7 @@ export interface ActivityEvent {
 
 export interface AgentRunConfig {
 	id: string;
+	name?: string;
 	prompt: string;
 	model: string;
 	thinking: ThinkingLevel;
@@ -79,6 +80,7 @@ export interface AgentRunner {
 
 export interface WaitResult {
 	id: string;
+	name?: string;
 	status: TerminalAgentStatus;
 	output: string;
 	error?: string;

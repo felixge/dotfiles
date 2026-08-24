@@ -104,6 +104,19 @@ test("manager enforces global concurrency and one writer per canonical cwd", asy
 	assert.equal(runner.maxActive, 2);
 });
 
+test("manager preserves optional agent names in snapshots and runner config", async () => {
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { idFactory: ids() });
+	const named = manager.spawn({ ...request("/repo"), name: "reviewer" });
+
+	assert.equal(named.name, "reviewer");
+	assert.equal(manager.get(named.id)?.name, "reviewer");
+	assert.equal(runner.runs.get(named.id)?.config.name, "reviewer");
+
+	runner.complete(named.id);
+	await tick();
+});
+
 test("cancelling a queued run never starts it and cancelling a running run stops it", async () => {
 	const runner = new FakeRunner();
 	const manager = new AgentManager(runner, { maxConcurrency: 1, idFactory: ids() });

@@ -13,6 +13,7 @@ test("model-visible output is capped while wait details can retain the bounded f
 test("wait result preserves terminal snapshot metadata", () => {
 	const snapshot: AgentSnapshot = {
 		id: "abc123",
+		name: "reviewer",
 		prompt: "task",
 		model: "provider/model",
 		thinking: "high",
@@ -33,6 +34,7 @@ test("wait result preserves terminal snapshot metadata", () => {
 	};
 	assert.deepEqual(waitResultFromSnapshot(snapshot), {
 		id: "abc123",
+		name: "reviewer",
 		status: "failed",
 		output: "partial",
 		error: "failure",

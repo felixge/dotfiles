@@ -20,6 +20,9 @@ const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "ma
 const ACCESS_LEVELS = ["read", "write"] as const;
 
 const AgentSpawnParams = Type.Object({
+	name: Type.Optional(
+		Type.String({ description: "Human-readable name for the sub-agent", minLength: 1, maxLength: 80 }),
+	),
 	prompt: Type.String({ description: "Task to send to the sub-agent", minLength: 1 }),
 	model: Type.Optional(
 		Type.String({ description: "Exact provider/model identifier. Defaults to the parent model." }),
@@ -53,6 +56,7 @@ export function parseExactModel(value: string): { provider: string; modelId: str
 
 async function resolveSpawnConfig(
 	params: {
+		name?: string;
 		prompt: string;
 		model?: string;
 		thinking?: ThinkingLevel;
@@ -60,8 +64,10 @@ async function resolveSpawnConfig(
 		access?: AgentAccess;
 	},
 	ctx: ExtensionContext,
-): Promise<{ prompt: string; model: string; thinking: ThinkingLevel; cwd: string; access: AgentAccess }> {
+): Promise<{ name?: string; prompt: string; model: string; thinking: ThinkingLevel; cwd: string; access: AgentAccess }> {
 	if (!params.prompt.trim()) throw new Error("Sub-agent prompt must not be empty");
+	const name = params.name?.replace(/\s+/gu, " ").trim();
+	if (params.name !== undefined && !name) throw new Error("Sub-agent name must not be empty");
 	const modelName = params.model ?? (ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined);
 	if (!modelName) throw new Error("No parent model is selected; provide model as provider/model");
 	const { provider, modelId } = parseExactModel(modelName);
@@ -74,6 +80,7 @@ async function resolveSpawnConfig(
 	const thinking = clampThinkingLevel(model, requestedThinking) as ThinkingLevel;
 	const cwd = await resolveCanonicalCwd(ctx.cwd, params.cwd);
 	return {
+		...(name ? { name } : {}),
 		prompt: params.prompt,
 		model: modelName,
 		thinking,
@@ -125,7 +132,7 @@ export default function subAgentExtension(pi: ExtensionAPI): void {
 		name: "agent_spawn",
 		label: "Spawn Agent",
 		description:
-			"Start one isolated background sub-agent and return immediately. Start all independent agents before calling agent_wait. Read access is the default; write access allows file mutation and is serialized with other writers in the same canonical working directory.",
+			"Start one isolated background sub-agent and return immediately. An optional name labels the agent in status and results. Start all independent agents before calling agent_wait. Read access is the default; write access allows file mutation and is serialized with other writers in the same canonical working directory.",
 		promptSnippet: "Start an isolated background sub-agent",
 		promptGuidelines: [
 			"Use agent_spawn for independent delegated tasks, start all independent sub-agents before using agent_wait, and retain every returned ID.",
@@ -136,6 +143,7 @@ export default function subAgentExtension(pi: ExtensionAPI): void {
 			const run = manager.spawn(config);
 			const response = {
 				id: run.id,
+				...(run.name ? { name: run.name } : {}),
 				status: run.status,
 				model: run.model,
 				thinking: run.thinking,
