@@ -112,6 +112,7 @@ test("event reducer reconciles cumulative streaming usage and retains partial us
 	});
 	assert.equal(state.usage.totalTokens, 10);
 	assert.equal(state.usage.cost.total, 0.05);
+	assert.equal(state.outputTokens, 2);
 	state = reduceJsonEvent(state, {
 		type: "message_end",
 		message: {
@@ -130,7 +131,9 @@ test("event reducer reconciles cumulative streaming usage and retains partial us
 	});
 	assert.equal(state.usage.totalTokens, 12);
 	assert.equal(state.usage.cost.total, 0.07);
+	assert.equal(state.outputTokens, 3);
 	assert.equal(state.streamingUsage, undefined);
+	assert.equal(state.streamingOutputTokens, undefined);
 });
 
 test("event reducer includes nested tool and compaction usage", () => {
@@ -170,6 +173,7 @@ test("event reducer includes nested tool and compaction usage", () => {
 		totalTokens: 11,
 		cost: { input: 0.03, output: 0.06, cacheRead: 0.01, cacheWrite: 0, total: 0.1 },
 	});
+	assert.equal(state.outputTokens, 0);
 });
 
 test("event reducer bounds final output and activity", () => {

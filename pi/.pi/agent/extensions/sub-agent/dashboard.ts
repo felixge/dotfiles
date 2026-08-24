@@ -3,7 +3,14 @@ import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi, type 
 import type { AgentManager } from "./manager.ts";
 import type { AgentSnapshot, AgentStatus } from "./types.ts";
 import { isTerminalStatus } from "./types.ts";
-import { formatAgentLabel, formatDuration, formatUsage, shortModel } from "./render.ts";
+import {
+	formatAgentLabel,
+	formatCost,
+	formatDuration,
+	formatTokenRate,
+	formatUsage,
+	shortModel,
+} from "./render.ts";
 
 function statusLabel(status: AgentStatus): string {
 	switch (status) {
@@ -42,11 +49,17 @@ function padColumn(value: string, width: number): string {
 	return clipped + " ".repeat(Math.max(0, width - visibleWidth(clipped)));
 }
 
+function padColumnStart(value: string, width: number): string {
+	const clipped = truncateToWidth(value, width, "");
+	return " ".repeat(Math.max(0, width - visibleWidth(clipped))) + clipped;
+}
+
 class AgentsDashboard {
 	private selected = 0;
 	private selectedId?: string;
 	private detail = false;
 	private unsubscribe: () => void;
+	private timer: ReturnType<typeof setInterval>;
 
 	constructor(
 		private readonly tui: TUI,
@@ -59,6 +72,7 @@ class AgentsDashboard {
 			this.normalizeSelection();
 			tui.requestRender();
 		});
+		this.timer = setInterval(() => tui.requestRender(), 1_000);
 		this.normalizeSelection();
 	}
 
@@ -103,6 +117,7 @@ class AgentsDashboard {
 
 	dispose(): void {
 		this.unsubscribe();
+		clearInterval(this.timer);
 	}
 
 	private runs(): AgentSnapshot[] {
@@ -124,9 +139,19 @@ class AgentsDashboard {
 
 	private renderList(width: number, maxLines: number): string[] {
 		const runs = this.runs();
+		const agentWidth = Math.min(24, Math.max(8, width - 27));
+		const mandatoryWidth = 27 + agentWidth;
+		const showElapsed = width - mandatoryWidth >= 10;
+		const showModel = width - mandatoryWidth - (showElapsed ? 10 : 0) >= 21;
+		const showCurrent = width - mandatoryWidth - (showElapsed ? 10 : 0) - (showModel ? 21 : 0) >= 9;
+
+		let header = ` STATUS ${padColumn("AGENT", agentWidth)} ${padColumnStart("COST", 9)} ${padColumnStart("TOK/S", 7)}`;
+		if (showElapsed) header += ` ${padColumn("ELAPSED", 9)}`;
+		if (showModel) header += ` ${padColumn("MODEL/THINKING", 20)}`;
+		if (showCurrent) header += " CURRENT";
 		const lines = [
 			` ${this.theme.fg("accent", this.theme.bold("Sub-agents"))}`,
-			this.theme.fg("dim", ` STATUS ${"AGENT".padEnd(24)} ELAPSED   MODEL/THINKING       CURRENT`),
+			this.theme.fg("dim", truncateToWidth(header, width)),
 		];
 		if (runs.length === 0) lines.push(this.theme.fg("muted", " No sub-agents in this session"));
 
@@ -139,8 +164,13 @@ class AgentsDashboard {
 			const elapsed = formatDuration((run.endedAt ?? Date.now()) - (run.startedAt ?? run.createdAt));
 			const model = `${shortModel(run.model)}/${run.thinking}`;
 			const coloredStatus = this.theme.fg(statusColor(run.status), statusLabel(run.status).padEnd(6));
-			const agent = this.theme.fg("accent", padColumn(formatAgentLabel(run), 24));
-			const line = `${selected ? this.theme.fg("accent", ">") : " "} ${coloredStatus} ${agent} ${elapsed.padEnd(9)} ${model.padEnd(20)} ${run.currentActivity ?? run.status}`;
+			const agent = this.theme.fg("accent", padColumn(formatAgentLabel(run), agentWidth));
+			const cost = this.theme.fg("warning", padColumnStart(formatCost(run.usage.cost.total), 9));
+			const tokenRate = this.theme.fg("success", padColumnStart(formatTokenRate(run.tokensPerSecond15s), 7));
+			let line = `${selected ? this.theme.fg("accent", ">") : " "} ${coloredStatus} ${agent} ${cost} ${tokenRate}`;
+			if (showElapsed) line += ` ${elapsed.padEnd(9)}`;
+			if (showModel) line += ` ${model.padEnd(20)}`;
+			if (showCurrent) line += ` ${run.currentActivity ?? run.status}`;
 			lines.push(selected ? this.theme.bg("selectedBg", truncateToWidth(line, width)) : truncateToWidth(line, width));
 		}
 		lines.push(this.theme.fg("dim", " Up/Down select  Enter details  x cancel  Esc close"));
@@ -162,6 +192,8 @@ class AgentsDashboard {
 			` Cwd: ${run.cwd}`,
 			` Elapsed: ${elapsed}`,
 			` Turns: ${run.turns}`,
+			` Cost: ${formatCost(run.usage.cost.total)}`,
+			` Token rate (15s avg): ${formatTokenRate(run.tokensPerSecond15s)} tok/s`,
 			` Usage: ${formatUsage(run.usage) || "none"}`,
 			` Current: ${run.currentActivity ?? run.status}`,
 		];

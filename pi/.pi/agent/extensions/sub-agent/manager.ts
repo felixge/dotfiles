@@ -19,10 +19,16 @@ import {
 	type UsageSummary,
 } from "./types.ts";
 
+interface TokenSample {
+	timestamp: number;
+	tokens: number;
+}
+
 interface ManagedRun extends AgentRun {
 	handle?: RunningAgentProcess;
 	completion?: Promise<void>;
 	cancellationRequested: boolean;
+	tokenSamples: TokenSample[];
 }
 
 export interface AgentManagerOptions {
@@ -44,6 +50,7 @@ export interface SpawnRequest {
 export type ManagerListener = (snapshots: readonly AgentSnapshot[]) => void;
 
 const WAIT_UPDATE_INTERVAL_MS = 100;
+const TOKEN_RATE_WINDOW_MS = 15_000;
 const ID_PATTERN = /^[a-z0-9]{6}$/u;
 
 function createRunId(): string {
@@ -60,7 +67,34 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-function cloneSnapshot(run: ManagedRun): AgentSnapshot {
+function appendTokenSample(samples: TokenSample[], tokens: number, timestamp: number): void {
+	const latest = samples.at(-1);
+	if (latest?.tokens === tokens) return;
+	if (latest?.timestamp === timestamp) {
+		latest.tokens = tokens;
+	} else {
+		samples.push({ timestamp, tokens });
+	}
+	const cutoff = timestamp - TOKEN_RATE_WINDOW_MS;
+	while (samples.length > 2 && samples[1]!.timestamp <= cutoff) samples.shift();
+}
+
+function calculateTokenRate(samples: readonly TokenSample[], endpoint: number): number {
+	if (samples.length < 2) return 0;
+	const cutoff = endpoint - TOKEN_RATE_WINDOW_MS;
+	let baseline = samples[0]!;
+	for (const sample of samples) {
+		if (sample.timestamp > cutoff) break;
+		baseline = sample;
+	}
+	const latest = samples.at(-1)!;
+	const elapsedMs = Math.min(TOKEN_RATE_WINDOW_MS, endpoint - baseline.timestamp);
+	if (elapsedMs <= 0) return 0;
+	return Math.max(0, latest.tokens - baseline.tokens) / (elapsedMs / 1000);
+}
+
+function cloneSnapshot(run: ManagedRun, now: number): AgentSnapshot {
+	const endpoint = run.endedAt ?? now;
 	return Object.freeze({
 		id: run.id,
 		name: run.name,
@@ -76,6 +110,7 @@ function cloneSnapshot(run: ManagedRun): AgentSnapshot {
 		currentActivity: run.currentActivity,
 		turns: run.turns,
 		usage: Object.freeze({ ...run.usage, cost: Object.freeze({ ...run.usage.cost }) }),
+		...(run.startedAt !== undefined ? { tokensPerSecond15s: calculateTokenRate(run.tokenSamples, endpoint) } : {}),
 		finalOutput: run.finalOutput,
 		finalOutputTruncation: run.finalOutputTruncation,
 		fullOutputPath: run.fullOutputPath,
@@ -133,24 +168,27 @@ export class AgentManager {
 			createdAt: this.now(),
 			turns: 0,
 			usage: createUsageSummary(),
+			outputTokens: 0,
 			liveOutput: "",
 			stderr: "",
 			activity: [],
 			cancellationRequested: false,
+			tokenSamples: [],
 		};
 		this.runs.set(id, run);
 		this.pump();
 		this.emit();
-		return cloneSnapshot(run);
+		return cloneSnapshot(run, this.now());
 	}
 
 	get(id: string): AgentSnapshot | undefined {
 		const run = this.runs.get(id);
-		return run ? cloneSnapshot(run) : undefined;
+		return run ? cloneSnapshot(run, this.now()) : undefined;
 	}
 
 	getAll(): AgentSnapshot[] {
-		return Array.from(this.runs.values(), cloneSnapshot);
+		const now = this.now();
+		return Array.from(this.runs.values(), (run) => cloneSnapshot(run, now));
 	}
 
 	subscribe(listener: ManagerListener): () => void {
@@ -190,7 +228,10 @@ export class AgentManager {
 		}
 		if (signal?.aborted) throw abortError();
 
-		const selected = () => ids.map((id) => cloneSnapshot(this.runs.get(id)!));
+		const selected = () => {
+			const now = this.now();
+			return ids.map((id) => cloneSnapshot(this.runs.get(id)!, now));
+		};
 		const current = selected();
 		onSnapshot?.(current);
 		if (current.every((run) => isTerminalStatus(run.status))) return current;
@@ -327,6 +368,7 @@ export class AgentManager {
 	private startRun(run: ManagedRun): void {
 		run.status = "running";
 		run.startedAt = this.now();
+		run.tokenSamples = [{ timestamp: run.startedAt, tokens: 0 }];
 		run.currentActivity = "starting";
 		if (run.access === "write") this.writerLocks.add(run.cwd);
 
@@ -350,6 +392,10 @@ export class AgentManager {
 		run.currentActivity = progress.currentActivity;
 		run.turns = progress.turns;
 		run.usage = cloneUsageSummary(progress.usage);
+		if (progress.outputTokens !== run.outputTokens) {
+			run.outputTokens = progress.outputTokens;
+			appendTokenSample(run.tokenSamples, run.outputTokens, this.now());
+		}
 		run.finalOutput = progress.finalOutput;
 		run.finalOutputTruncation = progress.finalOutputTruncation;
 		run.fullOutputPath = progress.fullOutputPath;

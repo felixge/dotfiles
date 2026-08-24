@@ -169,6 +169,31 @@ test("wait preserves input order and aborting wait leaves children running", asy
 	assert.ok(results.every((run) => run.status === "completed"));
 });
 
+test("snapshots report a rolling 15-second output token rate", async () => {
+	let now = 0;
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { idFactory: ids(), now: () => now });
+	const run = manager.spawn(request("/repo"));
+	const deferred = runner.runs.get(run.id);
+	assert.ok(deferred);
+
+	now = 5_000;
+	deferred.onProgress({ ...createInitialProgress(), outputTokens: 50 });
+	assert.equal(manager.get(run.id)?.tokensPerSecond15s, 10);
+
+	now = 10_000;
+	deferred.onProgress({ ...createInitialProgress(), outputTokens: 100 });
+	assert.equal(manager.get(run.id)?.tokensPerSecond15s, 10);
+
+	now = 20_000;
+	assert.equal(manager.get(run.id)?.tokensPerSecond15s, 50 / 15);
+	runner.complete(run.id, { outputTokens: 100 });
+	await tick();
+
+	now = 60_000;
+	assert.equal(manager.get(run.id)?.tokensPerSecond15s, 50 / 15);
+});
+
 test("usage is attributed exactly once across duplicate and repeated claims", async () => {
 	const runner = new FakeRunner();
 	const manager = new AgentManager(runner, { maxConcurrency: 2, idFactory: ids() });

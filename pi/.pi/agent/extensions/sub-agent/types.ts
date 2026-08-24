@@ -82,6 +82,7 @@ export interface AgentRun extends AgentRunConfig {
 	currentActivity?: string;
 	turns: number;
 	usage: UsageSummary;
+	outputTokens: number;
 	finalOutput?: string;
 	finalOutputTruncation?: TruncationResult;
 	fullOutputPath?: string;
@@ -91,8 +92,9 @@ export interface AgentRun extends AgentRunConfig {
 	activity: ActivityEvent[];
 }
 
-export interface AgentSnapshot extends Readonly<Omit<AgentRun, "usage" | "activity">> {
+export interface AgentSnapshot extends Readonly<Omit<AgentRun, "usage" | "activity" | "outputTokens">> {
 	readonly usage: Readonly<UsageSummary>;
+	readonly tokensPerSecond15s?: number;
 	readonly activity: readonly Readonly<ActivityEvent>[];
 }
 
@@ -101,6 +103,8 @@ export interface RunnerProgress {
 	turns: number;
 	usage: UsageSummary;
 	streamingUsage?: UsageSummary;
+	outputTokens: number;
+	streamingOutputTokens?: number;
 	finalOutput?: string;
 	finalOutputTruncation?: TruncationResult;
 	fullOutputPath?: string;

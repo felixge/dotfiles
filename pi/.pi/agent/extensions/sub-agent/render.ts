@@ -38,13 +38,23 @@ export function formatTokens(value: number): string {
 	return `${(value / 1_000_000).toFixed(1)}m`;
 }
 
+export function formatCost(cost: number): string {
+	return `$${cost.toFixed(4)}`;
+}
+
+export function formatTokenRate(rate: number | undefined): string {
+	if (rate === undefined) return "-";
+	if (rate < 1_000) return rate.toFixed(1);
+	return `${(rate / 1_000).toFixed(1)}k`;
+}
+
 export function formatUsage(usage: Readonly<UsageSummary>): string {
 	const parts: string[] = [];
 	if (usage.input) parts.push(`in:${formatTokens(usage.input)}`);
 	if (usage.output) parts.push(`out:${formatTokens(usage.output)}`);
 	if (usage.cacheRead) parts.push(`cache-r:${formatTokens(usage.cacheRead)}`);
 	if (usage.cacheWrite) parts.push(`cache-w:${formatTokens(usage.cacheWrite)}`);
-	if (usage.cost.total) parts.push(`$${usage.cost.total.toFixed(4)}`);
+	if (usage.cost.total) parts.push(formatCost(usage.cost.total));
 	return parts.join(" ");
 }
 

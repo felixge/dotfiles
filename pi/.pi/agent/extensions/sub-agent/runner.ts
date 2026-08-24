@@ -72,6 +72,7 @@ export function createInitialProgress(): RunnerProgress {
 	return {
 		turns: 0,
 		usage: createUsageSummary(),
+		outputTokens: 0,
 		liveOutput: "",
 		finalAssistantSeen: false,
 		agentSettled: false,
@@ -149,6 +150,11 @@ function reconcileStreamingUsage(progress: RunnerProgress, raw: unknown): void {
 	if (progress.streamingUsage) subtractUsageSummary(progress.usage, progress.streamingUsage);
 	addUsageSummary(progress.usage, latest);
 	progress.streamingUsage = latest;
+
+	const outputTokens = numberValue(recordValue(raw).output);
+	progress.outputTokens -= progress.streamingOutputTokens ?? 0;
+	progress.outputTokens += outputTokens;
+	progress.streamingOutputTokens = outputTokens;
 }
 
 function addActivity(progress: RunnerProgress, summary: string, isError = false): void {
@@ -238,6 +244,7 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown): Ru
 			if (message.role === "assistant") {
 				next.liveOutput = "";
 				next.streamingUsage = undefined;
+				next.streamingOutputTokens = undefined;
 			}
 			break;
 		}
@@ -262,6 +269,7 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown): Ru
 			if (message.role !== "assistant") break;
 			if (message.usage !== undefined) reconcileStreamingUsage(next, message.usage);
 			next.streamingUsage = undefined;
+			next.streamingOutputTokens = undefined;
 			const output = assistantText(message);
 			const truncation = truncateHead(output, {
 				maxLines: MAX_FINAL_OUTPUT_LINES,
