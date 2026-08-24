@@ -140,12 +140,21 @@ export default function(pi: ExtensionAPI) {
       };
     }
 
-    const choice = await ctx.ui.select(
-      `⚠️  Potential issue${violations.length > 1 ? "s" : ""} detected:\n\n` +
-      `${issueList}\n\n` +
-      `Command:\n  ${command}\n`,
-      ["Allow — run the command", "Block — stop and let me decide"],
-    );
+    let choice: string | undefined;
+    try {
+      pi.events.emit("herdr:blocked", {
+        active: true,
+        label: violations.map((violation) => violation.description).join(", "),
+      });
+      choice = await ctx.ui.select(
+        `⚠️  Potential issue${violations.length > 1 ? "s" : ""} detected:\n\n` +
+        `${issueList}\n\n` +
+        `Command:\n  ${command}\n`,
+        ["Allow — run the command", "Block — stop and let me decide"],
+      );
+    } finally {
+      pi.events.emit("herdr:blocked", { active: false });
+    }
 
     if (choice !== "Allow — run the command") {
       // Abort the agent turn so control returns to the user instead of
