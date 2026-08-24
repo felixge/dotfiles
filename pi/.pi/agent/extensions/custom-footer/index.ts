@@ -15,6 +15,7 @@
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth } from "@mariozechner/pi-tui";
+import { OutputTokenRateTracker } from "./token-rate.ts";
 
 const ENTRY_TYPE = "custom-footer";
 const FAST_STATUS_EVENT = "openai-fast:status";
@@ -36,6 +37,7 @@ export default function (pi: ExtensionAPI) {
 	let timer: ReturnType<typeof setInterval> | undefined;
 	let fastStatus: FastStatus | undefined;
 	let requestRender: (() => void) | undefined;
+	const tokenRate = new OutputTokenRateTracker();
 
 	pi.events.on(FAST_STATUS_EVENT, (data) => {
 		const status = data as Partial<FastStatus>;
@@ -85,6 +87,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
 		accumulatedMs = restoreFromSession(ctx.sessionManager.getEntries());
 		resumeStart = Date.now();
+		tokenRate.reset();
 
 		ctx.ui.setFooter((tui, theme, footerData) => {
 			const render = () => tui.requestRender();
@@ -156,6 +159,7 @@ export default function (pi: ExtensionAPI) {
 					];
 					if (totalInput) parts.push(theme.fg("accent", `↑${formatTokens(totalInput)}`));
 					if (totalOutput) parts.push(theme.fg("success", `↓${formatTokens(totalOutput)}`));
+					parts.push(theme.fg("success", `${tokenRate.rate().toFixed(1)} tok/s`));
 					if (totalCacheRead) parts.push(theme.fg("dim", `R${formatTokens(totalCacheRead)}`));
 					if (totalCacheWrite) parts.push(theme.fg("dim", `W${formatTokens(totalCacheWrite)}`));
 
@@ -184,9 +188,25 @@ export default function (pi: ExtensionAPI) {
 		});
 	});
 
+	pi.on("message_start", (event) => {
+		if (event.message.role !== "assistant") return;
+		tokenRate.startMessage(event.message.usage.output);
+	});
+
+	pi.on("message_update", (event) => {
+		if (event.message.role !== "assistant") return;
+		tokenRate.observeMessage(event.message.usage.output);
+	});
+
+	pi.on("message_end", (event) => {
+		if (event.message.role !== "assistant") return;
+		tokenRate.observeMessage(event.message.usage.output);
+	});
+
 	pi.on("session_switch", async (_event, ctx) => {
 		accumulatedMs = restoreFromSession(ctx.sessionManager.getEntries());
 		resumeStart = Date.now();
+		tokenRate.reset();
 	});
 
 	pi.on("session_shutdown", async () => {

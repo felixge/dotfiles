@@ -1,6 +1,10 @@
 {
   "private": true,
   "name": "custom-footer",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.ts"
+  },
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "*"
   },
