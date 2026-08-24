@@ -1,0 +1,21 @@
+{
+  "name": "pi-sub-agent-extension",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "^0.84.2",
+    "@earendil-works/pi-coding-agent": "^0.84.2",
+    "@earendil-works/pi-tui": "^0.84.2",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typebox": "^1.3.7",
+    "typescript": "^6.0.0"
+  },
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}
