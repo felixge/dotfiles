@@ -173,11 +173,17 @@ export default function subAgentExtension(pi: ExtensionAPI): void {
 					details: { final: false, snapshots: partial } satisfies WaitToolDetails,
 				});
 			});
+			const attribution = manager.claimUsage(snapshots);
 			const results = snapshots.map(waitResultFromSnapshot);
 			const visible = modelVisibleResults(results);
 			return {
 				content: [{ type: "text", text: JSON.stringify(visible, null, 2) }],
-				details: { final: true, results } satisfies WaitToolDetails,
+				details: {
+					final: true,
+					results,
+					attributedIds: attribution.attributedIds,
+				} satisfies WaitToolDetails,
+				...(attribution.usage ? { usage: attribution.usage } : {}),
 			};
 		},
 		renderCall: renderWaitCall,

@@ -11,6 +11,12 @@ import type {
 	RunningAgentProcess,
 	UsageSummary,
 } from "./types.ts";
+import {
+	addUsageSummary,
+	cloneUsageSummary,
+	createUsageSummary,
+	subtractUsageSummary,
+} from "./types.ts";
 
 export const MAX_ACTIVITY_EVENTS = 100;
 export const MAX_ACTIVITY_BYTES = 512;
@@ -61,7 +67,7 @@ export interface ProcessRunnerOptions {
 export function createInitialProgress(): RunnerProgress {
 	return {
 		turns: 0,
-		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
+		usage: createUsageSummary(),
 		liveOutput: "",
 		finalAssistantSeen: false,
 		agentSettled: false,
@@ -72,7 +78,8 @@ export function createInitialProgress(): RunnerProgress {
 function cloneProgress(progress: RunnerProgress): RunnerProgress {
 	return {
 		...progress,
-		usage: { ...progress.usage },
+		usage: cloneUsageSummary(progress.usage),
+		streamingUsage: progress.streamingUsage ? cloneUsageSummary(progress.streamingUsage) : undefined,
 		activity: progress.activity.map((event) => ({ ...event })),
 	};
 }
@@ -110,11 +117,34 @@ function stringValue(value: unknown): string | undefined {
 function addUsage(target: UsageSummary, raw: unknown): void {
 	const usage = recordValue(raw);
 	const cost = recordValue(usage.cost);
-	target.input += numberValue(usage.input);
-	target.output += numberValue(usage.output);
-	target.cacheRead += numberValue(usage.cacheRead);
-	target.cacheWrite += numberValue(usage.cacheWrite);
-	target.cost += numberValue(cost.total ?? usage.cost);
+	const input = numberValue(usage.input);
+	const output = numberValue(usage.output);
+	const cacheRead = numberValue(usage.cacheRead);
+	const cacheWrite = numberValue(usage.cacheWrite);
+	target.input += input;
+	target.output += output;
+	target.cacheRead += cacheRead;
+	target.cacheWrite += cacheWrite;
+	target.totalTokens += numberValue(usage.totalTokens) || input + output + cacheRead + cacheWrite;
+	target.cost.input += numberValue(cost.input);
+	target.cost.output += numberValue(cost.output);
+	target.cost.cacheRead += numberValue(cost.cacheRead);
+	target.cost.cacheWrite += numberValue(cost.cacheWrite);
+	target.cost.total += numberValue(cost.total ?? usage.cost);
+	if (typeof usage.cacheWrite1h === "number" && Number.isFinite(usage.cacheWrite1h)) {
+		target.cacheWrite1h = (target.cacheWrite1h ?? 0) + usage.cacheWrite1h;
+	}
+	if (typeof usage.reasoning === "number" && Number.isFinite(usage.reasoning)) {
+		target.reasoning = (target.reasoning ?? 0) + usage.reasoning;
+	}
+}
+
+function reconcileStreamingUsage(progress: RunnerProgress, raw: unknown): void {
+	const latest = createUsageSummary();
+	addUsage(latest, raw);
+	if (progress.streamingUsage) subtractUsageSummary(progress.usage, progress.streamingUsage);
+	addUsageSummary(progress.usage, latest);
+	progress.streamingUsage = latest;
 }
 
 function addActivity(progress: RunnerProgress, summary: string, isError = false): void {
@@ -190,10 +220,14 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown): Ru
 			break;
 		case "message_start": {
 			const message = recordValue(event.message);
-			if (message.role === "assistant") next.liveOutput = "";
+			if (message.role === "assistant") {
+				next.liveOutput = "";
+				next.streamingUsage = undefined;
+			}
 			break;
 		}
 		case "message_update": {
+			if (event.usage !== undefined) reconcileStreamingUsage(next, event.usage);
 			const update = recordValue(event.assistantMessageEvent);
 			const updateType = stringValue(update.type);
 			if (updateType === "thinking_start" || updateType === "thinking_delta" || updateType === "thinking_end") {
@@ -206,14 +240,19 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown): Ru
 		}
 		case "message_end": {
 			const message = recordValue(event.message);
+			if (message.role === "toolResult") {
+				addUsage(next.usage, message.usage);
+				break;
+			}
 			if (message.role !== "assistant") break;
+			if (message.usage !== undefined) reconcileStreamingUsage(next, message.usage);
+			next.streamingUsage = undefined;
 			const output = assistantText(message);
 			next.finalOutput = truncateUtf8Head(output, MAX_FINAL_OUTPUT_BYTES);
 			next.liveOutput = truncateUtf8Tail(output, MAX_LIVE_OUTPUT_BYTES);
 			next.finalStopReason = stringValue(message.stopReason);
 			next.finalError = stringValue(message.errorMessage);
 			next.finalAssistantSeen = true;
-			addUsage(next.usage, message.usage);
 			break;
 		}
 		case "tool_execution_start":
@@ -240,6 +279,11 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown): Ru
 			next.currentActivity = "compacting context";
 			addActivity(next, next.currentActivity);
 			break;
+		case "compaction_end": {
+			const result = recordValue(event.result);
+			addUsage(next.usage, result.usage);
+			break;
+		}
 		case "agent_settled":
 			next.agentSettled = true;
 			break;

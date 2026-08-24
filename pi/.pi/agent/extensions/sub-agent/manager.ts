@@ -10,7 +10,14 @@ import type {
 	RunnerResult,
 	RunningAgentProcess,
 } from "./types.ts";
-import { isTerminalStatus } from "./types.ts";
+import {
+	addUsageSummary,
+	cloneUsageSummary,
+	createUsageSummary,
+	hasUsage,
+	isTerminalStatus,
+	type UsageSummary,
+} from "./types.ts";
 
 interface ManagedRun extends AgentRun {
 	handle?: RunningAgentProcess;
@@ -68,7 +75,7 @@ function cloneSnapshot(run: ManagedRun): AgentSnapshot {
 		endedAt: run.endedAt,
 		currentActivity: run.currentActivity,
 		turns: run.turns,
-		usage: Object.freeze({ ...run.usage }),
+		usage: Object.freeze({ ...run.usage, cost: Object.freeze({ ...run.usage.cost }) }),
 		finalOutput: run.finalOutput,
 		liveOutput: run.liveOutput,
 		error: run.error,
@@ -94,6 +101,9 @@ export class AgentManager {
 	private readonly runs = new Map<string, ManagedRun>();
 	private readonly listeners = new Set<ManagerListener>();
 	private readonly writerLocks = new Set<string>();
+	private readonly issuedIds = new Set<string>();
+	private readonly attributedIds = new Set<string>();
+	private readonly waiterCounts = new Map<string, number>();
 	private readonly maxConcurrency: number;
 	private readonly maxTerminalRuns: number;
 	private readonly now: () => number;
@@ -113,13 +123,14 @@ export class AgentManager {
 	spawn(request: SpawnRequest): AgentSnapshot {
 		if (this.shuttingDown) throw new Error("Sub-agent manager is shutting down");
 		const id = this.nextId();
+		this.issuedIds.add(id);
 		const run: ManagedRun = {
 			id,
 			...request,
 			status: "queued",
 			createdAt: this.now(),
 			turns: 0,
-			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
+			usage: createUsageSummary(),
 			liveOutput: "",
 			stderr: "",
 			activity: [],
@@ -182,6 +193,8 @@ export class AgentManager {
 		onSnapshot?.(current);
 		if (current.every((run) => isTerminalStatus(run.status))) return current;
 
+		const pinnedIds = [...new Set(ids)];
+		for (const id of pinnedIds) this.waiterCounts.set(id, (this.waiterCounts.get(id) ?? 0) + 1);
 		return new Promise<AgentSnapshot[]>((resolvePromise, rejectPromise) => {
 			let finished = false;
 			let lastUpdate = this.now();
@@ -191,6 +204,12 @@ export class AgentManager {
 				unsubscribe();
 				if (updateTimer) clearTimeout(updateTimer);
 				signal?.removeEventListener("abort", onAbort);
+				for (const id of pinnedIds) {
+					const count = (this.waiterCounts.get(id) ?? 1) - 1;
+					if (count > 0) this.waiterCounts.set(id, count);
+					else this.waiterCounts.delete(id);
+				}
+				if (this.trimTerminalRuns()) this.emit();
 			};
 			const publish = () => {
 				if (finished || !onSnapshot) return;
@@ -238,6 +257,20 @@ export class AgentManager {
 		});
 	}
 
+	claimUsage(snapshots: readonly AgentSnapshot[]): { usage?: UsageSummary; attributedIds: string[] } {
+		const usage = createUsageSummary();
+		const attributedIds: string[] = [];
+		for (const snapshot of snapshots) {
+			if (!this.issuedIds.has(snapshot.id)) throw new Error(`Unknown sub-agent ID: ${snapshot.id}`);
+			if (!isTerminalStatus(snapshot.status)) throw new Error(`Sub-agent ${snapshot.id} is not terminal`);
+			if (this.attributedIds.has(snapshot.id)) continue;
+			this.attributedIds.add(snapshot.id);
+			attributedIds.push(snapshot.id);
+			addUsageSummary(usage, snapshot.usage);
+		}
+		return { ...(hasUsage(usage) ? { usage } : {}), attributedIds };
+	}
+
 	async shutdown(): Promise<void> {
 		if (this.shuttingDown && !this.hasActiveRuns()) {
 			return;
@@ -260,7 +293,7 @@ export class AgentManager {
 		for (let attempt = 0; attempt < 100; attempt++) {
 			const id = this.idFactory().toLowerCase();
 			if (!ID_PATTERN.test(id)) throw new Error(`Invalid generated sub-agent ID: ${id}`);
-			if (!this.runs.has(id)) return id;
+			if (!this.issuedIds.has(id)) return id;
 		}
 		throw new Error("Could not allocate a unique sub-agent ID");
 	}
@@ -314,7 +347,7 @@ export class AgentManager {
 		if (run.status !== "running") return;
 		run.currentActivity = progress.currentActivity;
 		run.turns = progress.turns;
-		run.usage = { ...progress.usage };
+		run.usage = cloneUsageSummary(progress.usage);
 		run.finalOutput = progress.finalOutput;
 		run.liveOutput = progress.liveOutput;
 		run.activity = progress.activity.map((event) => ({ ...event }));
@@ -380,7 +413,7 @@ export class AgentManager {
 
 	private trimTerminalRuns(): boolean {
 		const terminal = [...this.runs.values()]
-			.filter((run) => isTerminalStatus(run.status))
+			.filter((run) => isTerminalStatus(run.status) && !this.waiterCounts.has(run.id))
 			.sort((left, right) => (left.endedAt ?? left.createdAt) - (right.endedAt ?? right.createdAt));
 		let removed = false;
 		while (terminal.length > this.maxTerminalRuns) {

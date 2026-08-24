@@ -53,14 +53,121 @@ test("event reducer tracks output, activity, turns, retries, and usage without r
 			role: "assistant",
 			content: [{ type: "text", text: "final answer" }],
 			stopReason: "stop",
-			usage: { input: 12, output: 4, cacheRead: 3, cacheWrite: 2, cost: { total: 0.25 } },
+			usage: {
+				input: 12,
+				output: 4,
+				cacheRead: 3,
+				cacheWrite: 2,
+				cacheWrite1h: 1,
+				reasoning: 2,
+				totalTokens: 21,
+				cost: { input: 0.05, output: 0.1, cacheRead: 0.04, cacheWrite: 0.06, total: 0.25 },
+			},
 		},
 	});
 	assert.equal(state.turns, 1);
 	assert.equal(state.finalOutput, "final answer");
-	assert.deepEqual(state.usage, { input: 12, output: 4, cacheRead: 3, cacheWrite: 2, cost: 0.25 });
+	assert.deepEqual(state.usage, {
+		input: 12,
+		output: 4,
+		cacheRead: 3,
+		cacheWrite: 2,
+		cacheWrite1h: 1,
+		reasoning: 2,
+		totalTokens: 21,
+		cost: { input: 0.05, output: 0.1, cacheRead: 0.04, cacheWrite: 0.06, total: 0.25 },
+	});
 	assert.equal(JSON.stringify(state).includes("do not retain me"), false);
 	assert.equal(state.activity.at(-1)?.summary, "retry 2/3 in 4s");
+});
+
+test("event reducer reconciles cumulative streaming usage and retains partial usage", () => {
+	let state = createInitialProgress();
+	state = reduceJsonEvent(state, { type: "message_start", message: { role: "assistant" } });
+	state = reduceJsonEvent(state, {
+		type: "message_update",
+		usage: {
+			input: 5,
+			output: 1,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 6,
+			cost: { input: 0.01, output: 0.01, cacheRead: 0, cacheWrite: 0, total: 0.02 },
+		},
+		assistantMessageEvent: { type: "text_delta", delta: "partial" },
+	});
+	state = reduceJsonEvent(state, {
+		type: "message_update",
+		usage: {
+			input: 7,
+			output: 2,
+			cacheRead: 1,
+			cacheWrite: 0,
+			totalTokens: 10,
+			cost: { input: 0.02, output: 0.02, cacheRead: 0.01, cacheWrite: 0, total: 0.05 },
+		},
+		assistantMessageEvent: { type: "text_delta", delta: " output" },
+	});
+	assert.equal(state.usage.totalTokens, 10);
+	assert.equal(state.usage.cost.total, 0.05);
+	state = reduceJsonEvent(state, {
+		type: "message_end",
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: "partial output" }],
+			stopReason: "stop",
+			usage: {
+				input: 8,
+				output: 3,
+				cacheRead: 1,
+				cacheWrite: 0,
+				totalTokens: 12,
+				cost: { input: 0.03, output: 0.03, cacheRead: 0.01, cacheWrite: 0, total: 0.07 },
+			},
+		},
+	});
+	assert.equal(state.usage.totalTokens, 12);
+	assert.equal(state.usage.cost.total, 0.07);
+	assert.equal(state.streamingUsage, undefined);
+});
+
+test("event reducer includes nested tool and compaction usage", () => {
+	let state = createInitialProgress();
+	state = reduceJsonEvent(state, {
+		type: "message_end",
+		message: {
+			role: "toolResult",
+			usage: {
+				input: 2,
+				output: 1,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 3,
+				cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 },
+			},
+		},
+	});
+	state = reduceJsonEvent(state, {
+		type: "compaction_end",
+		result: {
+			usage: {
+				input: 5,
+				output: 2,
+				cacheRead: 1,
+				cacheWrite: 0,
+				totalTokens: 8,
+				cost: { input: 0.02, output: 0.04, cacheRead: 0.01, cacheWrite: 0, total: 0.07 },
+			},
+		},
+	});
+	assert.deepEqual(state.usage, {
+		input: 7,
+		output: 3,
+		cacheRead: 1,
+		cacheWrite: 0,
+		totalTokens: 11,
+		cost: { input: 0.03, output: 0.06, cacheRead: 0.01, cacheWrite: 0, total: 0.1 },
+	});
 });
 
 test("event reducer bounds final output and activity", () => {

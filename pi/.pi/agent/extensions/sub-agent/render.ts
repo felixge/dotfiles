@@ -8,6 +8,7 @@ import type {
 	WaitResult,
 	WaitToolDetails,
 } from "./types.ts";
+import { addUsageSummary, cloneUsageSummary, createUsageSummary } from "./types.ts";
 
 export const MODEL_VISIBLE_OUTPUT_BYTES = 50 * 1024;
 export const MODEL_VISIBLE_DIAGNOSTIC_BYTES = 8 * 1024;
@@ -35,19 +36,13 @@ export function formatUsage(usage: Readonly<UsageSummary>): string {
 	if (usage.output) parts.push(`out:${formatTokens(usage.output)}`);
 	if (usage.cacheRead) parts.push(`cache-r:${formatTokens(usage.cacheRead)}`);
 	if (usage.cacheWrite) parts.push(`cache-w:${formatTokens(usage.cacheWrite)}`);
-	if (usage.cost) parts.push(`$${usage.cost.toFixed(4)}`);
+	if (usage.cost.total) parts.push(`$${usage.cost.total.toFixed(4)}`);
 	return parts.join(" ");
 }
 
 export function aggregateUsage(items: readonly { usage: Readonly<UsageSummary> }[]): UsageSummary {
-	const usage: UsageSummary = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 };
-	for (const item of items) {
-		usage.input += item.usage.input;
-		usage.output += item.usage.output;
-		usage.cacheRead += item.usage.cacheRead;
-		usage.cacheWrite += item.usage.cacheWrite;
-		usage.cost += item.usage.cost;
-	}
+	const usage = createUsageSummary();
+	for (const item of items) addUsageSummary(usage, item.usage);
 	return usage;
 }
 
@@ -213,7 +208,7 @@ export function waitResultFromSnapshot(run: AgentSnapshot): WaitResult {
 		cwd: run.cwd,
 		elapsedMs: Math.max(0, (run.endedAt ?? Date.now()) - (run.startedAt ?? run.createdAt)),
 		turns: run.turns,
-		usage: { ...run.usage },
+		usage: cloneUsageSummary(run.usage),
 	};
 }
 

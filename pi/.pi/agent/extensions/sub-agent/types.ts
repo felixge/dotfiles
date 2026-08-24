@@ -1,14 +1,60 @@
+import type { Usage } from "@earendil-works/pi-ai";
+
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type AgentAccess = "read" | "write";
 export type AgentStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 export type TerminalAgentStatus = Extract<AgentStatus, "completed" | "failed" | "cancelled">;
+export type UsageSummary = Usage;
 
-export interface UsageSummary {
-	input: number;
-	output: number;
-	cacheRead: number;
-	cacheWrite: number;
-	cost: number;
+export function createUsageSummary(): UsageSummary {
+	return {
+		input: 0,
+		output: 0,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: 0,
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+	};
+}
+
+export function cloneUsageSummary(usage: Readonly<UsageSummary>): UsageSummary {
+	return { ...usage, cost: { ...usage.cost } };
+}
+
+function applyUsageSummary(target: UsageSummary, usage: Readonly<UsageSummary>, factor: 1 | -1): void {
+	target.input += usage.input * factor;
+	target.output += usage.output * factor;
+	target.cacheRead += usage.cacheRead * factor;
+	target.cacheWrite += usage.cacheWrite * factor;
+	target.totalTokens += usage.totalTokens * factor;
+	target.cost.input += usage.cost.input * factor;
+	target.cost.output += usage.cost.output * factor;
+	target.cost.cacheRead += usage.cost.cacheRead * factor;
+	target.cost.cacheWrite += usage.cost.cacheWrite * factor;
+	target.cost.total += usage.cost.total * factor;
+	if (usage.cacheWrite1h !== undefined) {
+		target.cacheWrite1h = (target.cacheWrite1h ?? 0) + usage.cacheWrite1h * factor;
+	}
+	if (usage.reasoning !== undefined) target.reasoning = (target.reasoning ?? 0) + usage.reasoning * factor;
+}
+
+export function addUsageSummary(target: UsageSummary, usage: Readonly<UsageSummary>): void {
+	applyUsageSummary(target, usage, 1);
+}
+
+export function subtractUsageSummary(target: UsageSummary, usage: Readonly<UsageSummary>): void {
+	applyUsageSummary(target, usage, -1);
+}
+
+export function hasUsage(usage: Readonly<UsageSummary>): boolean {
+	return (
+		usage.input > 0 ||
+		usage.output > 0 ||
+		usage.cacheRead > 0 ||
+		usage.cacheWrite > 0 ||
+		usage.totalTokens > 0 ||
+		usage.cost.total > 0
+	);
 }
 
 export interface ActivityEvent {
@@ -51,6 +97,7 @@ export interface RunnerProgress {
 	currentActivity?: string;
 	turns: number;
 	usage: UsageSummary;
+	streamingUsage?: UsageSummary;
 	finalOutput?: string;
 	liveOutput: string;
 	finalStopReason?: string;
@@ -100,14 +147,12 @@ export interface WaitToolDetails {
 	final: boolean;
 	snapshots?: AgentSnapshot[];
 	results?: WaitResult[];
+	attributedIds?: string[];
 }
 
 export const EMPTY_USAGE: Readonly<UsageSummary> = Object.freeze({
-	input: 0,
-	output: 0,
-	cacheRead: 0,
-	cacheWrite: 0,
-	cost: 0,
+	...createUsageSummary(),
+	cost: Object.freeze(createUsageSummary().cost),
 });
 
 export function isTerminalStatus(status: AgentStatus): status is TerminalAgentStatus {

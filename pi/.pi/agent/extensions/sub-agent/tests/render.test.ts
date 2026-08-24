@@ -25,7 +25,14 @@ test("wait result preserves terminal snapshot metadata", () => {
 		endedAt: 250,
 		currentActivity: "failed",
 		turns: 2,
-		usage: { input: 10, output: 2, cacheRead: 0, cacheWrite: 0, cost: 0.1 },
+		usage: {
+			input: 10,
+			output: 2,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 12,
+			cost: { input: 0.02, output: 0.08, cacheRead: 0, cacheWrite: 0, total: 0.1 },
+		},
 		finalOutput: "partial",
 		liveOutput: "partial",
 		error: "failure",
@@ -43,6 +50,13 @@ test("wait result preserves terminal snapshot metadata", () => {
 		cwd: "/repo",
 		elapsedMs: 100,
 		turns: 2,
-		usage: { input: 10, output: 2, cacheRead: 0, cacheWrite: 0, cost: 0.1 },
+		usage: {
+			input: 10,
+			output: 2,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 12,
+			cost: { input: 0.02, output: 0.08, cacheRead: 0, cacheWrite: 0, total: 0.1 },
+		},
 	});
 });

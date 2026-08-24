@@ -19,7 +19,14 @@ if (mode === "hang") {
 			message: {
 				role: "assistant",
 				content: [{ type: "text", text: "fixture result" }],
-				usage: { input: 10, output: 3, cacheRead: 2, cacheWrite: 1, cost: { total: 0.01 } },
+				usage: {
+					input: 10,
+					output: 3,
+					cacheRead: 2,
+					cacheWrite: 1,
+					totalTokens: 16,
+					cost: { input: 0.002, output: 0.006, cacheRead: 0.001, cacheWrite: 0.001, total: 0.01 }
+				},
 				stopReason: "stop"
 			}
 		},

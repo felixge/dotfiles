@@ -150,13 +150,48 @@ test("wait preserves input order and aborting wait leaves children running", asy
 	assert.ok(results.every((run) => run.status === "completed"));
 });
 
-test("waiters receive terminal snapshots in order while retention remains bounded", async () => {
+test("usage is attributed exactly once across duplicate and repeated claims", async () => {
 	const runner = new FakeRunner();
-	const manager = new AgentManager(runner, { maxConcurrency: 2, maxTerminalRuns: 1, idFactory: ids() });
+	const manager = new AgentManager(runner, { maxConcurrency: 2, idFactory: ids() });
 	const first = manager.spawn(request("/one"));
 	const second = manager.spawn(request("/two"));
+	const usage = {
+		input: 10,
+		output: 2,
+		cacheRead: 3,
+		cacheWrite: 1,
+		totalTokens: 16,
+		cost: { input: 0.02, output: 0.04, cacheRead: 0.01, cacheWrite: 0.01, total: 0.08 },
+	};
+	runner.complete(first.id, { usage });
+	runner.complete(second.id, { usage });
+	const snapshots = await manager.wait([first.id, first.id, second.id]);
+
+	const initial = manager.claimUsage(snapshots);
+	assert.deepEqual(initial.attributedIds, [first.id, second.id]);
+	assert.deepEqual(initial.usage, {
+		input: 20,
+		output: 4,
+		cacheRead: 6,
+		cacheWrite: 2,
+		totalTokens: 32,
+		cost: { input: 0.04, output: 0.08, cacheRead: 0.02, cacheWrite: 0.02, total: 0.16 },
+	});
+	assert.deepEqual(manager.claimUsage(snapshots), { attributedIds: [] });
+});
+
+test("active waits pin terminal runs while retention remains bounded", async () => {
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { maxConcurrency: 3, maxTerminalRuns: 1, idFactory: ids() });
+	const first = manager.spawn(request("/one"));
+	const second = manager.spawn(request("/two"));
+	const third = manager.spawn(request("/three"));
 	const waiting = manager.wait([first.id, second.id]);
 	runner.complete(first.id);
+	await tick();
+	runner.complete(third.id);
+	await tick();
+	assert.equal(manager.get(first.id)?.status, "completed");
 	runner.complete(second.id);
 	const results = await waiting;
 	assert.deepEqual(results.map((run) => run.id), [first.id, second.id]);
