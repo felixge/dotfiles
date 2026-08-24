@@ -114,7 +114,7 @@ export class AgentManager {
 		private readonly runner: AgentRunner,
 		options: AgentManagerOptions = {},
 	) {
-		this.maxConcurrency = Math.max(1, options.maxConcurrency ?? 4);
+		this.maxConcurrency = Math.max(1, options.maxConcurrency ?? 10);
 		this.maxTerminalRuns = Math.max(0, options.maxTerminalRuns ?? 20);
 		this.now = options.now ?? Date.now;
 		this.idFactory = options.idFactory ?? createRunId;

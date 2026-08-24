@@ -41,7 +41,6 @@ const AgentSpawnParams = Type.Object({
 const AgentWaitParams = Type.Object({
 	ids: Type.Array(Type.String(), {
 		minItems: 1,
-		maxItems: 8,
 		description: "Sub-agent IDs to wait for",
 	}),
 });
@@ -163,7 +162,7 @@ export default function subAgentExtension(pi: ExtensionAPI): void {
 		name: "agent_wait",
 		label: "Wait for Agents",
 		description:
-			"Wait for one to eight background sub-agents. Escaping this tool stops only the wait; it does not cancel any sub-agent. Outputs are capped at 50 KB per agent in model-visible content.",
+			"Wait for one or more background sub-agents. Escaping this tool stops only the wait; it does not cancel any sub-agent. Outputs are capped at 50 KB per agent in model-visible content.",
 		promptSnippet: "Wait for background sub-agents and collect their results",
 		parameters: AgentWaitParams,
 		async execute(_toolCallId, params, signal, onUpdate) {
