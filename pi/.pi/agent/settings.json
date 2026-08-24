@@ -8,8 +8,8 @@
     "ai-gw-anthropic-1m/anthropic/claude-opus-5",
     "openai-codex/gpt-5.6-luna"
   ],
-  "hideThinkingBlock": false,
-  "defaultThinkingLevel": "high",
+  "hideThinkingBlock": true,
+  "defaultThinkingLevel": "max",
   "enableSkillCommands": true,
   "skills": [
     "~/.claude/skills"
