@@ -9,7 +9,7 @@
     "openai-codex/gpt-5.6-luna"
   ],
   "hideThinkingBlock": true,
-  "defaultThinkingLevel": "max",
+  "defaultThinkingLevel": "high",
   "enableSkillCommands": true,
   "skills": [
     "~/.claude/skills"
