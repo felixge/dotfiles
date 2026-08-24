@@ -3,11 +3,11 @@
  *
  * Adds a `/total-cost` command that scans every saved pi session under
  * `$PI_CODING_AGENT_DIR/sessions` (default `~/.pi/agent/sessions`) and shows a
- * per-month breakdown of cumulative LLM cost, message count, and number of
+ * per-month breakdown of cumulative LLM cost, usage-entry count, and number of
  * distinct sessions that contributed.
  *
- * Costs come from the `usage.cost.total` field stored on each assistant
- * message. Months are bucketed by the entry-level ISO timestamp (UTC).
+ * Costs include assistant messages, nested LLM usage on tool results, and
+ * compaction and branch summaries. Months use the entry timestamp in UTC.
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
@@ -16,17 +16,18 @@ import { Container, matchesKey, Text } from "@mariozechner/pi-tui";
 import { readdir, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { getSessionEntryUsage } from "../lib/session-usage.ts";
 
 interface MonthBucket {
 	month: string; // YYYY-MM
 	cost: number;
-	messages: number;
+	usageEntries: number;
 	sessions: Set<string>;
 }
 
 interface Totals {
 	cost: number;
-	messages: number;
+	usageEntries: number;
 	sessions: number;
 	files: number;
 	skippedFiles: number;
@@ -81,7 +82,7 @@ async function computeTotals(): Promise<Totals> {
 
 	const buckets = new Map<string, MonthBucket>();
 	let totalCost = 0;
-	let totalMessages = 0;
+	let totalUsageEntries = 0;
 	const allSessions = new Set<string>();
 	let skippedFiles = 0;
 
@@ -104,28 +105,24 @@ async function computeTotals(): Promise<Totals> {
 				continue; // tolerate corrupt/partial trailing lines
 			}
 
-			if (entry?.type !== "message") continue;
-			const message = entry.message;
-			if (!message || message.role !== "assistant") continue;
+			const usage = getSessionEntryUsage(entry);
+			const cost = usage?.cost.total;
+			if (cost === undefined || cost <= 0) continue;
 
-			const cost = message.usage?.cost?.total;
-			if (typeof cost !== "number" || !Number.isFinite(cost) || cost <= 0) continue;
-
-			// Prefer entry-level ISO timestamp; fall back to message timestamp (unix ms).
-			const month = bucketKey(entry.timestamp) ?? bucketKey(message.timestamp);
+			const month = bucketKey(entry.timestamp) ?? bucketKey(entry.message?.timestamp);
 			if (!month) continue;
 
 			let bucket = buckets.get(month);
 			if (!bucket) {
-				bucket = { month, cost: 0, messages: 0, sessions: new Set() };
+				bucket = { month, cost: 0, usageEntries: 0, sessions: new Set() };
 				buckets.set(month, bucket);
 			}
 			bucket.cost += cost;
-			bucket.messages += 1;
+			bucket.usageEntries += 1;
 			bucket.sessions.add(file);
 
 			totalCost += cost;
-			totalMessages += 1;
+			totalUsageEntries += 1;
 			allSessions.add(file);
 		}
 	}
@@ -134,7 +131,7 @@ async function computeTotals(): Promise<Totals> {
 
 	return {
 		cost: totalCost,
-		messages: totalMessages,
+		usageEntries: totalUsageEntries,
 		sessions: allSessions.size,
 		files: files.length,
 		skippedFiles,
@@ -162,7 +159,7 @@ function buildLines(totals: Totals, theme: any): string[] {
 	// Column widths
 	const monthW = 7; // YYYY-MM
 	const costW = Math.max(8, ...totals.byMonth.map((b) => fmtMoney(b.cost).length), fmtMoney(totals.cost).length);
-	const msgW = Math.max(8, ...totals.byMonth.map((b) => fmtInt(b.messages).length));
+	const usageW = Math.max(7, ...totals.byMonth.map((b) => fmtInt(b.usageEntries).length));
 	const sessW = Math.max(8, ...totals.byMonth.map((b) => fmtInt(b.sessions.size).length));
 
 	const padL = (s: string, w: number) => s + " ".repeat(Math.max(0, w - s.length));
@@ -173,11 +170,11 @@ function buildLines(totals: Totals, theme: any): string[] {
 		"  " +
 		theme.fg("muted", padR("Cost", costW)) +
 		"  " +
-		theme.fg("muted", padR("Messages", msgW)) +
+		theme.fg("muted", padR("Entries", usageW)) +
 		"  " +
 		theme.fg("muted", padR("Sessions", sessW));
 	lines.push(header);
-	lines.push(theme.fg("dim", "─".repeat(monthW + 2 + costW + 2 + msgW + 2 + sessW)));
+	lines.push(theme.fg("dim", "─".repeat(monthW + 2 + costW + 2 + usageW + 2 + sessW)));
 
 	for (const b of totals.byMonth) {
 		lines.push(
@@ -185,19 +182,19 @@ function buildLines(totals: Totals, theme: any): string[] {
 				"  " +
 				theme.fg("warning", padR(fmtMoney(b.cost), costW)) +
 				"  " +
-				theme.fg("dim", padR(fmtInt(b.messages), msgW)) +
+				theme.fg("dim", padR(fmtInt(b.usageEntries), usageW)) +
 				"  " +
 				theme.fg("dim", padR(fmtInt(b.sessions.size), sessW)),
 		);
 	}
 
-	lines.push(theme.fg("dim", "─".repeat(monthW + 2 + costW + 2 + msgW + 2 + sessW)));
+	lines.push(theme.fg("dim", "─".repeat(monthW + 2 + costW + 2 + usageW + 2 + sessW)));
 	lines.push(
 		theme.bold(theme.fg("accent", padL("Total", monthW))) +
 			"  " +
 			theme.bold(theme.fg("warning", padR(fmtMoney(totals.cost), costW))) +
 			"  " +
-			theme.bold(theme.fg("muted", padR(fmtInt(totals.messages), msgW))) +
+			theme.bold(theme.fg("muted", padR(fmtInt(totals.usageEntries), usageW))) +
 			"  " +
 			theme.bold(theme.fg("muted", padR(fmtInt(totals.sessions), sessW))),
 	);
@@ -217,10 +214,10 @@ async function showTotals(totals: Totals, ctx: ExtensionCommandContext): Promise
 		plain.push("Total Cost by Month");
 		plain.push("===================");
 		for (const b of totals.byMonth) {
-			plain.push(`${b.month}  ${fmtMoney(b.cost).padStart(10)}  ${fmtInt(b.messages).padStart(8)} msgs  ${fmtInt(b.sessions.size).padStart(4)} sessions`);
+			plain.push(`${b.month}  ${fmtMoney(b.cost).padStart(10)}  ${fmtInt(b.usageEntries).padStart(8)} entries  ${fmtInt(b.sessions.size).padStart(4)} sessions`);
 		}
 		plain.push("-------------------");
-		plain.push(`Total     ${fmtMoney(totals.cost).padStart(10)}  ${fmtInt(totals.messages).padStart(8)} msgs  ${fmtInt(totals.sessions).padStart(4)} sessions`);
+		plain.push(`Total     ${fmtMoney(totals.cost).padStart(10)}  ${fmtInt(totals.usageEntries).padStart(8)} entries  ${fmtInt(totals.sessions).padStart(4)} sessions`);
 		console.log(plain.join("\n"));
 		return;
 	}
