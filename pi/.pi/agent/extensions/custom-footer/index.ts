@@ -12,9 +12,9 @@
  * https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/modes/interactive/components/footer.ts
  */
 
-import type { AssistantMessage } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth } from "@mariozechner/pi-tui";
+import { sumSessionUsage } from "../lib/session-usage.ts";
 import { OutputTokenRateTracker } from "./token-rate.ts";
 
 const ENTRY_TYPE = "custom-footer";
@@ -119,22 +119,12 @@ export default function (pi: ExtensionAPI) {
 					pwdLine = truncateToWidth(pwdLine, width, theme.fg("dim", "…"));
 
 					// Line 2: model + thinking/fast status + usage stats
-					let totalInput = 0;
-					let totalOutput = 0;
-					let totalCacheRead = 0;
-					let totalCacheWrite = 0;
-					let totalCost = 0;
-
-					for (const entry of ctx.sessionManager.getEntries()) {
-						if (entry.type === "message" && entry.message.role === "assistant") {
-							const m = entry.message as AssistantMessage;
-							totalInput += m.usage.input;
-							totalOutput += m.usage.output;
-							totalCacheRead += m.usage.cacheRead;
-							totalCacheWrite += m.usage.cacheWrite;
-							totalCost += m.usage.cost.total;
-						}
-					}
+					const usage = sumSessionUsage(ctx.sessionManager.getEntries());
+					const totalInput = usage.input;
+					const totalOutput = usage.output;
+					const totalCacheRead = usage.cacheRead;
+					const totalCacheWrite = usage.cacheWrite;
+					const totalCost = usage.cost.total;
 
 					const contextUsage = ctx.getContextUsage();
 					const contextWindow = contextUsage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
