@@ -12,6 +12,7 @@ main() {
     setup_bashrc
     setup_gitconfig
     setup_tmux
+    setup_macos_defaults
     unminimize_ubuntu
     mise_install
     stow_dotfiles
@@ -169,6 +170,32 @@ is_macos() {
         return 0
     else
         return 1
+    fi
+}
+
+setup_macos_defaults() {
+    if ! is_macos; then
+        return
+    fi
+
+    local restart_finder=0
+    local current_tabbing_mode
+    current_tabbing_mode="$(defaults read -g AppleWindowTabbingMode 2>/dev/null || true)"
+    if [ "$current_tabbing_mode" != "always" ]; then
+        defaults write -g AppleWindowTabbingMode -string always
+        restart_finder=1
+    fi
+
+    local current_spawn_tab
+    current_spawn_tab="$(defaults read com.apple.finder FinderSpawnTab 2>/dev/null || true)"
+    if [ "$current_spawn_tab" != "1" ]; then
+        defaults write com.apple.finder FinderSpawnTab -bool true
+        restart_finder=1
+    fi
+
+    if (( restart_finder )); then
+        echo "-> configure Finder to open folders in tabs"
+        killall Finder 2>/dev/null || true
     fi
 }
 
