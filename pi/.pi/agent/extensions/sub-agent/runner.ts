@@ -1,7 +1,10 @@
 import { spawn as nodeSpawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { basename } from "node:path";
+import { randomBytes } from "node:crypto";
+import { existsSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
+import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateHead } from "@earendil-works/pi-coding-agent";
 import type {
 	ActivityEvent,
 	AgentRunConfig,
@@ -20,7 +23,8 @@ import {
 
 export const MAX_ACTIVITY_EVENTS = 100;
 export const MAX_ACTIVITY_BYTES = 512;
-export const MAX_FINAL_OUTPUT_BYTES = 256 * 1024;
+export const MAX_FINAL_OUTPUT_BYTES = DEFAULT_MAX_BYTES;
+export const MAX_FINAL_OUTPUT_LINES = DEFAULT_MAX_LINES;
 export const MAX_LIVE_OUTPUT_BYTES = 64 * 1024;
 export const MAX_STDERR_BYTES = 64 * 1024;
 export const MAX_JSON_LINE_BYTES = 8 * 1024 * 1024;
@@ -203,6 +207,17 @@ function assistantText(message: Record<string, unknown>): string {
 		.join("\n");
 }
 
+function finalAssistantOutput(rawEvent: unknown): string | undefined {
+	const event = recordValue(rawEvent);
+	if (event.type !== "message_end") return undefined;
+	const message = recordValue(event.message);
+	return message.role === "assistant" ? assistantText(message) : undefined;
+}
+
+function createFullOutputPath(id: string): string {
+	return join(tmpdir(), `pi-sub-agent-${id}-${randomBytes(8).toString("hex")}.log`);
+}
+
 /** Reduce one Pi JSON event without retaining raw thinking or tool output. */
 export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown): RunnerProgress {
 	const event = recordValue(rawEvent);
@@ -248,7 +263,13 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown): Ru
 			if (message.usage !== undefined) reconcileStreamingUsage(next, message.usage);
 			next.streamingUsage = undefined;
 			const output = assistantText(message);
-			next.finalOutput = truncateUtf8Head(output, MAX_FINAL_OUTPUT_BYTES);
+			const truncation = truncateHead(output, {
+				maxLines: MAX_FINAL_OUTPUT_LINES,
+				maxBytes: MAX_FINAL_OUTPUT_BYTES,
+			});
+			next.finalOutput = truncation.content;
+			next.finalOutputTruncation = truncation.truncated ? truncation : undefined;
+			next.fullOutputPath = undefined;
 			next.liveOutput = truncateUtf8Tail(output, MAX_LIVE_OUTPUT_BYTES);
 			next.finalStopReason = stringValue(message.stopReason);
 			next.finalError = stringValue(message.errorMessage);
@@ -469,7 +490,19 @@ export class PiProcessRunner implements AgentRunner {
 						activeToolSummaries.delete(toolCallId);
 						if (activitySummary) reducedEvent = { ...event, activitySummary };
 					}
-					publish(reduceJsonEvent(progress, reducedEvent));
+					let next = reduceJsonEvent(progress, reducedEvent);
+					const fullOutput = finalAssistantOutput(reducedEvent);
+					if (fullOutput !== undefined && next.finalOutputTruncation?.truncated) {
+						try {
+							const fullOutputPath = createFullOutputPath(config.id);
+							writeFileSync(fullOutputPath, fullOutput, "utf8");
+							next.fullOutputPath = fullOutputPath;
+						} catch (error) {
+							const message = error instanceof Error ? error.message : String(error);
+							next = addDiagnostic(next, `could not save full output: ${message}`);
+						}
+					}
+					publish(next);
 				} catch (error) {
 					const message = error instanceof Error ? error.message : String(error);
 					diagnostic(`malformed JSON event: ${message}`);

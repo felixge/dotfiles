@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { readFile, unlink } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
 	LfDelimitedJsonReader,
 	MAX_ACTIVITY_EVENTS,
 	MAX_FINAL_OUTPUT_BYTES,
+	MAX_FINAL_OUTPUT_LINES,
 	PiProcessRunner,
 	createInitialProgress,
 	reduceJsonEvent,
@@ -186,6 +188,7 @@ test("event reducer bounds final output and activity", () => {
 	});
 	assert.equal(state.activity.length, MAX_ACTIVITY_EVENTS);
 	assert.ok(Buffer.byteLength(state.finalOutput ?? "") <= MAX_FINAL_OUTPUT_BYTES);
+	assert.equal(state.finalOutputTruncation?.truncated, true);
 });
 
 test("process runner uses the isolated Pi CLI policy and consumes deterministic JSON output", async () => {
@@ -217,6 +220,21 @@ test("process runner uses the isolated Pi CLI policy and consumes deterministic 
 		"--no-approve",
 	]);
 	assert.equal(piArgs[piArgs.indexOf("--tools") + 1], "read,grep,find,ls");
+});
+
+test("process runner saves full truncated output to a temp file", async () => {
+	const runner = new PiProcessRunner({
+		resolveInvocation: () => ({ command: process.execPath, args: [fixture, "large"] }),
+		timeoutMs: 2_000,
+	});
+	const result = await runner.start(config, () => {}).result;
+	assert.equal(result.progress.finalOutputTruncation?.truncatedBy, "lines");
+	assert.equal(result.progress.finalOutputTruncation?.outputLines, MAX_FINAL_OUTPUT_LINES);
+	assert.ok(result.progress.fullOutputPath);
+	const fullOutput = await readFile(result.progress.fullOutputPath, "utf8");
+	assert.equal(fullOutput.split("\n").length, 2_500);
+	assert.match(fullOutput, /line 2500$/u);
+	await unlink(result.progress.fullOutputPath);
 });
 
 test("process runner records malformed JSON diagnostics and bounds stderr", async () => {

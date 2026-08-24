@@ -77,6 +77,8 @@ function cloneSnapshot(run: ManagedRun): AgentSnapshot {
 		turns: run.turns,
 		usage: Object.freeze({ ...run.usage, cost: Object.freeze({ ...run.usage.cost }) }),
 		finalOutput: run.finalOutput,
+		finalOutputTruncation: run.finalOutputTruncation,
+		fullOutputPath: run.fullOutputPath,
 		liveOutput: run.liveOutput,
 		error: run.error,
 		stderr: run.stderr,
@@ -349,6 +351,8 @@ export class AgentManager {
 		run.turns = progress.turns;
 		run.usage = cloneUsageSummary(progress.usage);
 		run.finalOutput = progress.finalOutput;
+		run.finalOutputTruncation = progress.finalOutputTruncation;
+		run.fullOutputPath = progress.fullOutputPath;
 		run.liveOutput = progress.liveOutput;
 		run.activity = progress.activity.map((event) => ({ ...event }));
 		if (progress.finalError) run.error = progress.finalError;

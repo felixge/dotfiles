@@ -5,6 +5,7 @@ if (mode === "hang") {
 } else {
 	if (mode === "malformed") process.stdout.write("not-json\n");
 	if (mode === "stderr") process.stderr.write("e".repeat(10_000));
+	const finalOutput = mode === "large" ? Array.from({ length: 2_500 }, (_, index) => `line ${index + 1}`).join("\n") : "fixture result";
 	const events = [
 		{ type: "agent_start" },
 		{ type: "turn_start", turnIndex: 0 },
@@ -18,7 +19,7 @@ if (mode === "hang") {
 			type: "message_end",
 			message: {
 				role: "assistant",
-				content: [{ type: "text", text: "fixture result" }],
+				content: [{ type: "text", text: finalOutput }],
 				usage: {
 					input: 10,
 					output: 3,

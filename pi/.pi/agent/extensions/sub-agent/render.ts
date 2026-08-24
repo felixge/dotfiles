@@ -1,4 +1,12 @@
-import { getMarkdownTheme, type Theme } from "@earendil-works/pi-coding-agent";
+import {
+	DEFAULT_MAX_BYTES,
+	DEFAULT_MAX_LINES,
+	formatSize,
+	getMarkdownTheme,
+	truncateHead,
+	type Theme,
+	type TruncationResult,
+} from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { truncateUtf8Head } from "./runner.ts";
 import type {
@@ -10,7 +18,7 @@ import type {
 } from "./types.ts";
 import { addUsageSummary, cloneUsageSummary, createUsageSummary } from "./types.ts";
 
-export const MODEL_VISIBLE_OUTPUT_BYTES = 50 * 1024;
+export const MODEL_VISIBLE_OUTPUT_BYTES = DEFAULT_MAX_BYTES;
 export const MODEL_VISIBLE_DIAGNOSTIC_BYTES = 8 * 1024;
 
 export function formatDuration(milliseconds: number): string {
@@ -59,11 +67,32 @@ export function preview(value: string, length = 80): string {
 	return singleLine.length > length ? `${singleLine.slice(0, length - 3)}...` : singleLine;
 }
 
-export function truncateModelVisibleOutput(output: string): string {
-	if (Buffer.byteLength(output, "utf8") <= MODEL_VISIBLE_OUTPUT_BYTES) return output;
-	const suffix = "\n\n[Output truncated at 50 KB. The bounded full result remains in tool details.]";
-	const truncated = truncateUtf8Head(output, MODEL_VISIBLE_OUTPUT_BYTES - Buffer.byteLength(suffix, "utf8"));
-	return `${truncated}${suffix}`;
+export function truncateModelVisibleOutput(
+	output: string,
+	truncation?: TruncationResult,
+	fullOutputPath?: string,
+): string {
+	const effective = truncation ?? truncateHead(output, {
+		maxLines: DEFAULT_MAX_LINES,
+		maxBytes: MODEL_VISIBLE_OUTPUT_BYTES,
+	});
+	if (!effective.truncated) return output;
+
+	const location = fullOutputPath ? ` Full output: ${fullOutputPath}` : " Full output unavailable.";
+	const formatNotice = (outputLines: number, outputBytes: number) =>
+		`[Output truncated: showing ${outputLines} of ${effective.totalLines} lines ` +
+		`(${formatSize(outputBytes)} of ${formatSize(effective.totalBytes)}).${location}]`;
+	const provisionalNotice = formatNotice(effective.outputLines, effective.outputBytes);
+	const availableBytes = Math.max(
+		0,
+		MODEL_VISIBLE_OUTPUT_BYTES - Buffer.byteLength(`\n\n${provisionalNotice}`, "utf8"),
+	);
+	const visible = truncateHead(output, {
+		maxLines: DEFAULT_MAX_LINES,
+		maxBytes: availableBytes,
+	});
+	const notice = formatNotice(visible.outputLines, visible.outputBytes);
+	return `${visible.content ? `${visible.content}\n\n` : ""}${notice}`;
 }
 
 export function truncateModelVisibleDiagnostic(diagnostic: string): string {
@@ -187,6 +216,9 @@ export function renderWaitResult(
 		);
 		if (item.error) container.addChild(new Text(theme.fg("error", item.error), 0, 0));
 		if (item.output) container.addChild(new Markdown(item.output, 0, 0, getMarkdownTheme()));
+		if (item.fullOutputPath) {
+			container.addChild(new Text(theme.fg("warning", `Full output: ${item.fullOutputPath}`), 0, 0));
+		}
 	}
 	if (usage) {
 		container.addChild(new Spacer(1));
@@ -202,6 +234,8 @@ export function waitResultFromSnapshot(run: AgentSnapshot): WaitResult {
 		...(run.name ? { name: run.name } : {}),
 		status: run.status,
 		output: run.finalOutput ?? "",
+		...(run.finalOutputTruncation ? { outputTruncation: run.finalOutputTruncation } : {}),
+		...(run.fullOutputPath ? { fullOutputPath: run.fullOutputPath } : {}),
 		...(run.error ? { error: run.error } : {}),
 		model: run.model,
 		thinking: run.thinking,

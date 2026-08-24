@@ -88,12 +88,15 @@ async function resolveSpawnConfig(
 	};
 }
 
-function modelVisibleResults(results: WaitResult[]): WaitResult[] {
-	return results.map((result) => ({
-		...result,
-		output: truncateModelVisibleOutput(result.output),
-		...(result.error ? { error: truncateModelVisibleDiagnostic(result.error) } : {}),
-	}));
+export function modelVisibleResults(results: WaitResult[]): WaitResult[] {
+	return results.map((result) => {
+		const { outputTruncation, ...visible } = result;
+		return {
+			...visible,
+			output: truncateModelVisibleOutput(result.output, outputTruncation, result.fullOutputPath),
+			...(result.error ? { error: truncateModelVisibleDiagnostic(result.error) } : {}),
+		};
+	});
 }
 
 function footerText(snapshots: ReturnType<AgentManager["getAll"]>): string | undefined {
@@ -162,7 +165,7 @@ export default function subAgentExtension(pi: ExtensionAPI): void {
 		name: "agent_wait",
 		label: "Wait for Agents",
 		description:
-			"Wait for one or more background sub-agents. Escaping this tool stops only the wait; it does not cancel any sub-agent. Outputs are capped at 50 KB per agent in model-visible content.",
+			"Wait for one or more background sub-agents. Escaping this tool stops only the wait; it does not cancel any sub-agent. Outputs are capped at 50 KB or 2,000 lines per agent; full truncated output is saved to a temp file.",
 		promptSnippet: "Wait for background sub-agents and collect their results",
 		parameters: AgentWaitParams,
 		async execute(_toolCallId, params, signal, onUpdate) {

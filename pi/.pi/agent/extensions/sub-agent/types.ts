@@ -1,4 +1,5 @@
 import type { Usage } from "@earendil-works/pi-ai";
+import type { TruncationResult } from "@earendil-works/pi-coding-agent";
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type AgentAccess = "read" | "write";
@@ -82,6 +83,8 @@ export interface AgentRun extends AgentRunConfig {
 	turns: number;
 	usage: UsageSummary;
 	finalOutput?: string;
+	finalOutputTruncation?: TruncationResult;
+	fullOutputPath?: string;
 	liveOutput: string;
 	error?: string;
 	stderr: string;
@@ -99,6 +102,8 @@ export interface RunnerProgress {
 	usage: UsageSummary;
 	streamingUsage?: UsageSummary;
 	finalOutput?: string;
+	finalOutputTruncation?: TruncationResult;
+	fullOutputPath?: string;
 	liveOutput: string;
 	finalStopReason?: string;
 	finalError?: string;
@@ -130,6 +135,8 @@ export interface WaitResult {
 	name?: string;
 	status: TerminalAgentStatus;
 	output: string;
+	outputTruncation?: TruncationResult;
+	fullOutputPath?: string;
 	error?: string;
 	model: string;
 	thinking: ThinkingLevel;

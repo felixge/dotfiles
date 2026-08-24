@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { truncateHead } from "@earendil-works/pi-coding-agent";
 import { AgentManager, resolveCanonicalCwd } from "../manager.ts";
 import { createInitialProgress } from "../runner.ts";
 import type {
@@ -115,6 +116,24 @@ test("manager preserves optional agent names in snapshots and runner config", as
 
 	runner.complete(named.id);
 	await tick();
+});
+
+test("manager snapshots preserve truncated output metadata", async () => {
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { idFactory: ids() });
+	const run = manager.spawn(request("/repo"));
+	const fullOutput = Array.from({ length: 2_500 }, (_, index) => `line ${index + 1}`).join("\n");
+	const truncation = truncateHead(fullOutput);
+	runner.complete(run.id, {
+		finalOutput: truncation.content,
+		finalOutputTruncation: truncation,
+		fullOutputPath: "/tmp/full-output.log",
+	});
+	await tick();
+
+	const [snapshot] = await manager.wait([run.id]);
+	assert.equal(snapshot.fullOutputPath, "/tmp/full-output.log");
+	assert.deepEqual(snapshot.finalOutputTruncation, truncation);
 });
 
 test("cancelling a queued run never starts it and cancelling a running run stops it", async () => {
