@@ -57,6 +57,10 @@ export function getSessionEntryUsage(value: unknown): SessionUsage | undefined {
 	if (entry.type === "compaction" || entry.type === "branch_summary") {
 		return normalizeUsage(entry.usage);
 	}
+
+	if (entry.type === "custom" && entry.customType === "btw-history") {
+		return normalizeUsage(record(entry.data)?.usage);
+	}
 	return undefined;
 }
 

@@ -19,14 +19,15 @@ test("sums all usage-bearing session entry types", () => {
 		{ type: "message", message: { role: "toolResult", usage: usage(2, 20) } },
 		{ type: "compaction", usage: usage(3, 30) },
 		{ type: "branch_summary", usage: usage(4, 40) },
+		{ type: "custom", customType: "btw-history", data: { usage: usage(5, 50) } },
 	]);
 
-	assert.equal(total.input, 100);
-	assert.equal(total.output, 8);
-	assert.equal(total.cacheRead, 12);
-	assert.equal(total.cacheWrite, 16);
-	assert.equal(total.totalTokens, 136);
-	assert.equal(total.cost.total, 10);
+	assert.equal(total.input, 150);
+	assert.equal(total.output, 10);
+	assert.equal(total.cacheRead, 15);
+	assert.equal(total.cacheWrite, 20);
+	assert.equal(total.totalTokens, 195);
+	assert.equal(total.cost.total, 15);
 });
 
 test("does not count usage metadata or unrelated messages", () => {
