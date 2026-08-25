@@ -58,6 +58,14 @@ function padColumnStart(value: string, width: number): string {
 	return " ".repeat(Math.max(0, width - visibleWidth(clipped))) + clipped;
 }
 
+function structuredActivity(run: AgentSnapshot, now = Date.now()): string {
+	const operation = run.activeOperations.at(-1);
+	if (operation) {
+		return `${operation.summary} ${formatDuration(now - operation.startedAt)} quiet ${formatDuration(now - operation.lastUpdatedAt)}`;
+	}
+	return run.phase.summary ?? run.phase.kind.replaceAll("_", " ");
+}
+
 class AgentsDashboard {
 	private selected = 0;
 	private selectedId?: string;
@@ -179,7 +187,7 @@ class AgentsDashboard {
 			let line = `${selected ? this.theme.fg("accent", ">") : " "} ${coloredStatus} ${agent} ${cost} ${tokenRate}`;
 			if (showElapsed) line += ` ${elapsed.padEnd(9)}`;
 			if (showModel) line += ` ${model.padEnd(20)}`;
-			if (showCurrent) line += ` ${run.currentActivity ?? run.status}`;
+			if (showCurrent) line += ` ${structuredActivity(run)}`;
 			lines.push(selected ? this.theme.bg("selectedBg", truncateToWidth(line, width)) : truncateToWidth(line, width));
 		}
 		lines.push(this.theme.fg("dim", " Up/Down select  Enter details  x cancel  Esc close"));
@@ -204,8 +212,13 @@ class AgentsDashboard {
 			` Cost: ${formatCost(run.usage.cost.total)}`,
 			` Token rate (15s avg): ${formatTokenRate(run.tokensPerSecond15s)} tok/s`,
 			` Usage: ${formatUsage(run.usage) || "none"}`,
-			` Current: ${run.currentActivity ?? run.status}`,
+			` Phase: ${run.phase.kind} (${formatDuration((run.endedAt ?? Date.now()) - run.phase.startedAt)})`,
+			` Quiet: ${formatDuration((run.endedAt ?? Date.now()) - run.lastProgressAt)}`,
+			` Current: ${structuredActivity(run)}`,
 		];
+		for (const operation of run.activeOperations) {
+			lines.push(` Active: ${operation.summary} (${formatDuration(Date.now() - operation.startedAt)}, quiet ${formatDuration(Date.now() - operation.lastUpdatedAt)})`);
+		}
 		if (run.error) lines.push(` Error: ${run.error}`);
 
 		const promptLines = wrapTextWithAnsi(run.prompt, Math.max(1, width - 2)).slice(0, 3);

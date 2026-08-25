@@ -22,6 +22,8 @@ import {
 } from "./types.ts";
 
 export const MAX_ACTIVITY_EVENTS = 100;
+export const MAX_ACTIVE_OPERATIONS = 100;
+export const MAX_RECENT_OPERATIONS = 100;
 export const MAX_ACTIVITY_BYTES = 512;
 export const MAX_FINAL_OUTPUT_BYTES = DEFAULT_MAX_BYTES;
 export const MAX_FINAL_OUTPUT_LINES = DEFAULT_MAX_LINES;
@@ -66,10 +68,17 @@ export interface ProcessRunnerOptions {
 	timeoutMs?: number;
 	killGraceMs?: number;
 	maxStderrBytes?: number;
+	now?: () => number;
 }
 
-export function createInitialProgress(): RunnerProgress {
+export function createInitialProgress(now = Date.now()): RunnerProgress {
 	return {
+		revision: 0,
+		lastProgressAt: now,
+		phase: { kind: "starting", startedAt: now },
+		activeOperations: [],
+		recentOperations: [],
+		currentActivity: "starting",
 		turns: 0,
 		usage: createUsageSummary(),
 		outputTokens: 0,
@@ -83,6 +92,9 @@ export function createInitialProgress(): RunnerProgress {
 function cloneProgress(progress: RunnerProgress): RunnerProgress {
 	return {
 		...progress,
+		phase: { ...progress.phase },
+		activeOperations: progress.activeOperations.map((operation) => ({ ...operation })),
+		recentOperations: progress.recentOperations.map((operation) => ({ ...operation })),
 		usage: cloneUsageSummary(progress.usage),
 		streamingUsage: progress.streamingUsage ? cloneUsageSummary(progress.streamingUsage) : undefined,
 		activity: progress.activity.map((event) => ({ ...event })),
@@ -157,10 +169,10 @@ function reconcileStreamingUsage(progress: RunnerProgress, raw: unknown): void {
 	progress.streamingOutputTokens = outputTokens;
 }
 
-function addActivity(progress: RunnerProgress, summary: string, isError = false): void {
+function addActivity(progress: RunnerProgress, summary: string, isError = false, now = Date.now()): void {
 	const bounded = truncateUtf8Head(summary.replace(/\s+/gu, " ").trim(), MAX_ACTIVITY_BYTES);
 	if (!bounded) return;
-	const event: ActivityEvent = { timestamp: Date.now(), summary: bounded };
+	const event: ActivityEvent = { timestamp: now, summary: bounded };
 	if (isError) event.isError = true;
 	progress.activity.push(event);
 	if (progress.activity.length > MAX_ACTIVITY_EVENTS) {
@@ -168,9 +180,41 @@ function addActivity(progress: RunnerProgress, summary: string, isError = false)
 	}
 }
 
-export function addDiagnostic(progress: RunnerProgress, diagnostic: string): RunnerProgress {
+function addOperation(progress: RunnerProgress, operation: RunnerProgress["recentOperations"][number]): void {
+	progress.recentOperations.push(operation);
+	if (progress.recentOperations.length > MAX_RECENT_OPERATIONS) {
+		progress.recentOperations.splice(0, progress.recentOperations.length - MAX_RECENT_OPERATIONS);
+	}
+}
+
+function setPhase(
+	progress: RunnerProgress,
+	kind: RunnerProgress["phase"]["kind"],
+	now: number,
+	summary?: string,
+): void {
+	if (progress.phase.kind === kind && progress.phase.summary === summary) return;
+	progress.phase = { kind, startedAt: now, ...(summary ? { summary } : {}) };
+}
+
+function refreshCurrentActivity(progress: RunnerProgress): void {
+	const active = progress.activeOperations.at(-1);
+	if (active) {
+		progress.currentActivity = active.summary;
+		return;
+	}
+	if (progress.phase.summary) {
+		progress.currentActivity = progress.phase.summary;
+		return;
+	}
+	progress.currentActivity = progress.phase.kind.replaceAll("_", " ");
+}
+
+export function addDiagnostic(progress: RunnerProgress, diagnostic: string, now = Date.now()): RunnerProgress {
 	const next = cloneProgress(progress);
-	addActivity(next, diagnostic, true);
+	next.revision += 1;
+	next.lastProgressAt = now;
+	addActivity(next, diagnostic, true, now);
 	return next;
 }
 
@@ -204,6 +248,10 @@ export function formatToolActivity(toolName: string, rawArgs: unknown): string {
 	}
 }
 
+function boundedOperationSummary(toolName: string, rawArgs: unknown): string {
+	return truncateUtf8Head(formatToolActivity(toolName, rawArgs).replace(/\s+/gu, " ").trim(), MAX_ACTIVITY_BYTES);
+}
+
 function assistantText(message: Record<string, unknown>): string {
 	if (!Array.isArray(message.content)) return "";
 	return message.content
@@ -225,19 +273,27 @@ function createFullOutputPath(id: string): string {
 }
 
 /** Reduce one Pi JSON event without retaining raw thinking or tool output. */
-export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown): RunnerProgress {
+export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown, now = Date.now()): RunnerProgress {
 	const event = recordValue(rawEvent);
 	const type = stringValue(event.type);
-	if (!type) return progress;
+	const meaningful = new Set([
+		"agent_start", "turn_start", "message_start", "message_update", "message_end",
+		"tool_execution_start", "tool_execution_update", "tool_execution_end",
+		"auto_retry_start", "auto_retry_end", "compaction_start", "compaction_end",
+		"agent_settled", "extension_error",
+	]);
+	if (!type || !meaningful.has(type)) return progress;
 
 	const next = cloneProgress(progress);
+	next.revision += 1;
+	next.lastProgressAt = now;
 	switch (type) {
 		case "agent_start":
-			next.currentActivity = "starting";
+			setPhase(next, "starting", now);
 			break;
 		case "turn_start":
 			next.turns += 1;
-			next.currentActivity = "thinking";
+			setPhase(next, "waiting_for_model", now);
 			break;
 		case "message_start": {
 			const message = recordValue(event.message);
@@ -245,6 +301,7 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown): Ru
 				next.liveOutput = "";
 				next.streamingUsage = undefined;
 				next.streamingOutputTokens = undefined;
+				setPhase(next, "waiting_for_model", now);
 			}
 			break;
 		}
@@ -253,8 +310,9 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown): Ru
 			const update = recordValue(event.assistantMessageEvent);
 			const updateType = stringValue(update.type);
 			if (updateType === "thinking_start" || updateType === "thinking_delta" || updateType === "thinking_end") {
-				next.currentActivity = "thinking";
-			} else if (updateType === "text_delta") {
+				setPhase(next, "thinking", now);
+			} else if (updateType === "text_start" || updateType === "text_delta" || updateType === "text_end") {
+				setPhase(next, "responding", now);
 				const delta = stringValue(update.delta);
 				if (delta) next.liveOutput = appendUtf8Tail(next.liveOutput, delta, MAX_LIVE_OUTPUT_BYTES);
 			}
@@ -282,35 +340,92 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown): Ru
 			next.finalStopReason = stringValue(message.stopReason);
 			next.finalError = stringValue(message.errorMessage);
 			next.finalAssistantSeen = true;
+			setPhase(next, "responding", now);
 			break;
 		}
-		case "tool_execution_start":
-		case "tool_execution_update":
-			next.currentActivity = formatToolActivity(stringValue(event.toolName) ?? "tool", event.args);
+		case "tool_execution_start": {
+			const rawToolCallId = stringValue(event.toolCallId);
+			const toolCallId = rawToolCallId ? truncateUtf8Head(rawToolCallId, 256) : undefined;
+			const tool = truncateUtf8Head(stringValue(event.toolName) ?? "tool", 128);
+			const summary = boundedOperationSummary(tool, event.args);
+			if (toolCallId) {
+				const existing = next.activeOperations.findIndex((operation) => operation.toolCallId === toolCallId);
+				const operation = { toolCallId, tool, summary, startedAt: now, lastUpdatedAt: now };
+				if (existing >= 0) next.activeOperations[existing] = operation;
+				else next.activeOperations.push(operation);
+				if (next.activeOperations.length > MAX_ACTIVE_OPERATIONS) {
+					next.activeOperations.splice(0, next.activeOperations.length - MAX_ACTIVE_OPERATIONS);
+				}
+			}
+			setPhase(next, "using_tools", now, toolCallId ? undefined : summary);
 			break;
+		}
+		case "tool_execution_update": {
+			const rawToolCallId = stringValue(event.toolCallId);
+			const toolCallId = rawToolCallId ? truncateUtf8Head(rawToolCallId, 256) : undefined;
+			const operation = next.activeOperations.find((candidate) => candidate.toolCallId === toolCallId);
+			if (operation) {
+				operation.tool = truncateUtf8Head(stringValue(event.toolName) ?? operation.tool, 128);
+				operation.summary = event.args === undefined ? operation.summary : boundedOperationSummary(operation.tool, event.args);
+				operation.lastUpdatedAt = now;
+			}
+			setPhase(next, "using_tools", now);
+			break;
+		}
 		case "tool_execution_end": {
-			const summary =
-				stringValue(event.activitySummary) ?? formatToolActivity(stringValue(event.toolName) ?? "tool", event.args);
+			const rawToolCallId = stringValue(event.toolCallId);
+			const toolCallId = rawToolCallId ? truncateUtf8Head(rawToolCallId, 256) : undefined;
+			const index = next.activeOperations.findIndex((operation) => operation.toolCallId === toolCallId);
+			const active = index >= 0 ? next.activeOperations[index] : undefined;
+			if (index >= 0) next.activeOperations.splice(index, 1);
+			const tool = truncateUtf8Head(active?.tool ?? stringValue(event.toolName) ?? "tool", 128);
+			const summary = truncateUtf8Head(
+				stringValue(event.activitySummary) ?? active?.summary ?? boundedOperationSummary(tool, event.args),
+				MAX_ACTIVITY_BYTES,
+			);
 			const isError = event.isError === true;
-			addActivity(next, `${summary} ${isError ? "failed" : "completed"}`, isError);
-			next.currentActivity = isError ? `${summary} failed` : summary;
+			addOperation(next, {
+				kind: "tool", tool, summary, ...(active ? { startedAt: active.startedAt } : {}), endedAt: now,
+				outcome: isError ? "failed" : "completed",
+			});
+			addActivity(next, `${summary} ${isError ? "failed" : "completed"}`, isError, now);
+			setPhase(next, next.activeOperations.length > 0 ? "using_tools" : "waiting_for_model", now);
 			break;
 		}
 		case "auto_retry_start": {
 			const attempt = numberValue(event.attempt);
 			const maxAttempts = numberValue(event.maxAttempts);
 			const delay = Math.max(0, Math.round(numberValue(event.delayMs) / 1000));
-			next.currentActivity = `retry ${attempt}/${maxAttempts} in ${delay}s`;
-			addActivity(next, next.currentActivity);
+			const summary = `retry ${attempt}/${maxAttempts} in ${delay}s`;
+			setPhase(next, "retrying", now, summary);
+			addActivity(next, summary, false, now);
+			break;
+		}
+		case "auto_retry_end": {
+			const previous = next.phase.kind === "retrying" ? next.phase : undefined;
+			const success = event.success === true;
+			addOperation(next, {
+				kind: "retry", summary: previous?.summary ?? `retry ${numberValue(event.attempt)}`,
+				...(previous ? { startedAt: previous.startedAt } : {}), endedAt: now,
+				outcome: success ? "completed" : "failed",
+			});
+			setPhase(next, "waiting_for_model", now);
 			break;
 		}
 		case "compaction_start":
-			next.currentActivity = "compacting context";
-			addActivity(next, next.currentActivity);
+			setPhase(next, "compacting", now, "compacting context");
+			addActivity(next, "compacting context", false, now);
 			break;
 		case "compaction_end": {
+			const previous = next.phase.kind === "compacting" ? next.phase : undefined;
 			const result = recordValue(event.result);
 			addUsage(next.usage, result.usage);
+			addOperation(next, {
+				kind: "compaction", summary: previous?.summary ?? "compacting context",
+				...(previous ? { startedAt: previous.startedAt } : {}), endedAt: now,
+				outcome: event.aborted === true ? "cancelled" : event.errorMessage ? "failed" : "completed",
+			});
+			setPhase(next, "waiting_for_model", now);
 			break;
 		}
 		case "agent_settled":
@@ -318,10 +433,11 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown): Ru
 			break;
 		case "extension_error": {
 			const message = stringValue(event.error) ?? "extension error";
-			addActivity(next, `extension error: ${message}`, true);
+			addActivity(next, `extension error: ${message}`, true, now);
 			break;
 		}
 	}
+	refreshCurrentActivity(next);
 	return next;
 }
 
@@ -411,6 +527,7 @@ export class PiProcessRunner implements AgentRunner {
 	private readonly timeoutMs: number;
 	private readonly killGraceMs: number;
 	private readonly maxStderrBytes: number;
+	private readonly now: () => number;
 
 	constructor(options: ProcessRunnerOptions = {}) {
 		this.spawnProcess = options.spawn ?? defaultSpawn;
@@ -418,6 +535,7 @@ export class PiProcessRunner implements AgentRunner {
 		this.timeoutMs = options.timeoutMs ?? DEFAULT_RUN_TIMEOUT_MS;
 		this.killGraceMs = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
 		this.maxStderrBytes = options.maxStderrBytes ?? MAX_STDERR_BYTES;
+		this.now = options.now ?? Date.now;
 	}
 
 	start(config: AgentRunConfig, onProgress: (progress: RunnerProgress) => void): RunningAgentProcess {
@@ -439,7 +557,7 @@ export class PiProcessRunner implements AgentRunner {
 			config.prompt,
 		];
 		const invocation = this.resolveInvocation(args);
-		let progress = createInitialProgress();
+		let progress = createInitialProgress(this.now());
 		let child: ChildProcessLike;
 
 		try {
@@ -475,30 +593,13 @@ export class PiProcessRunner implements AgentRunner {
 			progress = next;
 			onProgress(cloneProgress(progress));
 		};
-		const diagnostic = (message: string) => publish(addDiagnostic(progress, message));
-		const activeToolSummaries = new Map<string, string>();
+		const diagnostic = (message: string) => publish(addDiagnostic(progress, message, this.now()));
 		const stdoutReader = new LfDelimitedJsonReader(
 			(line) => {
 				try {
 					const parsed = JSON.parse(line) as unknown;
-					const event = recordValue(parsed);
-					const toolCallId = stringValue(event.toolCallId);
-					if ((event.type === "tool_execution_start" || event.type === "tool_execution_update") && toolCallId) {
-						activeToolSummaries.set(
-							toolCallId,
-							formatToolActivity(stringValue(event.toolName) ?? "tool", event.args),
-						);
-						if (activeToolSummaries.size > MAX_ACTIVITY_EVENTS) {
-							activeToolSummaries.delete(activeToolSummaries.keys().next().value as string);
-						}
-					}
-					let reducedEvent = parsed;
-					if (event.type === "tool_execution_end" && toolCallId) {
-						const activitySummary = activeToolSummaries.get(toolCallId);
-						activeToolSummaries.delete(toolCallId);
-						if (activitySummary) reducedEvent = { ...event, activitySummary };
-					}
-					let next = reduceJsonEvent(progress, reducedEvent);
+					const reducedEvent = parsed;
+					let next = reduceJsonEvent(progress, reducedEvent, this.now());
 					const fullOutput = finalAssistantOutput(reducedEvent);
 					if (fullOutput !== undefined && next.finalOutputTruncation?.truncated) {
 						try {

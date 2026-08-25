@@ -6,6 +6,40 @@ export type AgentAccess = "read" | "write";
 export type AgentStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
 export type TerminalAgentStatus = Extract<AgentStatus, "completed" | "failed" | "cancelled" | "interrupted">;
 export type UsageSummary = Usage;
+export type AgentPhaseKind =
+	| "queued"
+	| "starting"
+	| "waiting_for_model"
+	| "thinking"
+	| "responding"
+	| "using_tools"
+	| "retrying"
+	| "compacting"
+	| "cancelling"
+	| TerminalAgentStatus;
+
+export interface AgentPhase {
+	kind: AgentPhaseKind;
+	startedAt: number;
+	summary?: string;
+}
+
+export interface ActiveOperation {
+	toolCallId: string;
+	tool: string;
+	summary: string;
+	startedAt: number;
+	lastUpdatedAt: number;
+}
+
+export interface OperationEvent {
+	kind: "tool" | "retry" | "compaction";
+	tool?: string;
+	summary: string;
+	startedAt?: number;
+	endedAt: number;
+	outcome: "completed" | "failed" | "cancelled";
+}
 
 export function createUsageSummary(): UsageSummary {
 	return {
@@ -58,6 +92,7 @@ export function hasUsage(usage: Readonly<UsageSummary>): boolean {
 	);
 }
 
+/** Legacy dashboard event retained for session compatibility. */
 export interface ActivityEvent {
 	timestamp: number;
 	summary: string;
@@ -81,6 +116,11 @@ export interface AgentRun extends AgentRunConfig {
 	createdAt: number;
 	startedAt?: number;
 	endedAt?: number;
+	revision: number;
+	lastProgressAt: number;
+	phase: AgentPhase;
+	activeOperations: ActiveOperation[];
+	recentOperations: OperationEvent[];
 	currentActivity?: string;
 	turns: number;
 	usage: UsageSummary;
@@ -94,13 +134,21 @@ export interface AgentRun extends AgentRunConfig {
 	activity: ActivityEvent[];
 }
 
-export interface AgentSnapshot extends Readonly<Omit<AgentRun, "usage" | "activity" | "outputTokens">> {
+export interface AgentSnapshot extends Readonly<Omit<AgentRun, "usage" | "activity" | "outputTokens" | "phase" | "activeOperations" | "recentOperations">> {
 	readonly usage: Readonly<UsageSummary>;
 	readonly tokensPerSecond15s?: number;
+	readonly phase: Readonly<AgentPhase>;
+	readonly activeOperations: readonly Readonly<ActiveOperation>[];
+	readonly recentOperations: readonly Readonly<OperationEvent>[];
 	readonly activity: readonly Readonly<ActivityEvent>[];
 }
 
 export interface RunnerProgress {
+	revision: number;
+	lastProgressAt: number;
+	phase: AgentPhase;
+	activeOperations: ActiveOperation[];
+	recentOperations: OperationEvent[];
 	currentActivity?: string;
 	turns: number;
 	usage: UsageSummary;
@@ -136,6 +184,7 @@ export interface AgentRunner {
 	start(config: AgentRunConfig, onProgress: (progress: RunnerProgress) => void): RunningAgentProcess;
 }
 
+/** Historical agent_wait result shape, retained only for session migration. */
 export interface WaitResult {
 	id: string;
 	name?: string;
@@ -152,6 +201,67 @@ export interface WaitResult {
 	usage: UsageSummary;
 }
 
+export interface OperationObservation {
+	kind: OperationEvent["kind"];
+	tool?: string;
+	summary: string;
+	startedAt?: string;
+	endedAt: string;
+	durationMs?: number;
+	outcome: OperationEvent["outcome"];
+}
+
+export interface ActiveOperationObservation {
+	toolCallId: string;
+	tool: string;
+	summary: string;
+	startedAt: string;
+	lastUpdatedAt: string;
+	runningMs: number;
+	quietMs: number;
+}
+
+export interface AgentObservation {
+	id: string;
+	name?: string;
+	status: AgentStatus;
+	model: string;
+	thinking: ThinkingLevel;
+	access: AgentAccess;
+	cwd: string;
+	createdAt: string;
+	startedAt?: string;
+	endedAt?: string;
+	elapsedMs: number;
+	lastProgressAt: string;
+	quietMs: number;
+	revision: number;
+	phase: { kind: AgentPhaseKind; summary?: string; startedAt: string; ageMs: number };
+	activeOperations: ActiveOperationObservation[];
+	activeOperationsOmitted?: number;
+	recentOperations: OperationObservation[];
+	recentOperationsOmitted?: number;
+	turns: number;
+	tokensPerSecond15s?: number;
+	usage: UsageSummary;
+	error?: string;
+	liveOutput?: string;
+	finalOutput?: string;
+	outputTruncation?: {
+		truncated: true;
+		originalBytes: number;
+		visibleBytes: number;
+		fullOutputPath?: string;
+	};
+}
+
+export interface AgentStatusResponse {
+	observedAt: string;
+	waited: boolean;
+	allTerminal: boolean;
+	agents: AgentObservation[];
+}
+
 export interface SpawnToolDetails {
 	run: AgentSnapshot;
 }
@@ -161,10 +271,7 @@ export interface CancelToolDetails {
 	runs: AgentSnapshot[];
 }
 
-export interface WaitToolDetails {
-	final: boolean;
-	snapshots?: AgentSnapshot[];
-	results?: WaitResult[];
+export interface StatusToolDetails extends AgentStatusResponse {
 	attributedIds?: string[];
 }
 

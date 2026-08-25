@@ -127,6 +127,55 @@ test("manager preserves provenance and optional names in snapshots and runner co
 	await tick();
 });
 
+test("manager preserves structured progress and returns immutable snapshots", async () => {
+	let now = 100;
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { idFactory: ids(), now: () => now });
+	const run = manager.spawn(request("/repo"));
+	const deferred = runner.runs.get(run.id);
+	assert.ok(deferred);
+	const progress = createInitialProgress(100);
+	progress.revision = 7;
+	progress.lastProgressAt = 180;
+	progress.phase = { kind: "using_tools", startedAt: 150 };
+	progress.currentActivity = "bash: npm test";
+	progress.activeOperations = [{
+		toolCallId: "tool-1",
+		tool: "bash",
+		summary: "bash: npm test",
+		startedAt: 150,
+		lastUpdatedAt: 170,
+	}];
+	progress.recentOperations = [{
+		kind: "retry",
+		summary: "retry 1/3",
+		startedAt: 120,
+		endedAt: 140,
+		outcome: "completed",
+	}];
+	now = 200;
+	deferred.onProgress(progress);
+	const snapshot = manager.get(run.id)!;
+	assert.equal(snapshot.revision, 8);
+	assert.equal(snapshot.lastProgressAt, 180);
+	assert.equal(snapshot.phase.kind, "using_tools");
+	assert.equal(snapshot.activeOperations[0]?.lastUpdatedAt, 170);
+	assert.equal(snapshot.recentOperations[0]?.endedAt, 140);
+	assert.ok(Object.isFrozen(snapshot));
+	assert.ok(Object.isFrozen(snapshot.phase));
+	assert.ok(Object.isFrozen(snapshot.activeOperations));
+	assert.ok(Object.isFrozen(snapshot.activeOperations[0]));
+	assert.ok(Object.isFrozen(snapshot.recentOperations[0]));
+	assert.throws(() => {
+		(snapshot.activeOperations as any[]).push({});
+	}, TypeError);
+	progress.activeOperations[0]!.summary = "mutated";
+	assert.equal(snapshot.activeOperations[0]?.summary, "bash: npm test");
+
+	runner.complete(run.id);
+	await tick();
+});
+
 test("manager snapshots preserve truncated output metadata", async () => {
 	const runner = new FakeRunner();
 	const manager = new AgentManager(runner, { idFactory: ids() });

@@ -28,6 +28,7 @@ interface ManagedRun extends AgentRun {
 	handle?: RunningAgentProcess;
 	completion?: Promise<void>;
 	cancellationRequested: boolean;
+	runnerRevision: number;
 	tokenSamples: TokenSample[];
 }
 
@@ -111,6 +112,11 @@ function cloneSnapshot(run: ManagedRun, now: number): AgentSnapshot {
 		createdAt: run.createdAt,
 		startedAt: run.startedAt,
 		endedAt: run.endedAt,
+		revision: run.revision,
+		lastProgressAt: run.lastProgressAt,
+		phase: Object.freeze({ ...run.phase }),
+		activeOperations: Object.freeze(run.activeOperations.map((operation) => Object.freeze({ ...operation }))),
+		recentOperations: Object.freeze(run.recentOperations.map((operation) => Object.freeze({ ...operation }))),
 		currentActivity: run.currentActivity,
 		turns: run.turns,
 		usage: Object.freeze({ ...run.usage, cost: Object.freeze({ ...run.usage.cost }) }),
@@ -165,11 +171,18 @@ export class AgentManager {
 		if (this.shuttingDown) throw new Error("Sub-agent manager is shutting down");
 		const id = this.nextId();
 		this.issuedIds.add(id);
+		const createdAt = this.now();
 		const run: ManagedRun = {
 			id,
 			...request,
 			status: "queued",
-			createdAt: this.now(),
+			createdAt,
+			revision: 0,
+			lastProgressAt: createdAt,
+			phase: { kind: "queued", startedAt: createdAt },
+			activeOperations: [],
+			recentOperations: [],
+			currentActivity: "queued",
 			turns: 0,
 			usage: createUsageSummary(),
 			outputTokens: 0,
@@ -177,6 +190,7 @@ export class AgentManager {
 			stderr: "",
 			activity: [],
 			cancellationRequested: false,
+			runnerRevision: 0,
 			tokenSamples: [],
 		};
 		this.runs.set(id, run);
@@ -205,8 +219,12 @@ export class AgentManager {
 		if (!run || isTerminalStatus(run.status) || run.cancellationRequested) return false;
 		run.cancellationRequested = true;
 		if (run.status === "queued") {
+			const now = this.now();
 			run.status = "cancelled";
-			run.endedAt = this.now();
+			run.endedAt = now;
+			run.lastProgressAt = now;
+			run.revision += 1;
+			run.phase = { kind: "cancelled", startedAt: now };
 			run.currentActivity = "cancelled";
 			run.error = "Cancelled before start";
 			this.pump();
@@ -215,6 +233,10 @@ export class AgentManager {
 			return true;
 		}
 
+		const now = this.now();
+		run.lastProgressAt = now;
+		run.revision += 1;
+		run.phase = { kind: "cancelling", startedAt: now };
 		run.currentActivity = "cancelling";
 		run.handle?.cancel();
 		this.emit();
@@ -369,11 +391,11 @@ export class AgentManager {
 		for (const run of this.runs.values()) {
 			if (run.status !== "queued") continue;
 			if (running >= this.maxConcurrency) {
-				run.currentActivity = "capacity";
+				this.updateQueuedPhase(run, "capacity");
 				continue;
 			}
 			if (run.access === "write" && this.writerLocks.has(run.cwd)) {
-				run.currentActivity = "writer lock";
+				this.updateQueuedPhase(run, "writer lock");
 				continue;
 			}
 			this.startRun(run);
@@ -381,9 +403,22 @@ export class AgentManager {
 		}
 	}
 
+	private updateQueuedPhase(run: ManagedRun, summary: string): void {
+		if (run.phase.kind === "queued" && run.phase.summary === summary) return;
+		const now = this.now();
+		run.phase = { kind: "queued", startedAt: now, summary };
+		run.currentActivity = summary;
+		run.lastProgressAt = now;
+		run.revision += 1;
+	}
+
 	private startRun(run: ManagedRun): void {
+		const now = this.now();
 		run.status = "running";
-		run.startedAt = this.now();
+		run.startedAt = now;
+		run.lastProgressAt = now;
+		run.revision += 1;
+		run.phase = { kind: "starting", startedAt: now };
 		run.tokenSamples = [{ timestamp: run.startedAt, tokens: 0 }];
 		run.currentActivity = "starting";
 		if (run.access === "write") this.writerLocks.add(run.cwd);
@@ -405,6 +440,14 @@ export class AgentManager {
 
 	private updateProgress(run: ManagedRun, progress: RunnerProgress): void {
 		if (run.status !== "running") return;
+		if (progress.revision > run.runnerRevision) {
+			run.revision += progress.revision - run.runnerRevision;
+			run.runnerRevision = progress.revision;
+		}
+		run.lastProgressAt = Math.max(run.lastProgressAt, progress.lastProgressAt);
+		run.phase = { ...progress.phase };
+		run.activeOperations = progress.activeOperations.map((operation) => ({ ...operation }));
+		run.recentOperations = progress.recentOperations.map((operation) => ({ ...operation }));
 		run.currentActivity = progress.currentActivity;
 		run.turns = progress.turns;
 		run.usage = cloneUsageSummary(progress.usage);
@@ -457,6 +500,7 @@ export class AgentManager {
 			run.error = undefined;
 			run.currentActivity = "completed";
 		}
+		this.markTerminal(run);
 		this.finishRun(run);
 	}
 
@@ -466,7 +510,28 @@ export class AgentManager {
 		run.error = run.cancellationRequested ? "Cancelled" : message;
 		run.currentActivity = run.status;
 		run.endedAt = this.now();
+		this.markTerminal(run);
 		this.finishRun(run);
+	}
+
+	private markTerminal(run: ManagedRun): void {
+		if (!isTerminalStatus(run.status)) return;
+		const endedAt = run.endedAt ?? this.now();
+		for (const operation of run.activeOperations) {
+			run.recentOperations.push({
+				kind: "tool",
+				tool: operation.tool,
+				summary: operation.summary,
+				startedAt: operation.startedAt,
+				endedAt,
+				outcome: run.status === "cancelled" ? "cancelled" : "failed",
+			});
+		}
+		run.activeOperations = [];
+		if (run.recentOperations.length > 100) run.recentOperations.splice(0, run.recentOperations.length - 100);
+		run.phase = { kind: run.status, startedAt: endedAt };
+		run.lastProgressAt = endedAt;
+		run.revision += 1;
 	}
 
 	private finishRun(run: ManagedRun): void {

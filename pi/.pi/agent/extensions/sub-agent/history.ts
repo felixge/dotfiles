@@ -1,10 +1,18 @@
-import type { AgentSnapshot, AgentStatus, WaitResult } from "./types.ts";
+import type {
+	ActiveOperation,
+	AgentObservation,
+	AgentPhase,
+	AgentSnapshot,
+	AgentStatus,
+	OperationEvent,
+	WaitResult,
+} from "./types.ts";
 import { isTerminalStatus } from "./types.ts";
 
 export const TERMINAL_RUN_ENTRY_TYPE = "sub-agent-terminal";
-const TERMINAL_RUN_ENTRY_VERSION = 1;
+export const TERMINAL_RUN_ENTRY_VERSION = 2;
 
-interface TerminalRunEntryData {
+export interface TerminalRunEntryData {
 	version: typeof TERMINAL_RUN_ENTRY_VERSION;
 	run: AgentSnapshot;
 }
@@ -45,6 +53,61 @@ function isUsage(value: unknown): boolean {
 	].every((item) => typeof item === "number" && Number.isFinite(item));
 }
 
+function numberOr(value: unknown, fallback: number): number {
+	return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function inferredPhase(status: AgentStatus, timestamp: number, summary?: string): AgentPhase {
+	const kind = status === "running" ? "starting" : status;
+	return { kind, startedAt: timestamp, ...(summary ? { summary } : {}) };
+}
+
+function phaseFrom(value: unknown, status: AgentStatus, fallbackTimestamp: number, summary?: string): AgentPhase {
+	if (!isRecord(value) || typeof value.kind !== "string") return inferredPhase(status, fallbackTimestamp, summary);
+	const valid = [
+		"queued", "starting", "waiting_for_model", "thinking", "responding", "using_tools",
+		"retrying", "compacting", "cancelling", "completed", "failed", "cancelled", "interrupted",
+	].includes(value.kind);
+	if (!valid) return inferredPhase(status, fallbackTimestamp, summary);
+	return {
+		kind: value.kind as AgentPhase["kind"],
+		startedAt: numberOr(value.startedAt, fallbackTimestamp),
+		...(typeof value.summary === "string" ? { summary: value.summary } : {}),
+	};
+}
+
+function activeOperationsFrom(value: unknown, fallbackTimestamp: number): ActiveOperation[] {
+	if (!Array.isArray(value)) return [];
+	return value.flatMap((item) => {
+		if (!isRecord(item) || typeof item.toolCallId !== "string" || typeof item.tool !== "string" || typeof item.summary !== "string") return [];
+		const startedAt = numberOr(item.startedAt, fallbackTimestamp);
+		return [{
+			toolCallId: item.toolCallId,
+			tool: item.tool,
+			summary: item.summary,
+			startedAt,
+			lastUpdatedAt: numberOr(item.lastUpdatedAt, startedAt),
+		}];
+	});
+}
+
+function recentOperationsFrom(value: unknown): OperationEvent[] {
+	if (!Array.isArray(value)) return [];
+	return value.flatMap((item) => {
+		if (!isRecord(item) || !["tool", "retry", "compaction"].includes(String(item.kind)) ||
+			typeof item.summary !== "string" || typeof item.endedAt !== "number" ||
+			!["completed", "failed", "cancelled"].includes(String(item.outcome))) return [];
+		return [{
+			kind: item.kind as OperationEvent["kind"],
+			...(typeof item.tool === "string" ? { tool: item.tool } : {}),
+			summary: item.summary,
+			...(typeof item.startedAt === "number" ? { startedAt: item.startedAt } : {}),
+			endedAt: item.endedAt,
+			outcome: item.outcome as OperationEvent["outcome"],
+		}];
+	});
+}
+
 function snapshotFrom(value: unknown): AgentSnapshot | undefined {
 	if (!isRecord(value) || !isAgentStatus(value.status)) return undefined;
 	if (
@@ -67,7 +130,15 @@ function snapshotFrom(value: unknown): AgentSnapshot | undefined {
 	) {
 		return undefined;
 	}
-	return value as unknown as AgentSnapshot;
+	const fallbackTimestamp = numberOr(value.endedAt, numberOr(value.startedAt, value.createdAt));
+	return {
+		...(value as unknown as AgentSnapshot),
+		revision: numberOr(value.revision, 0),
+		lastProgressAt: numberOr(value.lastProgressAt, fallbackTimestamp),
+		phase: phaseFrom(value.phase, value.status, fallbackTimestamp, typeof value.currentActivity === "string" ? value.currentActivity : undefined),
+		activeOperations: activeOperationsFrom(value.activeOperations, fallbackTimestamp),
+		recentOperations: recentOperationsFrom(value.recentOperations),
+	};
 }
 
 function waitResultFrom(value: unknown): WaitResult | undefined {
@@ -81,18 +152,82 @@ function waitResultFrom(value: unknown): WaitResult | undefined {
 		typeof value.elapsedMs !== "number" ||
 		typeof value.turns !== "number" ||
 		!isUsage(value.usage)
-	) {
-		return undefined;
-	}
+	) return undefined;
 	return value as unknown as WaitResult;
+}
+
+function timestamp(value: unknown): number | undefined {
+	if (typeof value !== "string") return undefined;
+	const parsed = Date.parse(value);
+	return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function observationFrom(value: unknown): AgentObservation | undefined {
+	if (!isRecord(value) || typeof value.id !== "string" || !isAgentStatus(value.status) ||
+		typeof value.createdAt !== "string" || typeof value.lastProgressAt !== "string" ||
+		typeof value.revision !== "number" || typeof value.turns !== "number" || !isUsage(value.usage) ||
+		!isRecord(value.phase) || typeof value.phase.kind !== "string" || typeof value.phase.startedAt !== "string" ||
+		!Array.isArray(value.activeOperations) || !Array.isArray(value.recentOperations)) return undefined;
+	return value as unknown as AgentObservation;
+}
+
+function restoreObservation(existing: AgentSnapshot, observation: AgentObservation): AgentSnapshot {
+	const createdAt = timestamp(observation.createdAt) ?? existing.createdAt;
+	const startedAt = timestamp(observation.startedAt) ?? existing.startedAt;
+	const endedAt = timestamp(observation.endedAt) ?? existing.endedAt;
+	const lastProgressAt = timestamp(observation.lastProgressAt) ?? endedAt ?? startedAt ?? createdAt;
+	const phaseStartedAt = timestamp(observation.phase.startedAt) ?? lastProgressAt;
+	return {
+		...existing,
+		...(observation.name ? { name: observation.name } : {}),
+		status: observation.status,
+		createdAt,
+		...(startedAt !== undefined ? { startedAt } : {}),
+		...(endedAt !== undefined ? { endedAt } : {}),
+		revision: observation.revision,
+		lastProgressAt,
+		phase: {
+			kind: observation.phase.kind,
+			startedAt: phaseStartedAt,
+			...(observation.phase.summary ? { summary: observation.phase.summary } : {}),
+		},
+		activeOperations: observation.activeOperations.map((operation) => ({
+			toolCallId: operation.toolCallId,
+			tool: operation.tool,
+			summary: operation.summary,
+			startedAt: timestamp(operation.startedAt) ?? lastProgressAt,
+			lastUpdatedAt: timestamp(operation.lastUpdatedAt) ?? lastProgressAt,
+		})),
+		recentOperations: observation.recentOperations.map((operation) => ({
+			kind: operation.kind,
+			...(operation.tool ? { tool: operation.tool } : {}),
+			summary: operation.summary,
+			...(timestamp(operation.startedAt) !== undefined ? { startedAt: timestamp(operation.startedAt)! } : {}),
+			endedAt: timestamp(operation.endedAt) ?? lastProgressAt,
+			outcome: operation.outcome,
+		})),
+		currentActivity: observation.activeOperations.at(-1)?.summary ?? observation.phase.summary ?? observation.phase.kind,
+		turns: observation.turns,
+		usage: observation.usage,
+		tokensPerSecond15s: observation.tokensPerSecond15s,
+		finalOutput: observation.finalOutput ?? existing.finalOutput,
+		fullOutputPath: observation.outputTruncation?.fullOutputPath ?? existing.fullOutputPath,
+		liveOutput: observation.liveOutput ?? "",
+		error: observation.error,
+	};
 }
 
 function interrupted(run: AgentSnapshot): AgentSnapshot {
 	if (isTerminalStatus(run.status)) return run;
+	const endedAt = run.endedAt ?? run.lastProgressAt ?? run.createdAt;
 	return {
 		...run,
 		status: "interrupted",
-		endedAt: run.endedAt ?? run.createdAt,
+		endedAt,
+		revision: run.revision + 1,
+		lastProgressAt: endedAt,
+		phase: { kind: "interrupted", startedAt: endedAt },
+		activeOperations: [],
 		currentActivity: "interrupted",
 		error: "Sub-agent was interrupted before recording a terminal result",
 		tokensPerSecond15s: undefined,
@@ -127,11 +262,16 @@ export function readAgentHistory(entries: readonly unknown[]): AgentHistory {
 					const result = waitResultFrom(value);
 					const existing = result ? runs.get(result.id) : undefined;
 					if (!result || !existing) continue;
+					const endedAt = existing.endedAt ?? existing.createdAt + result.elapsedMs;
 					store({
 						...existing,
 						...(result.name ? { name: result.name } : {}),
 						status: result.status,
-						endedAt: existing.endedAt ?? existing.createdAt + result.elapsedMs,
+						endedAt,
+						revision: existing.revision + 1,
+						lastProgressAt: endedAt,
+						phase: { kind: result.status, startedAt: endedAt },
+						activeOperations: [],
 						currentActivity: result.status,
 						turns: result.turns,
 						usage: result.usage,
@@ -143,9 +283,16 @@ export function readAgentHistory(entries: readonly unknown[]): AgentHistory {
 					});
 				}
 			}
+			if (entry.message.toolName === "agent_status" && isRecord(entry.message.details)) {
+				for (const value of Array.isArray(entry.message.details.agents) ? entry.message.details.agents : []) {
+					const observation = observationFrom(value);
+					const existing = observation ? runs.get(observation.id) : undefined;
+					if (observation && existing) store(restoreObservation(existing, observation));
+				}
+			}
 		}
 		if (entry.type === "custom" && entry.customType === TERMINAL_RUN_ENTRY_TYPE && isRecord(entry.data)) {
-			if (entry.data.version !== TERMINAL_RUN_ENTRY_VERSION) continue;
+			if (entry.data.version !== 1 && entry.data.version !== TERMINAL_RUN_ENTRY_VERSION) continue;
 			const run = snapshotFrom(entry.data.run);
 			if (!run || !isTerminalStatus(run.status)) continue;
 			store(run);

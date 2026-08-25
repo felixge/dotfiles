@@ -8,19 +8,25 @@ import {
 	type TruncationResult,
 } from "@earendil-works/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
-import { truncateUtf8Head } from "./runner.ts";
+import { truncateUtf8Head, truncateUtf8Tail } from "./runner.ts";
 import type {
+	AgentObservation,
 	AgentSnapshot,
+	AgentStatusResponse,
 	CancelToolDetails,
 	SpawnToolDetails,
+	StatusToolDetails,
 	UsageSummary,
 	WaitResult,
-	WaitToolDetails,
 } from "./types.ts";
-import { addUsageSummary, cloneUsageSummary, createUsageSummary } from "./types.ts";
+import { addUsageSummary, cloneUsageSummary, createUsageSummary, isTerminalStatus } from "./types.ts";
 
 export const MODEL_VISIBLE_OUTPUT_BYTES = DEFAULT_MAX_BYTES;
 export const MODEL_VISIBLE_DIAGNOSTIC_BYTES = 8 * 1024;
+// Reserve room for tool-detail attribution metadata around the shared projection.
+export const STATUS_RESPONSE_MAX_BYTES = Math.min(DEFAULT_MAX_BYTES, 50 * 1024) - 2_048;
+export const STATUS_RESPONSE_MAX_LINES = Math.min(DEFAULT_MAX_LINES, 2_000) - 1;
+const MAX_OBSERVATION_OPERATIONS = 20;
 
 export function formatDuration(milliseconds: number): string {
 	const seconds = Math.max(0, Math.floor(milliseconds / 1000));
@@ -115,13 +121,172 @@ export function truncateModelVisibleDiagnostic(diagnostic: string): string {
 	) + suffix;
 }
 
-export function formatWaitProgress(snapshots: readonly AgentSnapshot[]): string {
-	return snapshots
-		.map((run) => {
-			const elapsed = formatDuration((run.endedAt ?? Date.now()) - (run.startedAt ?? run.createdAt));
-			return `${formatAgentLabel(run)} ${run.status} ${elapsed}${run.currentActivity ? `: ${run.currentActivity}` : ""}`;
-		})
-		.join("\n");
+function iso(timestamp: number): string {
+	return new Date(Number.isFinite(timestamp) ? timestamp : 0).toISOString();
+}
+
+function boundedString(value: string, bytes: number): string {
+	return truncateUtf8Head(value, bytes);
+}
+
+interface ProjectionLimits {
+	activeOperations: number;
+	recentOperations: number;
+	outputBytes: number;
+	errorBytes: number;
+}
+
+export function observationFromSnapshot(
+	run: AgentSnapshot,
+	now = Date.now(),
+	limits: Partial<ProjectionLimits> = {},
+): AgentObservation {
+	const activeLimit = Math.max(0, limits.activeOperations ?? run.activeOperations.length);
+	const recentLimit = Math.max(0, limits.recentOperations ?? MAX_OBSERVATION_OPERATIONS);
+	const activeOperations = run.activeOperations.slice(-activeLimit || run.activeOperations.length);
+	const recentOperations = run.recentOperations.slice(-recentLimit || run.recentOperations.length);
+	const visibleActiveOperations = activeLimit === 0 ? [] : activeOperations;
+	const visibleRecentOperations = recentLimit === 0 ? [] : recentOperations;
+	const outputBudget = Math.max(0, limits.outputBytes ?? MODEL_VISIBLE_OUTPUT_BYTES);
+	const errorBudget = Math.max(0, limits.errorBytes ?? MODEL_VISIBLE_DIAGNOSTIC_BYTES);
+	const terminal = isTerminalStatus(run.status);
+	const endpoint = terminal ? (run.endedAt ?? now) : now;
+	const elapsedStart = run.startedAt ?? run.createdAt;
+	const originalOutput = terminal ? (run.finalOutput ?? "") : run.liveOutput;
+	const existingOriginalBytes = terminal && run.finalOutputTruncation?.truncated
+		? run.finalOutputTruncation.totalBytes
+		: Buffer.byteLength(originalOutput, "utf8");
+	const visibleOutput = terminal
+		? truncateUtf8Head(originalOutput, outputBudget)
+		: truncateUtf8Tail(originalOutput, outputBudget);
+	const visibleBytes = Buffer.byteLength(visibleOutput, "utf8");
+	const wasTruncated = existingOriginalBytes > visibleBytes;
+
+	const observation: AgentObservation = {
+		id: run.id,
+		...(run.name ? { name: boundedString(run.name, 256) } : {}),
+		status: run.status,
+		model: boundedString(run.model, 512),
+		thinking: run.thinking,
+		access: run.access,
+		cwd: boundedString(run.cwd, 2_048),
+		createdAt: iso(run.createdAt),
+		...(run.startedAt !== undefined ? { startedAt: iso(run.startedAt) } : {}),
+		...(run.endedAt !== undefined ? { endedAt: iso(run.endedAt) } : {}),
+		elapsedMs: Math.max(0, endpoint - elapsedStart),
+		lastProgressAt: iso(run.lastProgressAt),
+		quietMs: Math.max(0, endpoint - run.lastProgressAt),
+		revision: run.revision,
+		phase: {
+			kind: run.phase.kind,
+			...(run.phase.summary ? { summary: boundedString(run.phase.summary, 512) } : {}),
+			startedAt: iso(run.phase.startedAt),
+			ageMs: Math.max(0, endpoint - run.phase.startedAt),
+		},
+		activeOperations: visibleActiveOperations.map((operation) => ({
+			toolCallId: boundedString(operation.toolCallId, 256),
+			tool: boundedString(operation.tool, 128),
+			summary: boundedString(operation.summary, 512),
+			startedAt: iso(operation.startedAt),
+			lastUpdatedAt: iso(operation.lastUpdatedAt),
+			runningMs: Math.max(0, endpoint - operation.startedAt),
+			quietMs: Math.max(0, endpoint - operation.lastUpdatedAt),
+		})),
+		...(run.activeOperations.length > visibleActiveOperations.length ? {
+			activeOperationsOmitted: run.activeOperations.length - visibleActiveOperations.length,
+		} : {}),
+		recentOperations: visibleRecentOperations.map((operation) => ({
+			kind: operation.kind,
+			...(operation.tool ? { tool: boundedString(operation.tool, 128) } : {}),
+			summary: boundedString(operation.summary, 512),
+			...(operation.startedAt !== undefined ? { startedAt: iso(operation.startedAt) } : {}),
+			endedAt: iso(operation.endedAt),
+			...(operation.startedAt !== undefined ? { durationMs: Math.max(0, operation.endedAt - operation.startedAt) } : {}),
+			outcome: operation.outcome,
+		})),
+		...(run.recentOperations.length > visibleRecentOperations.length ? {
+			recentOperationsOmitted: run.recentOperations.length - visibleRecentOperations.length,
+		} : {}),
+		turns: run.turns,
+		...(run.tokensPerSecond15s !== undefined ? { tokensPerSecond15s: run.tokensPerSecond15s } : {}),
+		usage: cloneUsageSummary(run.usage),
+		...(run.error && errorBudget > 0 ? { error: boundedString(run.error, errorBudget) } : {}),
+		...(terminal ? { finalOutput: visibleOutput } : { liveOutput: visibleOutput }),
+		...(wasTruncated ? {
+			outputTruncation: {
+				truncated: true,
+				originalBytes: existingOriginalBytes,
+				visibleBytes,
+				...(run.fullOutputPath ? { fullOutputPath: boundedString(run.fullOutputPath, 2_048) } : {}),
+			},
+		} : {}),
+	};
+	return observation;
+}
+
+function serializedBytes(response: AgentStatusResponse): number {
+	return Buffer.byteLength(JSON.stringify(response), "utf8");
+}
+
+/** Build one aggregate-bounded, JSON-safe projection for both tool content and details. */
+export function statusResponseFromSnapshots(
+	snapshots: readonly AgentSnapshot[],
+	waited: boolean,
+	now = Date.now(),
+): AgentStatusResponse {
+	const count = Math.max(1, snapshots.length);
+	let activeOperationLimit = 100;
+	let recentOperationLimit = Math.min(MAX_OBSERVATION_OPERATIONS, Math.max(2, Math.floor(40 / count)));
+	let outputBudget = Math.max(0, Math.floor((STATUS_RESPONSE_MAX_BYTES - 8_192) / count));
+	let errorBudget = Math.min(MODEL_VISIBLE_DIAGNOSTIC_BYTES, Math.max(512, Math.floor(8_192 / count)));
+	const build = (): AgentStatusResponse => ({
+		observedAt: iso(now),
+		waited,
+		allTerminal: snapshots.every((run) => isTerminalStatus(run.status)),
+		agents: snapshots.map((run) => observationFromSnapshot(run, now, {
+			activeOperations: activeOperationLimit,
+			recentOperations: recentOperationLimit,
+			outputBytes: outputBudget,
+			errorBytes: errorBudget,
+		})),
+	});
+
+	let response = build();
+	while (serializedBytes(response) > STATUS_RESPONSE_MAX_BYTES && recentOperationLimit > 0) {
+		recentOperationLimit = Math.floor(recentOperationLimit / 2);
+		response = build();
+	}
+	while (serializedBytes(response) > STATUS_RESPONSE_MAX_BYTES && outputBudget > 0) {
+		outputBudget = Math.floor(outputBudget / 2);
+		response = build();
+	}
+	while (serializedBytes(response) > STATUS_RESPONSE_MAX_BYTES && errorBudget > 0) {
+		errorBudget = Math.floor(errorBudget / 2);
+		response = build();
+	}
+	while (serializedBytes(response) > STATUS_RESPONSE_MAX_BYTES && activeOperationLimit > 0) {
+		activeOperationLimit = Math.floor(activeOperationLimit / 2);
+		response = build();
+	}
+	if (serializedBytes(response) > STATUS_RESPONSE_MAX_BYTES) {
+		throw new Error("Agent status metadata exceeds the 50 KB response limit");
+	}
+	return response;
+}
+
+export function formatStatusProgress(response: AgentStatusResponse): string {
+	const lines = response.agents.slice(0, STATUS_RESPONSE_MAX_LINES - 1).map((run) => {
+		const operation = run.activeOperations.at(-1);
+		const activity = operation
+			? `${operation.summary} running ${formatDuration(operation.runningMs)}, quiet ${formatDuration(operation.quietMs)}`
+			: `${run.phase.summary ?? run.phase.kind.replaceAll("_", " ")} ${formatDuration(run.phase.ageMs)}`;
+		return `${formatAgentLabel(run)} ${run.status}: ${activity}`;
+	});
+	if (lines.length < response.agents.length) lines.push(`[${response.agents.length - lines.length} agents omitted]`);
+	const text = lines.join("\n");
+	if (Buffer.byteLength(text, "utf8") <= STATUS_RESPONSE_MAX_BYTES) return text;
+	const notice = "\n[Progress display truncated; structured details remain available]";
+	return truncateUtf8Head(text, STATUS_RESPONSE_MAX_BYTES - Buffer.byteLength(notice, "utf8")) + notice;
 }
 
 interface SpawnCallArgs {
@@ -168,6 +333,7 @@ export function renderSpawnResult(result: ToolResultLike<SpawnToolDetails>, _opt
 
 interface AgentIdsArgs {
 	ids?: string[];
+	wait?: boolean;
 }
 
 export function renderCancelCall(args: AgentIdsArgs, theme: Theme): Text {
@@ -201,42 +367,39 @@ export function renderCancelResult(
 	return new Text(text, 0, 0);
 }
 
-export function renderWaitCall(args: AgentIdsArgs, theme: Theme): Text {
+export function renderStatusCall(args: AgentIdsArgs, theme: Theme): Text {
+	const mode = args.wait ? "wait" : "snapshot";
 	return new Text(
-		theme.fg("toolTitle", theme.bold("agent_wait ")) + theme.fg("accent", (args.ids ?? []).join(", ")),
+		theme.fg("toolTitle", theme.bold(`agent_status ${mode} `)) + theme.fg("accent", (args.ids ?? []).join(", ")),
 		0,
 		0,
 	);
 }
 
-export function renderWaitResult(
-	result: ToolResultLike<WaitToolDetails>,
+export function renderStatusResult(
+	result: ToolResultLike<StatusToolDetails>,
 	options: { expanded: boolean; isPartial: boolean },
 	theme: Theme,
 ): Text | Container {
 	const details = result.details;
-	if (options.isPartial || details?.final === false) {
-		const progress =
-			(details?.snapshots ?? [])
-				.map((run) => {
-					const color = run.status === "failed" ? "error" : run.status === "completed" ? "success" : "warning";
-					return `${theme.fg(color, formatAgentLabel(run))} ${theme.fg("muted", run.status)}${run.currentActivity ? ` ${theme.fg("dim", run.currentActivity)}` : ""}`;
-				})
-				.join("\n") || theme.fg("muted", "waiting");
-		return new Text(`${progress}\n${theme.fg("dim", "Esc stops waiting; sub-agents continue")}`, 0, 0);
+	if (!details) return new Text(result.content[0]?.text ?? "No sub-agent status", 0, 0);
+	if (options.isPartial) {
+		return new Text(
+			`${formatStatusProgress(details)}\n${theme.fg("dim", "Esc stops waiting; sub-agents continue")}`,
+			0,
+			0,
+		);
 	}
 
-	const results = details?.results;
-	if (!results) return new Text(result.content[0]?.text ?? "No sub-agent results", 0, 0);
-	const completed = results.filter((item) => item.status === "completed").length;
-	const failed = results.filter((item) => item.status === "failed").length;
-	const cancelled = results.filter((item) => item.status === "cancelled").length;
-	const summary = `${completed} completed, ${failed} failed, ${cancelled} cancelled`;
-	const usage = formatUsage(aggregateUsage(results));
-
+	const completed = details.agents.filter((item) => item.status === "completed").length;
+	const failed = details.agents.filter((item) => item.status === "failed").length;
+	const active = details.agents.length - completed - failed - details.agents.filter((item) => item.status === "cancelled" || item.status === "interrupted").length;
+	const summary = `${completed} completed, ${failed} failed, ${active} active`;
+	const usage = formatUsage(aggregateUsage(details.agents));
 	if (!options.expanded) {
 		return new Text(
-			theme.fg(failed > 0 ? "warning" : "success", summary) + (usage ? `\n${theme.fg("dim", usage)}` : ""),
+			theme.fg(failed > 0 ? "warning" : details.allTerminal ? "success" : "warning", summary) +
+				(usage ? `\n${theme.fg("dim", usage)}` : ""),
 			0,
 			0,
 		);
@@ -244,20 +407,26 @@ export function renderWaitResult(
 
 	const container = new Container();
 	container.addChild(new Text(theme.fg(failed > 0 ? "warning" : "success", summary), 0, 0));
-	for (const item of results) {
+	for (const item of details.agents) {
 		container.addChild(new Spacer(1));
 		const color = item.status === "completed" ? "success" : item.status === "failed" ? "error" : "muted";
-		container.addChild(
-			new Text(
-				`${theme.fg(color, theme.bold(`${formatAgentLabel(item)} ${item.status}`))} ${theme.fg("dim", `${shortModel(item.model)}/${item.thinking} ${formatDuration(item.elapsedMs)}`)}`,
-				0,
-				0,
-			),
-		);
+		container.addChild(new Text(
+			`${theme.fg(color, theme.bold(`${formatAgentLabel(item)} ${item.status}`))} ${theme.fg("dim", `${shortModel(item.model)}/${item.thinking} ${formatDuration(item.elapsedMs)}`)}`,
+			0,
+			0,
+		));
+		container.addChild(new Text(theme.fg("dim", `Phase: ${item.phase.kind} ${formatDuration(item.phase.ageMs)}, quiet ${formatDuration(item.quietMs)}`), 0, 0));
+		for (const operation of item.activeOperations) {
+			container.addChild(new Text(`Active: ${operation.summary} ${formatDuration(operation.runningMs)}, quiet ${formatDuration(operation.quietMs)}`, 0, 0));
+		}
+		for (const operation of item.recentOperations) {
+			container.addChild(new Text(theme.fg("dim", `${operation.endedAt} ${operation.summary} ${operation.outcome}${operation.durationMs === undefined ? "" : ` ${formatDuration(operation.durationMs)}`}`), 0, 0));
+		}
 		if (item.error) container.addChild(new Text(theme.fg("error", item.error), 0, 0));
-		if (item.output) container.addChild(new Markdown(item.output, 0, 0, getMarkdownTheme()));
-		if (item.fullOutputPath) {
-			container.addChild(new Text(theme.fg("warning", `Full output: ${item.fullOutputPath}`), 0, 0));
+		const output = item.finalOutput ?? item.liveOutput;
+		if (output) container.addChild(new Markdown(output, 0, 0, getMarkdownTheme()));
+		if (item.outputTruncation?.fullOutputPath) {
+			container.addChild(new Text(theme.fg("warning", `Full output: ${item.outputTruncation.fullOutputPath}`), 0, 0));
 		}
 	}
 	if (usage) {
@@ -267,8 +436,9 @@ export function renderWaitResult(
 	return container;
 }
 
+/** Historical conversion retained for agent_wait session migration tests. */
 export function waitResultFromSnapshot(run: AgentSnapshot): WaitResult {
-	if (!isTerminal(run.status)) throw new Error(`Sub-agent ${run.id} is not terminal`);
+	if (!isTerminalStatus(run.status)) throw new Error(`Sub-agent ${run.id} is not terminal`);
 	return {
 		id: run.id,
 		...(run.name ? { name: run.name } : {}),
@@ -284,8 +454,4 @@ export function waitResultFromSnapshot(run: AgentSnapshot): WaitResult {
 		turns: run.turns,
 		usage: cloneUsageSummary(run.usage),
 	};
-}
-
-function isTerminal(status: AgentSnapshot["status"]): status is WaitResult["status"] {
-	return status === "completed" || status === "failed" || status === "cancelled";
 }

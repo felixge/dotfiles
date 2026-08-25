@@ -279,14 +279,30 @@ test("terminal runs persist without agent_wait and restore from session history"
 	assert.equal(api.entries.length, 1);
 });
 
-test("aborting agent_wait stops only the wait", async () => {
+test("agent_status replaces agent_wait and requires wait", () => {
+	const { api, manager } = setup();
+	assert.equal(api.tools.has("agent_wait"), false);
+	const statusTool = api.tools.get("agent_status");
+	assert.ok(statusTool);
+	assert.ok(statusTool.parameters.required.includes("wait"));
+	void manager.shutdown();
+});
+
+test("aborting agent_status wait stops only the wait", async () => {
 	const { api, manager, runner } = setup(1);
 	const running = manager.spawn(request("branch-a", "parent-1"));
 	const queued = manager.spawn(request("branch-a", "parent-1"));
-	const waitTool = api.tools.get("agent_wait");
-	assert.ok(waitTool);
+	const statusTool = api.tools.get("agent_status");
+	assert.ok(statusTool);
 	const controller = new AbortController();
-	const waiting = waitTool.execute("wait-1", { ids: [running.id, queued.id] }, controller.signal);
+	const context = { sessionManager: { getBranch: () => [{ id: "branch-a" }] } };
+	const waiting = statusTool.execute(
+		"status-1",
+		{ ids: [running.id, queued.id], wait: true },
+		controller.signal,
+		undefined,
+		context,
+	);
 	controller.abort();
 
 	await assert.rejects(waiting, { name: "AbortError" });
@@ -294,6 +310,81 @@ test("aborting agent_wait stops only the wait", async () => {
 	assert.equal(manager.get(running.id)?.status, "running");
 	assert.equal(manager.get(queued.id)?.status, "queued");
 	assert.equal(runner.cancelCalls.size, 0);
+	await manager.shutdown();
+});
+
+test("agent_status snapshots immediately, preserves input order, and deduplicates IDs", async () => {
+	const { api, manager } = setup(2);
+	const first = manager.spawn(request("branch-a", "parent-1"));
+	const second = manager.spawn(request("branch-a", "parent-1"));
+	const statusTool = api.tools.get("agent_status");
+	const context = { sessionManager: { getBranch: () => [{ id: "branch-a" }] } };
+	const result = await statusTool.execute(
+		"status-1",
+		{ ids: [second.id, first.id, second.id], wait: false },
+		undefined,
+		undefined,
+		context,
+	);
+
+	assert.equal(result.details.waited, false);
+	assert.equal(result.details.allTerminal, false);
+	assert.deepEqual(result.details.agents.map((run: any) => run.id), [second.id, first.id]);
+	assert.deepEqual(JSON.parse(result.content[0].text).agents.map((run: any) => run.id), [second.id, first.id]);
+	await manager.shutdown();
+});
+
+test("agent_status validates branch-visible IDs before waiting", async () => {
+	const { api, manager, runner } = setup(1);
+	const visible = manager.spawn(request("branch-a", "parent-1"));
+	const hidden = manager.spawn(request("branch-b", "parent-1"));
+	const statusTool = api.tools.get("agent_status");
+	const context = { sessionManager: { getBranch: () => [{ id: "branch-a" }] } };
+
+	await assert.rejects(
+		statusTool.execute(
+			"status-1",
+			{ ids: [visible.id, hidden.id], wait: true },
+			undefined,
+			undefined,
+			context,
+		),
+		new RegExp(`Unknown sub-agent ID: ${hidden.id}`, "u"),
+	);
+	assert.equal(manager.get(visible.id)?.status, "running");
+	assert.equal(runner.cancelCalls.size, 0);
+	await manager.shutdown();
+});
+
+test("agent_status wait returns mixed terminal results and attributes usage once", async () => {
+	const { api, manager, runner } = setup(2);
+	const first = manager.spawn(request("branch-a", "parent-1"));
+	const second = manager.spawn(request("branch-a", "parent-1"));
+	const statusTool = api.tools.get("agent_status");
+	const context = { sessionManager: { getBranch: () => [{ id: "branch-a" }] } };
+	const waiting = statusTool.execute(
+		"status-1",
+		{ ids: [first.id, second.id], wait: true },
+		undefined,
+		undefined,
+		context,
+	);
+	runner.complete(second.id);
+	runner.complete(first.id);
+	const result = await waiting;
+	assert.equal(result.details.waited, true);
+	assert.equal(result.details.allTerminal, true);
+	assert.deepEqual(result.details.agents.map((run: any) => run.id), [first.id, second.id]);
+	assert.deepEqual(result.details.attributedIds, [first.id, second.id]);
+
+	const repeated = await statusTool.execute(
+		"status-2",
+		{ ids: [first.id, second.id], wait: false },
+		undefined,
+		undefined,
+		context,
+	);
+	assert.deepEqual(repeated.details.attributedIds, []);
 	await manager.shutdown();
 });
 

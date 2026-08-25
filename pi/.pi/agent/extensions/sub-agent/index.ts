@@ -11,16 +11,16 @@ import {
 import { AgentManager, resolveCanonicalCwd } from "./manager.ts";
 import { branchEntryIds, runsOnBranch } from "./scope.ts";
 import {
-	formatWaitProgress,
+	formatStatusProgress,
 	renderCancelCall,
 	renderCancelResult,
 	renderSpawnCall,
 	renderSpawnResult,
-	renderWaitCall,
-	renderWaitResult,
+	renderStatusCall,
+	renderStatusResult,
+	statusResponseFromSnapshots,
 	truncateModelVisibleDiagnostic,
 	truncateModelVisibleOutput,
-	waitResultFromSnapshot,
 } from "./render.ts";
 import { PiProcessRunner } from "./runner.ts";
 import {
@@ -29,9 +29,9 @@ import {
 	type AgentSnapshot,
 	type CancelToolDetails,
 	type SpawnToolDetails,
+	type StatusToolDetails,
 	type ThinkingLevel,
 	type WaitResult,
-	type WaitToolDetails,
 } from "./types.ts";
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
@@ -63,10 +63,13 @@ function agentSpawnParams(modelDescription = DEFAULT_MODEL_DESCRIPTION) {
 	});
 }
 
-const AgentWaitParams = Type.Object({
+const AgentStatusParams = Type.Object({
 	ids: Type.Array(Type.String(), {
 		minItems: 1,
-		description: "Sub-agent IDs to wait for",
+		description: "Sub-agent IDs to observe",
+	}),
+	wait: Type.Boolean({
+		description: "False returns immediately. True waits until all selected agents finish.",
 	}),
 });
 
@@ -192,10 +195,10 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 		name: "agent_spawn",
 		label: "Spawn Agent",
 		description:
-			"Start one isolated background sub-agent and return immediately. An optional name labels the agent in status and results. Start all independent agents before calling agent_wait. Read access is the default; write access allows file mutation and is serialized with other writers in the same canonical working directory.",
+			"Start one isolated background sub-agent and return immediately. An optional name labels the agent in status and results. Start all independent agents before calling agent_status. Read access is the default; write access allows file mutation and is serialized with other writers in the same canonical working directory.",
 		promptSnippet: "Start an isolated background sub-agent",
 		promptGuidelines: [
-			"Before using agent_spawn, ask the user for permission and wait for explicit approval, unless the current user prompt already explicitly requests sub-agent use. Do not treat task complexity or parallelization opportunities as permission. Once authorized, start all independent sub-agents before using agent_wait and retain every returned ID.",
+			"Before using agent_spawn, ask the user for permission and wait for explicit approval, unless the current user prompt already explicitly requests sub-agent use. Do not treat task complexity or parallelization opportunities as permission. Once authorized, start all independent sub-agents before using agent_status and retain every returned ID. Use agent_status with wait: false for occasional progress checks; avoid tight polling.",
 		],
 		parameters: agentSpawnParams(modelDescription),
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
@@ -231,34 +234,57 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 	pi.registerTool(createAgentSpawnTool());
 
 	pi.registerTool({
-		name: "agent_wait",
-		label: "Wait for Agents",
+		name: "agent_status",
+		label: "Agent Status",
 		description:
-			"Wait for one or more background sub-agents. Aborting this tool stops only the wait; the sub-agents continue in the background. Outputs are capped at 50 KB or 2,000 lines per agent; full truncated output is saved to a temp file.",
-		promptSnippet: "Wait for background sub-agents and collect their results",
-		parameters: AgentWaitParams,
-		async execute(_toolCallId, params, signal, onUpdate) {
-			const snapshots = await manager.wait(params.ids, signal, (partial) => {
-				onUpdate?.({
-					content: [{ type: "text", text: formatWaitProgress(partial) }],
-					details: { final: false, snapshots: partial } satisfies WaitToolDetails,
-				});
-			});
-			const attribution = manager.claimUsage(snapshots);
-			const results = snapshots.map(waitResultFromSnapshot);
-			const visible = modelVisibleResults(results);
+			"Observe one or more background sub-agents. Set wait to false for an immediate snapshot or true to wait for all selected agents to finish. Aborting a waiting call stops only the wait. The complete response is capped below 50 KB and 2,000 lines.",
+		promptSnippet: "Observe background sub-agent status or wait for results",
+		promptGuidelines: [
+			"Use wait: false for occasional progress checks and avoid tight polling. Use wait: true when all selected results are needed.",
+		],
+		parameters: AgentStatusParams,
+		async execute(_toolCallId, params, signal, onUpdate, ctx) {
+			const ids = [...new Set(params.ids)];
+			const initiallyVisible = visibleRuns(ctx);
+			const initialById = new Map(initiallyVisible.map((run) => [run.id, run]));
+			for (const id of ids) {
+				if (!initialById.has(id)) throw new Error(`Unknown sub-agent ID: ${id}`);
+			}
+
+			let selected = ids.map((id) => initialById.get(id)!);
+			let waitedSnapshots: AgentSnapshot[] | undefined;
+			if (params.wait) {
+				signal?.throwIfAborted();
+				const liveIds = ids.filter((id) => manager.get(id) !== undefined);
+				if (liveIds.some((id) => !isTerminalStatus(manager.get(id)!.status))) {
+					waitedSnapshots = await manager.wait(liveIds, signal, (partial) => {
+						const partialById = new Map(partial.map((run) => [run.id, run]));
+						const combined = selected.map((run) => partialById.get(run.id) ?? run);
+						const response = statusResponseFromSnapshots(combined, true);
+						onUpdate?.({
+							content: [{ type: "text", text: formatStatusProgress(response) }],
+							details: response satisfies StatusToolDetails,
+						});
+					});
+					const waitedById = new Map(waitedSnapshots.map((run) => [run.id, run]));
+					selected = selected.map((run) => waitedById.get(run.id) ?? run);
+				}
+			}
+
+			const liveById = new Map((waitedSnapshots ?? manager.getAll()).map((run) => [run.id, run]));
+			selected = selected.map((run) => liveById.get(run.id) ?? run);
+			const terminalLive = selected.filter((run) => liveById.has(run.id) && isTerminalStatus(run.status));
+			const attribution = manager.claimUsage(terminalLive);
+			const response = statusResponseFromSnapshots(selected, params.wait);
+			const details: StatusToolDetails = { ...response, attributedIds: attribution.attributedIds };
 			return {
-				content: [{ type: "text", text: JSON.stringify(visible, null, 2) }],
-				details: {
-					final: true,
-					results,
-					attributedIds: attribution.attributedIds,
-				} satisfies WaitToolDetails,
+				content: [{ type: "text", text: JSON.stringify(response) }],
+				details,
 				...(attribution.usage ? { usage: attribution.usage } : {}),
 			};
 		},
-		renderCall: renderWaitCall,
-		renderResult: renderWaitResult,
+		renderCall: renderStatusCall,
+		renderResult: renderStatusResult,
 	});
 
 	pi.registerTool({
@@ -267,7 +293,7 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 		description: "Explicitly cancel one or more queued or running background sub-agents.",
 		promptSnippet: "Cancel queued or running background sub-agents",
 		promptGuidelines: [
-			"Use agent_cancel when the user asks to stop sub-agents. Aborting agent_wait stops only the wait and leaves sub-agents running.",
+			"Use agent_cancel when the user asks to stop sub-agents. Aborting agent_status with wait: true stops only the wait and leaves sub-agents running.",
 		],
 		parameters: AgentCancelParams,
 		async execute(_toolCallId, params) {

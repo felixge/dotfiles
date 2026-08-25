@@ -6,6 +6,7 @@ import {
 	readAgentHistory,
 	TERMINAL_RUN_ENTRY_TYPE,
 } from "../history.ts";
+import { observationFromSnapshot } from "../render.ts";
 import type { AgentSnapshot, AgentStatus } from "../types.ts";
 
 function snapshot(id: string, status: AgentStatus = "running"): AgentSnapshot {
@@ -22,6 +23,11 @@ function snapshot(id: string, status: AgentStatus = "running"): AgentSnapshot {
 		status,
 		createdAt: 10,
 		...(status === "running" ? { startedAt: 11 } : { startedAt: 11, endedAt: 20 }),
+		revision: 3,
+		lastProgressAt: status === "running" ? 15 : 20,
+		phase: { kind: status === "running" ? "thinking" : status, startedAt: 14 },
+		activeOperations: [],
+		recentOperations: [],
 		currentActivity: status,
 		turns: 1,
 		usage: {
@@ -72,6 +78,28 @@ test("terminal custom entries persist final snapshots without duplicate live out
 	assert.deepEqual([...history.persistedTerminalIds], ["aaaaaa"]);
 });
 
+test("version 1 terminal entries restore with normalized structured timing", () => {
+	const completed = snapshot("aaaaaa", "completed");
+	const {
+		revision: _revision,
+		lastProgressAt: _lastProgressAt,
+		phase: _phase,
+		activeOperations: _activeOperations,
+		recentOperations: _recentOperations,
+		...versionOne
+	} = completed;
+	const history = readAgentHistory([{
+		type: "custom",
+		customType: TERMINAL_RUN_ENTRY_TYPE,
+		data: { version: 1, run: versionOne },
+	}]);
+	assert.equal(history.runs[0]?.revision, 0);
+	assert.equal(history.runs[0]?.lastProgressAt, 20);
+	assert.equal(history.runs[0]?.phase.kind, "completed");
+	assert.equal(history.runs[0]?.phase.startedAt, 20);
+	assert.deepEqual(history.runs[0]?.activeOperations, []);
+});
+
 test("malformed terminal entries are ignored", () => {
 	const history = readAgentHistory([
 		{
@@ -83,6 +111,27 @@ test("malformed terminal entries are ignored", () => {
 
 	assert.deepEqual(history.runs, []);
 	assert.deepEqual([...history.persistedTerminalIds], []);
+});
+
+test("agent_status observations restore structured terminal state", () => {
+	const running = snapshot("aaaaaa");
+	const completed = snapshot("aaaaaa", "completed");
+	const observation = observationFromSnapshot(completed, 20);
+	const history = readAgentHistory([
+		spawnEntry(running),
+		{
+			type: "message",
+			message: {
+				role: "toolResult",
+				toolName: "agent_status",
+				details: { observedAt: observation.endedAt, waited: true, allTerminal: true, agents: [observation] },
+			},
+		},
+	]);
+	assert.equal(history.runs[0]?.status, "completed");
+	assert.equal(history.runs[0]?.revision, completed.revision);
+	assert.equal(history.runs[0]?.phase.kind, "completed");
+	assert.equal(history.runs[0]?.finalOutput, "done");
 });
 
 test("existing agent_wait results restore terminal state and live runs override history", () => {

@@ -85,6 +85,98 @@ test("event reducer tracks output, activity, turns, retries, and usage without r
 	assert.equal(state.activity.at(-1)?.summary, "retry 2/3 in 4s");
 });
 
+test("event reducer records deterministic phases, parallel tools, retries, and compaction", () => {
+	let state = createInitialProgress(100);
+	state = reduceJsonEvent(state, { type: "turn_start" }, 110);
+	assert.equal(state.phase.kind, "waiting_for_model");
+	assert.equal(state.revision, 1);
+	assert.equal(state.lastProgressAt, 110);
+
+	state = reduceJsonEvent(state, {
+		type: "message_update",
+		assistantMessageEvent: { type: "thinking_delta", delta: "private reasoning" },
+	}, 120);
+	assert.equal(state.phase.kind, "thinking");
+	state = reduceJsonEvent(state, {
+		type: "message_update",
+		assistantMessageEvent: { type: "text_delta", delta: "hello" },
+	}, 130);
+	assert.equal(state.phase.kind, "responding");
+
+	state = reduceJsonEvent(state, {
+		type: "tool_execution_start",
+		toolCallId: "one",
+		toolName: "bash",
+		args: { command: "npm test" },
+	}, 140);
+	const beforeParallel = state;
+	state = reduceJsonEvent(state, {
+		type: "tool_execution_start",
+		toolCallId: "two",
+		toolName: "read",
+		args: { path: "secret.txt" },
+	}, 150);
+	state = reduceJsonEvent(state, {
+		type: "tool_execution_update",
+		toolCallId: "one",
+		toolName: "bash",
+		args: { command: "npm test -- --run" },
+		result: "do not retain tool update output",
+	}, 160);
+	assert.equal(state.activeOperations.length, 2);
+	assert.equal(state.activeOperations[0]?.startedAt, 140);
+	assert.equal(state.activeOperations[0]?.lastUpdatedAt, 160);
+	assert.equal(beforeParallel.activeOperations.length, 1);
+	assert.equal(beforeParallel.activeOperations[0]?.summary, "bash: npm test");
+
+	state = reduceJsonEvent(state, {
+		type: "tool_execution_end",
+		toolCallId: "two",
+		toolName: "read",
+		result: "do not retain raw tool output",
+		isError: false,
+	}, 170);
+	assert.equal(state.activeOperations.length, 1);
+	assert.deepEqual(state.recentOperations.at(-1), {
+		kind: "tool",
+		tool: "read",
+		summary: "read secret.txt",
+		startedAt: 150,
+		endedAt: 170,
+		outcome: "completed",
+	});
+	state = reduceJsonEvent(state, {
+		type: "tool_execution_end",
+		toolCallId: "one",
+		isError: true,
+		result: "still not retained",
+	}, 190);
+	assert.equal(state.activeOperations.length, 0);
+	assert.equal(state.recentOperations.at(-1)?.outcome, "failed");
+	assert.equal(state.recentOperations.at(-1)?.startedAt, 140);
+	assert.equal(state.phase.kind, "waiting_for_model");
+
+	state = reduceJsonEvent(state, { type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 2_000 }, 200);
+	state = reduceJsonEvent(state, { type: "auto_retry_end", attempt: 1, success: true }, 250);
+	assert.deepEqual(state.recentOperations.at(-1), {
+		kind: "retry",
+		summary: "retry 1/3 in 2s",
+		startedAt: 200,
+		endedAt: 250,
+		outcome: "completed",
+	});
+	state = reduceJsonEvent(state, { type: "compaction_start", reason: "threshold" }, 300);
+	state = reduceJsonEvent(state, { type: "compaction_end", result: {}, aborted: false }, 380);
+	assert.equal(state.recentOperations.at(-1)?.kind, "compaction");
+	assert.equal(state.recentOperations.at(-1)?.startedAt, 300);
+	assert.equal(state.recentOperations.at(-1)?.endedAt, 380);
+	assert.equal(state.revision, 12);
+	assert.equal(state.lastProgressAt, 380);
+	const serialized = JSON.stringify(state);
+	assert.equal(serialized.includes("private reasoning"), false);
+	assert.equal(serialized.includes("do not retain"), false);
+});
+
 test("event reducer reconciles cumulative streaming usage and retains partial usage", () => {
 	let state = createInitialProgress();
 	state = reduceJsonEvent(state, { type: "message_start", message: { role: "assistant" } });
@@ -226,6 +318,20 @@ test("process runner uses the isolated Pi CLI policy and consumes deterministic 
 		"--no-approve",
 	]);
 	assert.equal(piArgs[piArgs.indexOf("--tools") + 1], "read,grep,find,ls");
+});
+
+test("process runner uses its injectable clock for operation timing", async () => {
+	let now = 90;
+	const runner = new PiProcessRunner({
+		resolveInvocation: () => ({ command: process.execPath, args: [fixture, "success"] }),
+		timeoutMs: 2_000,
+		now: () => (now += 10),
+	});
+	const result = await runner.start(config, () => {}).result;
+	assert.equal(result.progress.revision, 7);
+	assert.equal(result.progress.lastProgressAt, 170);
+	assert.equal(result.progress.recentOperations[0]?.startedAt, 140);
+	assert.equal(result.progress.recentOperations[0]?.endedAt, 150);
 });
 
 test("process runner saves full truncated output to a temp file", async () => {
