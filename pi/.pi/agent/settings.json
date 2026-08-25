@@ -1,12 +1,12 @@
 {
   "lastChangelogVersion": "0.84.2",
   "theme": "light",
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.6-sol",
+  "defaultProvider": "ai-gw-openai",
+  "defaultModel": "openai/gpt-5.6-sol",
   "enabledModels": [
-    "openai-codex/gpt-5.6-sol",
     "ai-gw-anthropic-1m/anthropic/claude-opus-5",
-    "openai-codex/gpt-5.6-luna"
+    "ai-gw-openai/openai/gpt-5.6-luna",
+    "ai-gw-openai/openai/gpt-5.6-sol"
   ],
   "hideThinkingBlock": true,
   "defaultThinkingLevel": "high",
