@@ -351,6 +351,12 @@ install_npm_packages() {
 install_pi_local_extensions() {
     echo "-> install pi local extensions"
     (cd "$HOME/.pi/agent/extensions" && quiet_run npm ci --omit=dev)
+
+    local lockfile
+    for lockfile in "$HOME/.pi/agent/extensions"/*/package-lock.json; do
+        [ -e "$lockfile" ] || continue
+        (cd "$(dirname "$lockfile")" && quiet_run npm ci --omit=dev)
+    done
 }
 
 install_pi_packages() {
