@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { readAgentHistory, TERMINAL_RUN_ENTRY_TYPE } from "../history.ts";
-import { registerSubAgentExtension } from "../index.ts";
+import { modelParameterDescription, registerSubAgentExtension } from "../index.ts";
 import { AgentManager } from "../manager.ts";
 import { createInitialProgress } from "../runner.ts";
 import type {
@@ -115,6 +115,47 @@ async function tick(): Promise<void> {
 	await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
+test("agent_spawn model parameter lists only scoped models", async () => {
+	const { api, manager } = setup();
+	const context = {
+		scopedModels: [
+			{ model: { provider: "openai-codex", id: "gpt-5.6-sol" } },
+			{ model: { provider: "openai-codex", id: "gpt-5.6-luna" } },
+		],
+		modelRegistry: {
+			getAvailable: () => {
+				throw new Error("must not enumerate all available models");
+			},
+		},
+		sessionManager: {
+			getBranch: () => [],
+			getEntries: () => [],
+		},
+		ui: { setStatus: () => {} },
+	};
+
+	await api.emit("session_start", { type: "session_start", reason: "startup" }, context);
+
+	assert.equal(
+		api.tools.get("agent_spawn")?.parameters.properties.model.description,
+		[
+			"Exact provider/model identifier. Defaults to the parent model.",
+			"Scoped models:",
+			"- openai-codex/gpt-5.6-sol",
+			"- openai-codex/gpt-5.6-luna",
+		].join("\n"),
+	);
+	await api.emit("session_shutdown", { type: "session_shutdown", reason: "quit" }, context);
+	await manager.shutdown();
+});
+
+test("empty model scope does not expose alternative models", () => {
+	assert.equal(
+		modelParameterDescription([]),
+		"Exact provider/model identifier. Defaults to the parent model.",
+	);
+});
+
 test("parent abort cancels only children from that low-level run", async () => {
 	const { api, manager } = setup();
 	await api.emit("agent_start", { type: "agent_start" });
@@ -192,6 +233,7 @@ test("footer follows branch scope and shutdown still cancels every branch", asyn
 	let branch = [{ id: "root" }, { id: "branch-a" }];
 	const statuses: Array<string | undefined> = [];
 	const context = {
+		scopedModels: [],
 		sessionManager: { getBranch: () => branch, getEntries: () => api.entries },
 		ui: { setStatus: (_key: string, value: string | undefined) => statuses.push(value) },
 	};
@@ -218,6 +260,7 @@ test("footer follows branch scope and shutdown still cancels every branch", asyn
 test("terminal runs persist without agent_wait and restore from session history", async () => {
 	const { api, manager, runner } = setup();
 	const context = {
+		scopedModels: [],
 		sessionManager: {
 			getBranch: () => [{ id: "assistant-1" }],
 			getEntries: () => api.entries,

@@ -1,5 +1,5 @@
 import { clampThinkingLevel, StringEnum, type ModelThinkingLevel } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { showAgentsDashboard } from "./dashboard.ts";
 import {
@@ -25,6 +25,7 @@ import {
 	isTerminalStatus,
 	type AgentAccess,
 	type AgentSnapshot,
+	type SpawnToolDetails,
 	type ThinkingLevel,
 	type WaitResult,
 	type WaitToolDetails,
@@ -32,25 +33,32 @@ import {
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 const ACCESS_LEVELS = ["read", "write"] as const;
+const DEFAULT_MODEL_DESCRIPTION = "Exact provider/model identifier. Defaults to the parent model.";
 
-const AgentSpawnParams = Type.Object({
-	name: Type.Optional(
-		Type.String({ description: "Human-readable name for the sub-agent", minLength: 1, maxLength: 80 }),
-	),
-	prompt: Type.String({ description: "Task to send to the sub-agent", minLength: 1 }),
-	model: Type.Optional(
-		Type.String({ description: "Exact provider/model identifier. Defaults to the parent model." }),
-	),
-	thinking: Type.Optional(
-		StringEnum(THINKING_LEVELS, { description: "Thinking level. Defaults to the parent thinking level." }),
-	),
-	cwd: Type.Optional(
-		Type.String({ description: "Working directory. Relative paths resolve from the parent cwd." }),
-	),
-	access: Type.Optional(
-		StringEnum(ACCESS_LEVELS, { description: "Tool access. Defaults to read.", default: "read" }),
-	),
-});
+export function modelParameterDescription(scopedModels: ExtensionContext["scopedModels"]): string {
+	if (scopedModels.length === 0) return DEFAULT_MODEL_DESCRIPTION;
+	const identifiers = scopedModels.map(({ model }) => `- ${model.provider}/${model.id}`);
+	return `${DEFAULT_MODEL_DESCRIPTION}\nScoped models:\n${identifiers.join("\n")}`;
+}
+
+function agentSpawnParams(modelDescription = DEFAULT_MODEL_DESCRIPTION) {
+	return Type.Object({
+		name: Type.Optional(
+			Type.String({ description: "Human-readable name for the sub-agent", minLength: 1, maxLength: 80 }),
+		),
+		prompt: Type.String({ description: "Task to send to the sub-agent", minLength: 1 }),
+		model: Type.Optional(Type.String({ description: modelDescription })),
+		thinking: Type.Optional(
+			StringEnum(THINKING_LEVELS, { description: "Thinking level. Defaults to the parent thinking level." }),
+		),
+		cwd: Type.Optional(
+			Type.String({ description: "Working directory. Relative paths resolve from the parent cwd." }),
+		),
+		access: Type.Optional(
+			StringEnum(ACCESS_LEVELS, { description: "Tool access. Defaults to read.", default: "read" }),
+		),
+	});
+}
 
 const AgentWaitParams = Type.Object({
 	ids: Type.Array(Type.String(), {
@@ -181,7 +189,9 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 		}, delay);
 	};
 
-	pi.registerTool({
+	const createAgentSpawnTool = (
+		modelDescription = DEFAULT_MODEL_DESCRIPTION,
+	): ToolDefinition<ReturnType<typeof agentSpawnParams>, SpawnToolDetails> => ({
 		name: "agent_spawn",
 		label: "Spawn Agent",
 		description:
@@ -190,7 +200,7 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 		promptGuidelines: [
 			"Before using agent_spawn, ask the user for permission and wait for explicit approval, unless the current user prompt already explicitly requests sub-agent use. Do not treat task complexity or parallelization opportunities as permission. Once authorized, start all independent sub-agents before using agent_wait and retain every returned ID.",
 		],
-		parameters: AgentSpawnParams,
+		parameters: agentSpawnParams(modelDescription),
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			const originEntryId = ctx.sessionManager.getLeafId();
 			if (!originEntryId) throw new Error("Cannot spawn a sub-agent without a persisted session origin entry");
@@ -220,6 +230,8 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 		renderCall: renderSpawnCall,
 		renderResult: renderSpawnResult,
 	});
+
+	pi.registerTool(createAgentSpawnTool());
 
 	pi.registerTool({
 		name: "agent_wait",
@@ -270,6 +282,7 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 	});
 
 	pi.on("session_start", (_event, ctx) => {
+		pi.registerTool(createAgentSpawnTool(modelParameterDescription(ctx.scopedModels)));
 		activeContext = ctx;
 		const history = readAgentHistory(ctx.sessionManager.getEntries());
 		archivedRuns = history.runs;
