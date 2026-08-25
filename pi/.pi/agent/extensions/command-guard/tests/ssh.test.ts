@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { analyzeCommand, localExecutionContext } from "../shell.js";
 import { matchNames, testFs, type TestFs } from "./helpers.js";
 
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
 describe("SSH command analysis", () => {
   let fixture: TestFs;
   beforeEach(() => fixture = testFs());
@@ -54,6 +58,20 @@ describe("SSH command analysis", () => {
     expect(localRm?.args[1]?.literal).toBe(`${fixture.home}/test`);
   });
 
+  it("passes wrapper assignments to nested remote shells", () => {
+    const prefixedSource = `ssh host ${shellQuote(`TARGET=/etc sh -c 'rm -rf "$TARGET/child"'`)}`;
+    const prefixed = analyzeCommand(prefixedSource, localExecutionContext(fixture.cwd, fixture.env));
+    const prefixedRm = prefixed.invocations.find((invocation) => invocation.execution.kind === "ssh" && invocation.executable.literal === "rm");
+    expect(prefixedRm?.execution).toMatchObject({ env: { TARGET: "/etc" } });
+    expect(matchNames(prefixedSource, fixture)).toContain("recursive-delete");
+
+    const wrappedSource = `ssh host ${shellQuote(`env TARGET=/etc sh -c 'rm -rf "$TARGET/child"'`)}`;
+    const wrapped = analyzeCommand(wrappedSource, localExecutionContext(fixture.cwd, fixture.env));
+    const wrappedRm = wrapped.invocations.find((invocation) => invocation.execution.kind === "ssh" && invocation.executable.literal === "rm");
+    expect(wrappedRm?.execution).toMatchObject({ env: { TARGET: "/etc" } });
+    expect(matchNames(wrappedSource, fixture)).toContain("recursive-delete");
+  });
+
   it("tracks remote cd without leaking subshell and pipeline changes", () => {
     const cases = [
       ["ssh host 'cd /tmp/project; rm -rf traces'", { kind: "absolute", value: "/tmp/project" }],
@@ -68,6 +86,24 @@ describe("SSH command analysis", () => {
     }
     expect(matchNames("ssh host 'cd /etc; rm -rf child'", fixture)).toContain("recursive-delete");
     expect(matchNames("ssh host 'cd \"$UNKNOWN\"; rm -rf child'", fixture)).toContain("recursive-delete");
+
+    const unresolved = analyzeCommand("ssh host 'D=$(printf /etc); cd \"$D\"; rm -rf child'", localExecutionContext(fixture.cwd, fixture.env));
+    const unresolvedRm = unresolved.invocations.find((invocation) => invocation.execution.kind === "ssh" && invocation.executable.literal === "rm");
+    expect(unresolvedRm?.cwd).toEqual({ kind: "unknown" });
+    expect(unresolved.uncertainties).toContain("cd directory is dynamic or unresolved");
+
+    const conditional = analyzeCommand("ssh host 'if true; then cd /etc; fi; rm -rf child'", localExecutionContext(fixture.cwd, fixture.env));
+    const conditionalRm = conditional.invocations.find((invocation) => invocation.execution.kind === "ssh" && invocation.executable.literal === "rm");
+    expect(conditionalRm?.cwd).toEqual({ kind: "unknown" });
+    expect(conditional.uncertainties).toContain("cwd may change across compound control flow");
+    expect(matchNames("ssh host 'if true; then cd /etc; fi; rm -rf child'", fixture)).toContain("recursive-delete");
+  });
+
+  it("still analyzes a literal remote payload when the destination host is dynamic", () => {
+    const analysis = analyzeCommand('ssh "$HOST" \'rm -rf /\'', localExecutionContext(fixture.cwd, fixture.env));
+    expect(analysis.uncertainties).toContain("SSH host is dynamic or unresolved");
+    expect(analysis.invocations.map((invocation) => invocation.executable.literal)).toEqual(["ssh", "rm"]);
+    expect(matchNames('ssh "$HOST" \'rm -rf /\'', fixture)).toEqual(expect.arrayContaining(["analysis-uncertain", "recursive-delete"]));
   });
 
   it("protects remote home dotfiles without treating nested dotted names as home dotfiles", () => {

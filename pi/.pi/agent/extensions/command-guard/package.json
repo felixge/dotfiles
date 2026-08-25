@@ -7,7 +7,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "mvdan-sh": "0.10.1"
+    "unbash": "4.0.10"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.84.3",

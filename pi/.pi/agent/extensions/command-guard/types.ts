@@ -22,7 +22,7 @@ export type SymbolicPath =
 export type ExecutionContext =
   | {
       kind: "local";
-      cwd: string;
+      cwd: string | undefined;
       home: string;
       tempRoots: string[];
       env: Record<string, string | undefined>;
@@ -32,6 +32,7 @@ export type ExecutionContext =
       host: string;
       cwd: SymbolicPath;
       home: SymbolicPath;
+      env?: Record<string, string | undefined>;
     };
 
 export interface CommandInvocation {
@@ -39,13 +40,16 @@ export interface CommandInvocation {
   executable: ParsedWord;
   originalExecutable: ParsedWord;
   args: ParsedWord[];
+  /** Environment used to expand the command's arguments in the outer shell. */
+  argumentExecution: ExecutionContext;
+  /** Environment and cwd used by the invoked command or nested child shell. */
   execution: ExecutionContext;
-  cwd: string | SymbolicPath;
+  cwd: string | undefined | SymbolicPath;
   wrappers: string[];
   pipelineId?: number;
   pipelineIndex?: number;
   parentInvocationId?: number;
-  nestedKind?: "command-substitution" | "process-substitution" | "shell-c" | "ssh" | "ssh-heredoc";
+  nestedKind?: "command-substitution" | "process-substitution" | "shell-c" | "ssh" | "ssh-heredoc" | "env-split-string";
   raw: string;
 }
 
@@ -54,6 +58,7 @@ export interface CommandAnalysis {
   invocations: CommandInvocation[];
   parseFailures: Array<{ source: string; context: ExecutionContext }>;
   fallbackMatches: Set<string>;
+  uncertainties: string[];
 }
 
 export interface RuleContext {

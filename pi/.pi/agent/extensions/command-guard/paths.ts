@@ -85,8 +85,13 @@ function canonicalLocalTarget(value: string): string | undefined {
   }
 }
 
-function resolveLocalTarget(word: ParsedWord, execution: Extract<ExecutionContext, { kind: "local" }>): string | undefined {
-  const resolved = resolveWord(word, execution);
+function resolveLocalTarget(
+  word: ParsedWord,
+  execution: Extract<ExecutionContext, { kind: "local" }>,
+  expansionExecution: ExecutionContext = execution,
+): string | undefined {
+  if (!execution.cwd) return undefined;
+  const resolved = resolveWord(word, expansionExecution);
   if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.value === undefined) return undefined;
   let value = resolved.value;
   if (value === "~") value = execution.home;
@@ -104,9 +109,13 @@ function safeLocalTemporary(value: string, execution: Extract<ExecutionContext, 
   });
 }
 
-export function isHighRiskLocalTarget(word: ParsedWord, execution: Extract<ExecutionContext, { kind: "local" }>): boolean {
-  const target = resolveLocalTarget(word, execution);
-  if (!target) return true;
+export function isHighRiskLocalTarget(
+  word: ParsedWord,
+  execution: Extract<ExecutionContext, { kind: "local" }>,
+  expansionExecution: ExecutionContext = execution,
+): boolean {
+  const target = resolveLocalTarget(word, execution, expansionExecution);
+  if (!target || !execution.cwd) return true;
   const cwd = canonicalLocalTarget(execution.cwd);
   const home = canonicalLocalTarget(execution.home);
   if (!cwd || !home) return true;
@@ -122,8 +131,12 @@ function normalizeSymbolicValue(value: string): string {
   return normalized === "." ? "" : normalized.replace(/^\.\//, "");
 }
 
-export function resolveRemoteTarget(word: ParsedWord, execution: Extract<ExecutionContext, { kind: "ssh" }>): SymbolicPath {
-  const resolved = resolveWord(word, execution);
+export function resolveRemoteTarget(
+  word: ParsedWord,
+  execution: Extract<ExecutionContext, { kind: "ssh" }>,
+  expansionExecution: ExecutionContext = execution,
+): SymbolicPath {
+  const resolved = resolveWord(word, expansionExecution);
   if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.value === undefined) return { kind: "unknown" };
   const value = resolved.value;
   if (value === "~" || value === "<remote-home>") return { kind: "home", value: "" };
@@ -142,8 +155,12 @@ function symbolicAncestorOrEqual(target: SymbolicPath, current: SymbolicPath): b
   return target.value === "" || isAncestorOrEqual(target.value, current.value);
 }
 
-export function isHighRiskRemoteTarget(word: ParsedWord, execution: Extract<ExecutionContext, { kind: "ssh" }>): boolean {
-  const target = resolveRemoteTarget(word, execution);
+export function isHighRiskRemoteTarget(
+  word: ParsedWord,
+  execution: Extract<ExecutionContext, { kind: "ssh" }>,
+  expansionExecution: ExecutionContext = execution,
+): boolean {
+  const target = resolveRemoteTarget(word, execution, expansionExecution);
   if (target.kind === "unknown") return true;
   if (target.kind === "temp") return target.value === "";
   if (symbolicAncestorOrEqual(target, execution.cwd)) return true;
@@ -158,31 +175,32 @@ export function isHighRiskRemoteTarget(word: ParsedWord, execution: Extract<Exec
 export function isHighRiskRm(rm: RmInvocation): boolean {
   if (!rm.recursive || rm.targets.length === 0) return false;
   return rm.targets.some((target) => rm.invocation.execution.kind === "local"
-    ? isHighRiskLocalTarget(target, rm.invocation.execution)
-    : isHighRiskRemoteTarget(target, rm.invocation.execution));
+    ? isHighRiskLocalTarget(target, rm.invocation.execution, rm.invocation.argumentExecution)
+    : isHighRiskRemoteTarget(target, rm.invocation.execution, rm.invocation.argumentExecution));
 }
 
-export function isHomeDotfileTarget(word: ParsedWord, execution: ExecutionContext): boolean {
+export function isHomeDotfileTarget(word: ParsedWord, execution: ExecutionContext, expansionExecution: ExecutionContext = execution): boolean {
   if (execution.kind === "ssh") {
-    const target = resolveRemoteTarget(word, execution);
+    const target = resolveRemoteTarget(word, execution, expansionExecution);
     if (target.kind === "home") return Boolean(target.value.split("/")[0]?.startsWith("."));
     return target.kind === "absolute" && /^\/(?:home|Users)\/[^/]+\/\./.test(target.value);
   }
-  const resolved = resolveWord(word, execution);
+  const resolved = resolveWord(word, expansionExecution);
   if (resolved.unresolved || resolved.value === undefined) return false;
   let value = resolved.value;
   if (value.startsWith("~/")) value = path.join(execution.home, value.slice(2));
+  if (!execution.cwd) return false;
   const absolute = path.resolve(execution.cwd, value);
   const relative = path.relative(execution.home, absolute);
   const first = relative.split(path.sep)[0];
   return relative !== "" && !relative.startsWith("..") && Boolean(first?.startsWith("."));
 }
 
-export function isProtectedRootOperand(word: ParsedWord, execution: ExecutionContext): boolean {
+export function isProtectedRootOperand(word: ParsedWord, execution: ExecutionContext, expansionExecution: ExecutionContext = execution): boolean {
   if (execution.kind === "ssh") {
-    const target = resolveRemoteTarget(word, execution);
+    const target = resolveRemoteTarget(word, execution, expansionExecution);
     return target.kind === "absolute" && isSensitive(target.value) && !isEqualOrBelow(target.value, "/tmp");
   }
-  const target = resolveLocalTarget(word, execution);
+  const target = resolveLocalTarget(word, execution, expansionExecution);
   return Boolean(target && isSensitive(target) && !safeLocalTemporary(target, execution));
 }

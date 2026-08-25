@@ -35,6 +35,11 @@ const EXECUTORS = new Set(["bash", "sh", "zsh", "python", "node", "ruby", "perl"
 
 export const rules: Rule[] = [
   {
+    name: "analysis-uncertain",
+    description: "Command analysis was incomplete or ambiguous",
+    test: ({ analysis }) => analysis.uncertainties.length > 0,
+  },
+  {
     name: "recursive-delete",
     description: "High-risk recursive file deletion",
     test: ({ analysis }) => analysis.fallbackMatches.has("recursive-delete") || analysis.invocations.some((invocation) => {
@@ -45,17 +50,17 @@ export const rules: Rule[] = [
   {
     name: "root-path-write",
     description: "Writing to sensitive system paths",
-    test: anyInvocation((invocation) => {
+    test: ({ analysis }) => analysis.fallbackMatches.has("root-path-write") || analysis.invocations.some((invocation) => {
       const executable = name(invocation);
-      return Boolean(executable && ROOT_WRITE_COMMANDS.has(executable) && invocation.args.some((arg) => isProtectedRootOperand(arg, invocation.execution)));
+      return Boolean(executable && ROOT_WRITE_COMMANDS.has(executable) && invocation.args.some((arg) => isProtectedRootOperand(arg, invocation.execution, invocation.argumentExecution)));
     }),
   },
   {
     name: "home-dotfile-delete",
     description: "Deleting home directory dotfiles",
-    test: anyInvocation((invocation) => {
+    test: ({ analysis }) => analysis.fallbackMatches.has("home-dotfile-delete") || analysis.invocations.some((invocation) => {
       const rm = inspectRm(invocation);
-      return Boolean(rm?.targets.some((target) => isHomeDotfileTarget(target, invocation.execution)));
+      return Boolean(rm?.targets.some((target) => isHomeDotfileTarget(target, invocation.execution, invocation.argumentExecution)));
     }),
   },
   {
@@ -66,12 +71,12 @@ export const rules: Rule[] = [
   {
     name: "world-writable",
     description: "Setting world-writable permissions (777/666)",
-    test: anyInvocation((invocation) => command(invocation, "chmod") && values(invocation).some((value) => value === "777" || value === "666")),
+    test: ({ analysis }) => analysis.fallbackMatches.has("world-writable") || analysis.invocations.some((invocation) => command(invocation, "chmod") && values(invocation).some((value) => value === "777" || value === "666")),
   },
   {
     name: "curl-pipe-exec",
     description: "Piping a download directly to an interpreter",
-    test: ({ analysis }) => analysis.invocations.some((download) => {
+    test: ({ analysis }) => analysis.fallbackMatches.has("curl-pipe-exec") || analysis.invocations.some((download) => {
       if (!DOWNLOADERS.has(name(download) ?? "")) return false;
       return analysis.invocations.some((executor) => {
         if (!EXECUTORS.has(name(executor) ?? "")) return false;
@@ -84,7 +89,7 @@ export const rules: Rule[] = [
   {
     name: "git-force-push",
     description: "Force pushing to remote",
-    test: anyInvocation((invocation) => {
+    test: ({ analysis }) => analysis.fallbackMatches.has("git-force-push") || analysis.invocations.some((invocation) => {
       const args = values(invocation);
       return command(invocation, "git") && args[0] === "push" && (args.includes("--force") || hasShortOption(args.slice(1), "f"));
     }),
@@ -92,7 +97,7 @@ export const rules: Rule[] = [
   {
     name: "git-hard-reset",
     description: "Hard resetting git history",
-    test: anyInvocation((invocation) => {
+    test: ({ analysis }) => analysis.fallbackMatches.has("git-hard-reset") || analysis.invocations.some((invocation) => {
       const args = values(invocation);
       return command(invocation, "git") && args[0] === "reset" && args.includes("--hard");
     }),
@@ -100,7 +105,7 @@ export const rules: Rule[] = [
   {
     name: "git-clean-force",
     description: "Force cleaning untracked files",
-    test: anyInvocation((invocation) => {
+    test: ({ analysis }) => analysis.fallbackMatches.has("git-clean-force") || analysis.invocations.some((invocation) => {
       const args = values(invocation);
       return command(invocation, "git") && args[0] === "clean" && (args.includes("--force") || hasShortOption(args.slice(1), "f"));
     }),
@@ -108,12 +113,12 @@ export const rules: Rule[] = [
   {
     name: "kill-signal",
     description: "Sending kill signals (kill -9, killall)",
-    test: anyInvocation((invocation) => command(invocation, "killall") || (command(invocation, "kill") && values(invocation).includes("-9"))),
+    test: ({ analysis }) => analysis.fallbackMatches.has("kill-signal") || analysis.invocations.some((invocation) => command(invocation, "killall") || (command(invocation, "kill") && values(invocation).includes("-9"))),
   },
   {
     name: "dd-command",
     description: "Raw disk write with dd",
-    test: anyInvocation((invocation) => command(invocation, "dd") && values(invocation).some((value) => value.startsWith("of="))),
+    test: ({ analysis }) => analysis.fallbackMatches.has("dd-command") || analysis.invocations.some((invocation) => command(invocation, "dd") && values(invocation).some((value) => value.startsWith("of="))),
   },
   {
     name: "mkfs",
@@ -123,7 +128,7 @@ export const rules: Rule[] = [
   {
     name: "global-npm-install",
     description: "Global npm install/uninstall",
-    test: anyInvocation((invocation) => {
+    test: ({ analysis }) => analysis.fallbackMatches.has("global-npm-install") || analysis.invocations.some((invocation) => {
       const args = values(invocation);
       return command(invocation, "npm") && ["install", "i", "uninstall", "remove"].includes(args[0] ?? "") && (args.includes("--global") || hasShortOption(args.slice(1), "g"));
     }),
@@ -131,17 +136,18 @@ export const rules: Rule[] = [
   {
     name: "brew-uninstall",
     description: "Homebrew uninstall/remove",
-    test: anyInvocation((invocation) => command(invocation, "brew") && ["uninstall", "remove"].includes(values(invocation)[0] ?? "")),
+    test: ({ analysis }) => analysis.fallbackMatches.has("brew-uninstall") || analysis.invocations.some((invocation) => command(invocation, "brew") && ["uninstall", "remove"].includes(values(invocation)[0] ?? "")),
   },
   {
     name: "docker-system-prune",
     description: "Docker system-wide prune",
-    test: anyInvocation((invocation) => command(invocation, "docker") && values(invocation)[0] === "system" && values(invocation)[1] === "prune"),
+    test: ({ analysis }) => analysis.fallbackMatches.has("docker-system-prune") || analysis.invocations.some((invocation) => command(invocation, "docker") && values(invocation)[0] === "system" && values(invocation)[1] === "prune"),
   },
   {
     name: "reverse-shell",
     description: "Possible reverse shell pattern",
     test: ({ analysis }) => {
+      if (analysis.fallbackMatches.has("reverse-shell")) return true;
       const netcat = analysis.invocations.some((invocation) => ["nc", "ncat", "netcat"].includes(name(invocation) ?? "") && hasShortOption(values(invocation), "e"));
       const devSocket = analysis.invocations.some((invocation) => invocation.args.some((word: ParsedWord) => word.parts.some((part) => part.kind === "literal" && /\/dev\/(?:tcp|udp)\//.test(part.value))));
       const fifo = analysis.invocations.some((invocation) => command(invocation, "mkfifo"));
