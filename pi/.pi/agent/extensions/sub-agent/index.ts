@@ -188,7 +188,7 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 			"Start one isolated background sub-agent and return immediately. An optional name labels the agent in status and results. Start all independent agents before calling agent_wait. Read access is the default; write access allows file mutation and is serialized with other writers in the same canonical working directory.",
 		promptSnippet: "Start an isolated background sub-agent",
 		promptGuidelines: [
-			"Use agent_spawn for independent delegated tasks, start all independent sub-agents before using agent_wait, and retain every returned ID.",
+			"Before using agent_spawn, ask the user for permission and wait for explicit approval, unless the current user prompt already explicitly requests sub-agent use. Do not treat task complexity or parallelization opportunities as permission. Once authorized, start all independent sub-agents before using agent_wait and retain every returned ID.",
 		],
 		parameters: AgentSpawnParams,
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
