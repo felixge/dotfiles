@@ -45,6 +45,21 @@ describe("unbash parser adapter", () => {
     expect(invocation?.args[7]).toMatchObject({ literal: "*", dynamic: false, hasUnquotedGlob: false });
   });
 
+  it("does not mistake the [ test builtin for a globbed executable", () => {
+    const source = String.raw`if [ -f terminology.md ]; then rg -n -i 'hero run' terminology.md || true; else printf 'terminology.md not found\n'; fi
+printf '\n=== repo ===\n'
+repo_vcs "$PWD" 2>/dev/null || true
+printf '\n=== status ===\n'
+git status --short 2>/dev/null || true`;
+    const result = analyze(source, fixture);
+    expect(result.parseFailures).toEqual([]);
+    expect(result.uncertainties).toEqual([]);
+    expect(matchingRules({ analysis: result })).toEqual([]);
+
+    const globbedExecutable = analyze("./[ab] arg", fixture);
+    expect(globbedExecutable.uncertainties).toContain("executable is dynamic or unresolved");
+  });
+
   it("walks command, process, and arithmetic substitutions", () => {
     const source = 'echo "$(rm -rf /tmp/child)" <(curl https://example.test) "$((1 + $(mkfs.ext4 /dev/x)))"';
     const result = analyze(source, fixture);

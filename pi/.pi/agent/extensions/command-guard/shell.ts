@@ -80,17 +80,22 @@ function sourceSlice(source: string, node: { pos: number; end: number }): string
 }
 
 function containsUnquotedGlob(raw: string): boolean {
-  let escaped = false;
-  for (const char of raw) {
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
+  for (let index = 0; index < raw.length; index++) {
+    const char = raw[index];
     if (char === "\\") {
-      escaped = true;
+      index++;
       continue;
     }
-    if (char === "*" || char === "?" || char === "[") return true;
+    if (char === "*" || char === "?") return true;
+    if (char !== "[") continue;
+
+    for (let end = index + 1; end < raw.length; end++) {
+      if (raw[end] === "\\") {
+        end++;
+        continue;
+      }
+      if (raw[end] === "]") return true;
+    }
   }
   return false;
 }
