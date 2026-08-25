@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { truncateHead } from "@earendil-works/pi-coding-agent";
 import {
 	mergeAgentRuns,
 	persistedTerminalRun,
@@ -132,6 +133,31 @@ test("agent_status observations restore structured terminal state", () => {
 	assert.equal(history.runs[0]?.revision, completed.revision);
 	assert.equal(history.runs[0]?.phase.kind, "completed");
 	assert.equal(history.runs[0]?.finalOutput, "done");
+});
+
+test("agent_status history preserves output truncation across re-projection", () => {
+	const fullOutput = "line\n".repeat(20_000);
+	const truncation = truncateHead(fullOutput);
+	const completed: AgentSnapshot = {
+		...snapshot("aaaaaa", "completed"),
+		finalOutput: truncation.content,
+		finalOutputTruncation: truncation,
+		fullOutputPath: "/tmp/full-agent-output.log",
+	};
+	const observation = observationFromSnapshot(completed, 20, { outputBytes: 100 });
+	const history = readAgentHistory([
+		spawnEntry(snapshot("aaaaaa")),
+		{
+			type: "message",
+			message: { role: "toolResult", toolName: "agent_status", details: { agents: [observation] } },
+		},
+	]);
+	const restored = history.runs[0]!;
+	const projected = observationFromSnapshot(restored, 20, { outputBytes: 100 });
+	assert.equal(projected.outputTruncation?.truncated, true);
+	assert.equal(projected.outputTruncation?.originalBytes, truncation.totalBytes);
+	assert.equal(projected.outputTruncation?.originalLines, truncation.totalLines);
+	assert.equal(projected.outputTruncation?.fullOutputPath, "/tmp/full-agent-output.log");
 });
 
 test("existing agent_wait results restore terminal state and live runs override history", () => {

@@ -130,6 +130,7 @@ export interface AgentRun extends AgentRunConfig {
 	fullOutputPath?: string;
 	liveOutput: string;
 	error?: string;
+	errorOriginalBytes?: number;
 	stderr: string;
 	activity: ActivityEvent[];
 }
@@ -245,11 +246,19 @@ export interface AgentObservation {
 	tokensPerSecond15s?: number;
 	usage: UsageSummary;
 	error?: string;
+	errorTruncation?: {
+		truncated: true;
+		originalBytes: number;
+		visibleBytes: number;
+	};
 	liveOutput?: string;
 	finalOutput?: string;
 	outputTruncation?: {
 		truncated: true;
+		truncatedBy: "lines" | "bytes";
+		originalLines: number;
 		originalBytes: number;
+		visibleLines: number;
 		visibleBytes: number;
 		fullOutputPath?: string;
 	};

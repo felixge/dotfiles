@@ -211,9 +211,25 @@ function restoreObservation(existing: AgentSnapshot, observation: AgentObservati
 		usage: observation.usage,
 		tokensPerSecond15s: observation.tokensPerSecond15s,
 		finalOutput: observation.finalOutput ?? existing.finalOutput,
+		finalOutputTruncation: observation.finalOutput !== undefined && observation.outputTruncation
+			? {
+				content: observation.finalOutput,
+				truncated: true,
+				truncatedBy: observation.outputTruncation.truncatedBy,
+				totalLines: observation.outputTruncation.originalLines,
+				totalBytes: observation.outputTruncation.originalBytes,
+				outputLines: observation.outputTruncation.visibleLines,
+				outputBytes: observation.outputTruncation.visibleBytes,
+				lastLinePartial: false,
+				firstLineExceedsLimit: false,
+				maxLines: observation.outputTruncation.visibleLines,
+				maxBytes: observation.outputTruncation.visibleBytes,
+			}
+			: existing.finalOutputTruncation,
 		fullOutputPath: observation.outputTruncation?.fullOutputPath ?? existing.fullOutputPath,
 		liveOutput: observation.liveOutput ?? "",
 		error: observation.error,
+		errorOriginalBytes: observation.errorTruncation?.originalBytes ?? existing.errorOriginalBytes,
 	};
 }
 

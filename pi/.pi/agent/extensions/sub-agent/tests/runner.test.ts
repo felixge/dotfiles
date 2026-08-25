@@ -334,6 +334,23 @@ test("process runner uses its injectable clock for operation timing", async () =
 	assert.equal(result.progress.recentOperations[0]?.endedAt, 150);
 });
 
+test("full-output write diagnostics use the injectable clock", async () => {
+	let now = 90;
+	const runner = new PiProcessRunner({
+		resolveInvocation: () => ({ command: process.execPath, args: [fixture, "large"] }),
+		writeFullOutput: () => {
+			throw new Error("disk full");
+		},
+		timeoutMs: 2_000,
+		now: () => (now += 10),
+	});
+	const result = await runner.start(config, () => {}).result;
+	const diagnostic = result.progress.activity.find((event) => event.summary.includes("could not save full output"));
+	assert.equal(diagnostic?.timestamp, 170);
+	assert.equal(result.progress.lastProgressAt, 180);
+	assert.match(diagnostic?.summary ?? "", /disk full/u);
+});
+
 test("process runner saves full truncated output to a temp file", async () => {
 	const runner = new PiProcessRunner({
 		resolveInvocation: () => ({ command: process.execPath, args: [fixture, "large"] }),

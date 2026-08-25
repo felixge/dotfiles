@@ -122,10 +122,13 @@ function cloneSnapshot(run: ManagedRun, now: number): AgentSnapshot {
 		usage: Object.freeze({ ...run.usage, cost: Object.freeze({ ...run.usage.cost }) }),
 		...(run.startedAt !== undefined ? { tokensPerSecond15s: calculateTokenRate(run.tokenSamples, endpoint) } : {}),
 		finalOutput: run.finalOutput,
-		finalOutputTruncation: run.finalOutputTruncation,
+		finalOutputTruncation: run.finalOutputTruncation
+			? Object.freeze({ ...run.finalOutputTruncation })
+			: undefined,
 		fullOutputPath: run.fullOutputPath,
 		liveOutput: run.liveOutput,
 		error: run.error,
+		errorOriginalBytes: run.errorOriginalBytes,
 		stderr: run.stderr,
 		activity: Object.freeze(run.activity.map((event) => Object.freeze({ ...event }))),
 	});
@@ -456,11 +459,16 @@ export class AgentManager {
 			appendTokenSample(run.tokenSamples, run.outputTokens, this.now());
 		}
 		run.finalOutput = progress.finalOutput;
-		run.finalOutputTruncation = progress.finalOutputTruncation;
+		run.finalOutputTruncation = progress.finalOutputTruncation
+			? { ...progress.finalOutputTruncation }
+			: undefined;
 		run.fullOutputPath = progress.fullOutputPath;
 		run.liveOutput = progress.liveOutput;
 		run.activity = progress.activity.map((event) => ({ ...event }));
-		if (progress.finalError) run.error = progress.finalError;
+		if (progress.finalError) {
+			run.error = progress.finalError;
+			run.errorOriginalBytes = Buffer.byteLength(progress.finalError, "utf8");
+		}
 		this.emit();
 	}
 

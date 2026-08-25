@@ -274,8 +274,10 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 			const liveById = new Map((waitedSnapshots ?? manager.getAll()).map((run) => [run.id, run]));
 			selected = selected.map((run) => liveById.get(run.id) ?? run);
 			const terminalLive = selected.filter((run) => liveById.has(run.id) && isTerminalStatus(run.status));
-			const attribution = manager.claimUsage(terminalLive);
+			// Projection can reject oversized non-elidable metadata. Build it before
+			// mutating exactly-once usage attribution state.
 			const response = statusResponseFromSnapshots(selected, params.wait);
+			const attribution = manager.claimUsage(terminalLive);
 			const details: StatusToolDetails = { ...response, attributedIds: attribution.attributedIds };
 			return {
 				content: [{ type: "text", text: JSON.stringify(response) }],

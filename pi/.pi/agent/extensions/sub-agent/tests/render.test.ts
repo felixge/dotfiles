@@ -153,6 +153,24 @@ test("aggregate status response stays valid and below 50 KB", () => {
 	assert.equal(response.agents[0]?.outputTruncation?.fullOutputPath, "/tmp/agent-0.log");
 });
 
+test("aggregate pressure never silently omits failed-agent errors", () => {
+	const snapshots = Array.from({ length: 12 }, (_, index) => structuredSnapshot({
+		id: `failed${index}`,
+		status: "failed",
+		endedAt: 1_000,
+		lastProgressAt: 1_000,
+		phase: { kind: "failed", startedAt: 1_000 },
+		activeOperations: [],
+		error: `failure ${index}: ${"x".repeat(20_000)}`,
+	}));
+	const response = statusResponseFromSnapshots(snapshots, true, 1_000);
+	for (const agent of response.agents) {
+		assert.equal("error" in agent, true);
+		assert.equal(agent.errorTruncation?.truncated, true);
+		assert.ok((agent.errorTruncation?.originalBytes ?? 0) > (agent.errorTruncation?.visibleBytes ?? 0));
+	}
+});
+
 test("status TUI rendering distinguishes snapshot and wait modes", () => {
 	assert.match(renderStatusCall({ ids: ["abc123"], wait: false }, plainTheme).render(120).join("\n"), /agent_status snapshot abc123/u);
 	assert.match(renderStatusCall({ ids: ["abc123"], wait: true }, plainTheme).render(120).join("\n"), /agent_status wait abc123/u);

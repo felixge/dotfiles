@@ -70,19 +70,21 @@ class FakeRunner implements AgentRunner {
 		};
 	}
 
-	complete(id: string): void {
+	complete(id: string, overrides: Partial<RunnerProgress> = {}): void {
 		const progress = createInitialProgress();
 		progress.finalOutput = "done";
 		progress.liveOutput = "done";
 		progress.finalAssistantSeen = true;
 		progress.agentSettled = true;
+		Object.assign(progress, overrides);
 		this.resolvers.get(id)?.({ exitCode: 0, signal: null, stderr: "", progress, timedOut: false });
 	}
 }
 
 function ids(): () => string {
 	const values = ["aaaaaa", "bbbbbb", "cccccc", "dddddd", "eeeeee", "ffffff"];
-	return () => values.shift()!;
+	let sequence = 100;
+	return () => values.shift() ?? (sequence++).toString(36).padStart(6, "0").slice(-6);
 }
 
 function request(originEntryId: string, parentRunId: string) {
@@ -97,10 +99,10 @@ function request(originEntryId: string, parentRunId: string) {
 	};
 }
 
-function setup(maxConcurrency = 10) {
+function setup(maxConcurrency = 10, maxTerminalRuns = 20) {
 	const api = new FakeExtensionApi();
 	const runner = new FakeRunner();
-	const manager = new AgentManager(runner, { idFactory: ids(), maxConcurrency });
+	const manager = new AgentManager(runner, { idFactory: ids(), maxConcurrency, maxTerminalRuns });
 	registerSubAgentExtension(api as unknown as ExtensionAPI, {
 		manager,
 		parentRunIdFactory: (() => {
@@ -385,6 +387,44 @@ test("agent_status wait returns mixed terminal results and attributes usage once
 		context,
 	);
 	assert.deepEqual(repeated.details.attributedIds, []);
+	await manager.shutdown();
+});
+
+test("failed agent_status projection does not consume usage attribution", async () => {
+	const { api, manager, runner } = setup(120, 200);
+	const runs = Array.from({ length: 120 }, () => manager.spawn(request("branch-a", "parent-1")));
+	const usage = {
+		input: 10,
+		output: 2,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: 12,
+		cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 },
+	};
+	for (const run of runs) runner.complete(run.id, { usage });
+	await tick();
+	const statusTool = api.tools.get("agent_status");
+	const context = { sessionManager: { getBranch: () => [{ id: "branch-a" }] } };
+	await assert.rejects(
+		statusTool.execute(
+			"status-large",
+			{ ids: runs.map((run) => run.id), wait: false },
+			undefined,
+			undefined,
+			context,
+		),
+		/metadata exceeds the 50 KB response limit/u,
+	);
+
+	const retry = await statusTool.execute(
+		"status-small",
+		{ ids: [runs[0]!.id], wait: false },
+		undefined,
+		undefined,
+		context,
+	);
+	assert.deepEqual(retry.details.attributedIds, [runs[0]!.id]);
+	assert.equal(retry.usage.totalTokens, 12);
 	await manager.shutdown();
 });
 

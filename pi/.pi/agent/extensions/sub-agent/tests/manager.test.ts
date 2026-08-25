@@ -192,6 +192,14 @@ test("manager snapshots preserve truncated output metadata", async () => {
 	const [snapshot] = await manager.wait([run.id]);
 	assert.equal(snapshot.fullOutputPath, "/tmp/full-output.log");
 	assert.deepEqual(snapshot.finalOutputTruncation, truncation);
+	assert.ok(Object.isFrozen(snapshot.finalOutputTruncation));
+	const originalTotalBytes = truncation.totalBytes;
+	truncation.totalBytes = 1;
+	assert.equal(manager.get(run.id)?.finalOutputTruncation?.totalBytes, originalTotalBytes);
+	assert.throws(() => {
+		(snapshot.finalOutputTruncation as any).totalBytes = 2;
+	}, TypeError);
+	assert.equal(manager.get(run.id)?.finalOutputTruncation?.totalBytes, originalTotalBytes);
 });
 
 test("cancelling a queued run never starts it and cancelling a running run stops it", async () => {

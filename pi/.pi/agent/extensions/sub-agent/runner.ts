@@ -65,6 +65,7 @@ export type InvocationResolver = (args: string[]) => { command: string; args: st
 export interface ProcessRunnerOptions {
 	spawn?: SpawnProcess;
 	resolveInvocation?: InvocationResolver;
+	writeFullOutput?: (path: string, output: string) => void;
 	timeoutMs?: number;
 	killGraceMs?: number;
 	maxStderrBytes?: number;
@@ -97,6 +98,7 @@ function cloneProgress(progress: RunnerProgress): RunnerProgress {
 		recentOperations: progress.recentOperations.map((operation) => ({ ...operation })),
 		usage: cloneUsageSummary(progress.usage),
 		streamingUsage: progress.streamingUsage ? cloneUsageSummary(progress.streamingUsage) : undefined,
+		finalOutputTruncation: progress.finalOutputTruncation ? { ...progress.finalOutputTruncation } : undefined,
 		activity: progress.activity.map((event) => ({ ...event })),
 	};
 }
@@ -524,6 +526,7 @@ function defaultSpawn(command: string, args: readonly string[], options: AgentSp
 export class PiProcessRunner implements AgentRunner {
 	private readonly spawnProcess: SpawnProcess;
 	private readonly resolveInvocation: InvocationResolver;
+	private readonly writeFullOutput: (path: string, output: string) => void;
 	private readonly timeoutMs: number;
 	private readonly killGraceMs: number;
 	private readonly maxStderrBytes: number;
@@ -532,6 +535,7 @@ export class PiProcessRunner implements AgentRunner {
 	constructor(options: ProcessRunnerOptions = {}) {
 		this.spawnProcess = options.spawn ?? defaultSpawn;
 		this.resolveInvocation = options.resolveInvocation ?? getPiInvocation;
+		this.writeFullOutput = options.writeFullOutput ?? ((path, output) => writeFileSync(path, output, "utf8"));
 		this.timeoutMs = options.timeoutMs ?? DEFAULT_RUN_TIMEOUT_MS;
 		this.killGraceMs = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
 		this.maxStderrBytes = options.maxStderrBytes ?? MAX_STDERR_BYTES;
@@ -604,11 +608,11 @@ export class PiProcessRunner implements AgentRunner {
 					if (fullOutput !== undefined && next.finalOutputTruncation?.truncated) {
 						try {
 							const fullOutputPath = createFullOutputPath(config.id);
-							writeFileSync(fullOutputPath, fullOutput, "utf8");
+							this.writeFullOutput(fullOutputPath, fullOutput);
 							next.fullOutputPath = fullOutputPath;
 						} catch (error) {
 							const message = error instanceof Error ? error.message : String(error);
-							next = addDiagnostic(next, `could not save full output: ${message}`);
+							next = addDiagnostic(next, `could not save full output: ${message}`, this.now());
 						}
 					}
 					publish(next);

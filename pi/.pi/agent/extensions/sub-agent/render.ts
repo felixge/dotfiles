@@ -129,6 +129,10 @@ function boundedString(value: string, bytes: number): string {
 	return truncateUtf8Head(value, bytes);
 }
 
+function lineCount(value: string): number {
+	return value.length === 0 ? 0 : value.split("\n").length;
+}
+
 interface ProjectionLimits {
 	activeOperations: number;
 	recentOperations: number;
@@ -156,11 +160,20 @@ export function observationFromSnapshot(
 	const existingOriginalBytes = terminal && run.finalOutputTruncation?.truncated
 		? run.finalOutputTruncation.totalBytes
 		: Buffer.byteLength(originalOutput, "utf8");
+	const existingOriginalLines = terminal && run.finalOutputTruncation?.truncated
+		? run.finalOutputTruncation.totalLines
+		: lineCount(originalOutput);
 	const visibleOutput = terminal
 		? truncateUtf8Head(originalOutput, outputBudget)
 		: truncateUtf8Tail(originalOutput, outputBudget);
 	const visibleBytes = Buffer.byteLength(visibleOutput, "utf8");
+	const visibleLines = lineCount(visibleOutput);
 	const wasTruncated = existingOriginalBytes > visibleBytes;
+	const error = run.error === undefined ? undefined : boundedString(run.error, errorBudget);
+	const originalErrorBytes = run.error === undefined
+		? 0
+		: (run.errorOriginalBytes ?? Buffer.byteLength(run.error, "utf8"));
+	const visibleErrorBytes = error === undefined ? 0 : Buffer.byteLength(error, "utf8");
 
 	const observation: AgentObservation = {
 		id: run.id,
@@ -210,12 +223,22 @@ export function observationFromSnapshot(
 		turns: run.turns,
 		...(run.tokensPerSecond15s !== undefined ? { tokensPerSecond15s: run.tokensPerSecond15s } : {}),
 		usage: cloneUsageSummary(run.usage),
-		...(run.error && errorBudget > 0 ? { error: boundedString(run.error, errorBudget) } : {}),
+		...(error !== undefined ? { error } : {}),
+		...(error !== undefined && originalErrorBytes > visibleErrorBytes ? {
+			errorTruncation: {
+				truncated: true,
+				originalBytes: originalErrorBytes,
+				visibleBytes: visibleErrorBytes,
+			},
+		} : {}),
 		...(terminal ? { finalOutput: visibleOutput } : { liveOutput: visibleOutput }),
 		...(wasTruncated ? {
 			outputTruncation: {
 				truncated: true,
+				truncatedBy: run.finalOutputTruncation?.truncatedBy ?? "bytes",
+				originalLines: existingOriginalLines,
 				originalBytes: existingOriginalBytes,
+				visibleLines,
 				visibleBytes,
 				...(run.fullOutputPath ? { fullOutputPath: boundedString(run.fullOutputPath, 2_048) } : {}),
 			},
