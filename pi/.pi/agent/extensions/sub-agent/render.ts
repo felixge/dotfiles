@@ -301,8 +301,8 @@ export function formatStatusProgress(response: AgentStatusResponse): string {
 	const lines = response.agents.slice(0, STATUS_RESPONSE_MAX_LINES - 1).map((run) => {
 		const operation = run.activeOperations.at(-1);
 		const activity = operation
-			? `${operation.summary} running ${formatDuration(operation.runningMs)}, quiet ${formatDuration(operation.quietMs)}`
-			: `${run.phase.summary ?? run.phase.kind.replaceAll("_", " ")} ${formatDuration(run.phase.ageMs)}`;
+			? `${operation.summary} ${formatDuration(operation.runningMs)}, quiet ${formatDuration(operation.quietMs)}`
+			: `${run.phase.summary ?? run.phase.kind.replaceAll("_", " ")} ${formatDuration(run.phase.ageMs)}, quiet ${formatDuration(run.quietMs)}`;
 		return `${formatAgentLabel(run)} [${run.access}] ${run.status}: ${activity}`;
 	});
 	if (lines.length < response.agents.length) lines.push(`[${response.agents.length - lines.length} agents omitted]`);
