@@ -58,12 +58,14 @@ function padColumnStart(value: string, width: number): string {
 	return " ".repeat(Math.max(0, width - visibleWidth(clipped))) + clipped;
 }
 
-function structuredActivity(run: AgentSnapshot, now = Date.now()): string {
+export function structuredActivity(run: AgentSnapshot, now = Date.now()): string {
+	const endpoint = run.endedAt ?? now;
 	const operation = run.activeOperations.at(-1);
 	if (operation) {
-		return `${operation.summary} ${formatDuration(now - operation.startedAt)} quiet ${formatDuration(now - operation.lastUpdatedAt)}`;
+		return `${operation.summary} ${formatDuration(endpoint - operation.startedAt)}, quiet ${formatDuration(endpoint - operation.lastUpdatedAt)}`;
 	}
-	return run.phase.summary ?? run.phase.kind.replaceAll("_", " ");
+	const phase = run.phase.summary ?? run.phase.kind.replaceAll("_", " ");
+	return `${phase} ${formatDuration(endpoint - run.phase.startedAt)}, quiet ${formatDuration(endpoint - run.lastProgressAt)}`;
 }
 
 class AgentsDashboard {
