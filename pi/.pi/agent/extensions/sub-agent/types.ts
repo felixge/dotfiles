@@ -156,6 +156,11 @@ export interface SpawnToolDetails {
 	run: AgentSnapshot;
 }
 
+export interface CancelToolDetails {
+	cancelledIds: string[];
+	runs: AgentSnapshot[];
+}
+
 export interface WaitToolDetails {
 	final: boolean;
 	snapshots?: AgentSnapshot[];

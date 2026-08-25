@@ -11,6 +11,7 @@ import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { truncateUtf8Head } from "./runner.ts";
 import type {
 	AgentSnapshot,
+	CancelToolDetails,
 	SpawnToolDetails,
 	UsageSummary,
 	WaitResult,
@@ -165,11 +166,42 @@ export function renderSpawnResult(result: ToolResultLike<SpawnToolDetails>, _opt
 	);
 }
 
-interface WaitCallArgs {
+interface AgentIdsArgs {
 	ids?: string[];
 }
 
-export function renderWaitCall(args: WaitCallArgs, theme: Theme): Text {
+export function renderCancelCall(args: AgentIdsArgs, theme: Theme): Text {
+	return new Text(
+		theme.fg("toolTitle", theme.bold("agent_cancel ")) + theme.fg("accent", (args.ids ?? []).join(", ")),
+		0,
+		0,
+	);
+}
+
+export function renderCancelResult(
+	result: ToolResultLike<CancelToolDetails>,
+	options: { expanded: boolean },
+	theme: Theme,
+): Text {
+	const details = result.details;
+	if (!details) return new Text(result.content[0]?.text ?? "No sub-agent cancellation result", 0, 0);
+	const cancelledIds = new Set(details.cancelledIds);
+	const unchanged = details.runs.length - cancelledIds.size;
+	let text = theme.fg(
+		cancelledIds.size > 0 ? "warning" : "muted",
+		`${cancelledIds.size} cancellation${cancelledIds.size === 1 ? "" : "s"} requested`,
+	);
+	if (unchanged > 0) text += theme.fg("dim", `, ${unchanged} unchanged`);
+	if (options.expanded) {
+		for (const run of details.runs) {
+			const requested = cancelledIds.has(run.id);
+			text += `\n${theme.fg(requested ? "warning" : "muted", formatAgentLabel(run))} ${theme.fg("dim", requested ? "cancellation requested" : run.status)}`;
+		}
+	}
+	return new Text(text, 0, 0);
+}
+
+export function renderWaitCall(args: AgentIdsArgs, theme: Theme): Text {
 	return new Text(
 		theme.fg("toolTitle", theme.bold("agent_wait ")) + theme.fg("accent", (args.ids ?? []).join(", ")),
 		0,
@@ -191,7 +223,7 @@ export function renderWaitResult(
 					return `${theme.fg(color, formatAgentLabel(run))} ${theme.fg("muted", run.status)}${run.currentActivity ? ` ${theme.fg("dim", run.currentActivity)}` : ""}`;
 				})
 				.join("\n") || theme.fg("muted", "waiting");
-		return new Text(`${progress}\n${theme.fg("dim", "Esc cancels selected sub-agents")}`, 0, 0);
+		return new Text(`${progress}\n${theme.fg("dim", "Esc stops waiting; sub-agents continue")}`, 0, 0);
 	}
 
 	const results = details?.results;

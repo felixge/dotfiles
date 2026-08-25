@@ -156,26 +156,18 @@ test("empty model scope does not expose alternative models", () => {
 	);
 });
 
-test("parent abort cancels only children from that low-level run", async () => {
+test("parent abort leaves background sub-agents running", async () => {
 	const { api, manager } = setup();
 	await api.emit("agent_start", { type: "agent_start" });
-	const earlier = manager.spawn(request("assistant-1", "parent-1"));
-	await api.emit("agent_end", {
-		type: "agent_end",
-		messages: [{ role: "assistant", stopReason: "stop" }],
-	});
-	assert.equal(manager.get(earlier.id)?.status, "running");
+	const run = manager.spawn(request("assistant-1", "parent-1"));
 
-	await api.emit("agent_start", { type: "agent_start" });
-	const aborted = manager.spawn(request("assistant-2", "parent-2"));
 	await api.emit("agent_end", {
 		type: "agent_end",
 		messages: [{ role: "toolResult" }, { role: "assistant", stopReason: "aborted" }],
 	});
 	await tick();
 
-	assert.equal(manager.get(earlier.id)?.status, "running");
-	assert.equal(manager.get(aborted.id)?.status, "cancelled");
+	assert.equal(manager.get(run.id)?.status, "running");
 	await manager.shutdown();
 });
 
@@ -204,7 +196,7 @@ test("successful tree navigation cancels abandoned runs and preserves ancestor-o
 	await manager.shutdown();
 });
 
-test("parent abort followed by tree cleanup cancels a child only once", async () => {
+test("tree cleanup cancels a child left running after parent abort", async () => {
 	const { api, manager, runner } = setup();
 	await api.emit("agent_start", { type: "agent_start" });
 	const run = manager.spawn(request("branch-a", "parent-1"));
@@ -213,6 +205,9 @@ test("parent abort followed by tree cleanup cancels a child only once", async ()
 		type: "agent_end",
 		messages: [{ role: "assistant", stopReason: "aborted" }],
 	});
+	assert.equal(manager.get(run.id)?.status, "running");
+	assert.equal(runner.cancelCalls.get(run.id), undefined);
+
 	await api.emit(
 		"session_tree",
 		{ type: "session_tree", oldLeafId: "branch-a", newLeafId: "branch-b" },
@@ -284,8 +279,8 @@ test("terminal runs persist without agent_wait and restore from session history"
 	assert.equal(api.entries.length, 1);
 });
 
-test("aborting agent_wait cancels every selected active run", async () => {
-	const { api, manager } = setup(1);
+test("aborting agent_wait stops only the wait", async () => {
+	const { api, manager, runner } = setup(1);
 	const running = manager.spawn(request("branch-a", "parent-1"));
 	const queued = manager.spawn(request("branch-a", "parent-1"));
 	const waitTool = api.tools.get("agent_wait");
@@ -296,12 +291,45 @@ test("aborting agent_wait cancels every selected active run", async () => {
 
 	await assert.rejects(waiting, { name: "AbortError" });
 	await tick();
-	assert.equal(manager.get(running.id)?.status, "cancelled");
-	assert.equal(manager.get(queued.id)?.status, "cancelled");
+	assert.equal(manager.get(running.id)?.status, "running");
+	assert.equal(manager.get(queued.id)?.status, "queued");
+	assert.equal(runner.cancelCalls.size, 0);
 	await manager.shutdown();
 });
 
-test("agent_start binds sibling agent_spawn calls to parent-abort cleanup", async () => {
+test("agent_cancel explicitly cancels selected active runs", async () => {
+	const { api, manager, runner } = setup(1);
+	const running = manager.spawn(request("branch-a", "parent-1"));
+	const queued = manager.spawn(request("branch-a", "parent-1"));
+	const cancelTool = api.tools.get("agent_cancel");
+	assert.ok(cancelTool);
+
+	const result = await cancelTool.execute("cancel-1", { ids: [running.id, queued.id] });
+	await tick();
+
+	assert.deepEqual(result.details.cancelledIds, [running.id, queued.id]);
+	assert.equal(manager.get(running.id)?.status, "cancelled");
+	assert.equal(manager.get(queued.id)?.status, "cancelled");
+	assert.equal(runner.cancelCalls.get(running.id), 1);
+	await manager.shutdown();
+});
+
+test("agent_cancel validates all IDs before cancelling", async () => {
+	const { api, manager, runner } = setup();
+	const running = manager.spawn(request("branch-a", "parent-1"));
+	const cancelTool = api.tools.get("agent_cancel");
+	assert.ok(cancelTool);
+
+	await assert.rejects(
+		cancelTool.execute("cancel-1", { ids: [running.id, "unknown"] }),
+		/Unknown sub-agent ID: unknown/u,
+	);
+	assert.equal(manager.get(running.id)?.status, "running");
+	assert.equal(runner.cancelCalls.size, 0);
+	await manager.shutdown();
+});
+
+test("agent_start binds sibling agent_spawn calls without parent-abort cleanup", async () => {
 	const { api, manager } = setup();
 	const spawnTool = api.tools.get("agent_spawn");
 	assert.ok(spawnTool);
@@ -342,7 +370,7 @@ test("agent_start binds sibling agent_spawn calls to parent-abort cleanup", asyn
 		messages: [{ role: "assistant", stopReason: "aborted" }],
 	});
 	await tick();
-	assert.equal(manager.get(firstRun!.id)?.status, "cancelled");
-	assert.equal(manager.get(secondRun!.id)?.status, "cancelled");
+	assert.equal(manager.get(firstRun!.id)?.status, "running");
+	assert.equal(manager.get(secondRun!.id)?.status, "running");
 	await manager.shutdown();
 });

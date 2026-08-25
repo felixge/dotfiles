@@ -12,6 +12,8 @@ import { AgentManager, resolveCanonicalCwd } from "./manager.ts";
 import { branchEntryIds, runsOnBranch } from "./scope.ts";
 import {
 	formatWaitProgress,
+	renderCancelCall,
+	renderCancelResult,
 	renderSpawnCall,
 	renderSpawnResult,
 	renderWaitCall,
@@ -25,6 +27,7 @@ import {
 	isTerminalStatus,
 	type AgentAccess,
 	type AgentSnapshot,
+	type CancelToolDetails,
 	type SpawnToolDetails,
 	type ThinkingLevel,
 	type WaitResult,
@@ -64,6 +67,13 @@ const AgentWaitParams = Type.Object({
 	ids: Type.Array(Type.String(), {
 		minItems: 1,
 		description: "Sub-agent IDs to wait for",
+	}),
+});
+
+const AgentCancelParams = Type.Object({
+	ids: Type.Array(Type.String(), {
+		minItems: 1,
+		description: "Queued or running sub-agent IDs to cancel",
 	}),
 });
 
@@ -129,19 +139,6 @@ export function footerText(snapshots: ReturnType<AgentManager["getAll"]>): strin
 	if (running > 0) parts.push(`${running} running`);
 	if (queued > 0) parts.push(`${queued} queued`);
 	return `Agents: ${parts.join(", ")}`;
-}
-
-export function agentRunWasAborted(messages: readonly unknown[]): boolean {
-	for (let index = messages.length - 1; index >= 0; index--) {
-		const message = messages[index];
-		if (typeof message !== "object" || message === null || !("role" in message)) continue;
-		if (message.role === "assistant") return "stopReason" in message && message.stopReason === "aborted";
-	}
-	return false;
-}
-
-function isAbortError(error: unknown): boolean {
-	return error instanceof Error && error.name === "AbortError";
 }
 
 export interface SubAgentExtensionOptions {
@@ -237,22 +234,16 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 		name: "agent_wait",
 		label: "Wait for Agents",
 		description:
-			"Wait for one or more background sub-agents. Escaping this tool cancels the selected queued or running sub-agents. Outputs are capped at 50 KB or 2,000 lines per agent; full truncated output is saved to a temp file.",
+			"Wait for one or more background sub-agents. Aborting this tool stops only the wait; the sub-agents continue in the background. Outputs are capped at 50 KB or 2,000 lines per agent; full truncated output is saved to a temp file.",
 		promptSnippet: "Wait for background sub-agents and collect their results",
 		parameters: AgentWaitParams,
 		async execute(_toolCallId, params, signal, onUpdate) {
-			let snapshots: AgentSnapshot[];
-			try {
-				snapshots = await manager.wait(params.ids, signal, (partial) => {
-					onUpdate?.({
-						content: [{ type: "text", text: formatWaitProgress(partial) }],
-						details: { final: false, snapshots: partial } satisfies WaitToolDetails,
-					});
+			const snapshots = await manager.wait(params.ids, signal, (partial) => {
+				onUpdate?.({
+					content: [{ type: "text", text: formatWaitProgress(partial) }],
+					details: { final: false, snapshots: partial } satisfies WaitToolDetails,
 				});
-			} catch (error) {
-				if (isAbortError(error)) manager.cancelMany(params.ids);
-				throw error;
-			}
+			});
 			const attribution = manager.claimUsage(snapshots);
 			const results = snapshots.map(waitResultFromSnapshot);
 			const visible = modelVisibleResults(results);
@@ -268,6 +259,38 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 		},
 		renderCall: renderWaitCall,
 		renderResult: renderWaitResult,
+	});
+
+	pi.registerTool({
+		name: "agent_cancel",
+		label: "Cancel Agents",
+		description: "Explicitly cancel one or more queued or running background sub-agents.",
+		promptSnippet: "Cancel queued or running background sub-agents",
+		promptGuidelines: [
+			"Use agent_cancel when the user asks to stop sub-agents. Aborting agent_wait stops only the wait and leaves sub-agents running.",
+		],
+		parameters: AgentCancelParams,
+		async execute(_toolCallId, params) {
+			const ids = [...new Set(params.ids)];
+			for (const id of ids) {
+				if (!manager.get(id)) throw new Error(`Unknown sub-agent ID: ${id}`);
+			}
+			const cancelledIds = manager.cancelMany(ids);
+			const runs = ids.map((id) => manager.get(id)!);
+			const cancelledSet = new Set(cancelledIds);
+			const response = {
+				cancellationRequested: cancelledIds,
+				unchanged: runs
+					.filter((run) => !cancelledSet.has(run.id))
+					.map((run) => ({ id: run.id, ...(run.name ? { name: run.name } : {}), status: run.status })),
+			};
+			return {
+				content: [{ type: "text", text: JSON.stringify(response, null, 2) }],
+				details: { cancelledIds, runs } satisfies CancelToolDetails,
+			};
+		},
+		renderCall: renderCancelCall,
+		renderResult: renderCancelResult,
 	});
 
 	pi.registerCommand("agents", {
@@ -299,12 +322,8 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 		activeParentRunId = parentRunIdFactory();
 	});
 
-	pi.on("agent_end", (event) => {
-		const parentRunId = activeParentRunId;
+	pi.on("agent_end", () => {
 		activeParentRunId = undefined;
-		if (parentRunId && agentRunWasAborted(event.messages)) {
-			manager.cancelWhere((run) => run.parentRunId === parentRunId);
-		}
 	});
 
 	pi.on("session_tree", (_event, ctx) => {
