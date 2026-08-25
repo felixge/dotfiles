@@ -13,6 +13,7 @@ describe("per-rule approvals", () => {
       env: fixture.env,
       hasUI: true,
       abort: vi.fn(),
+      audit: vi.fn(),
       choose: vi.fn(async (_title: string, _options: string[]) => choice),
     };
   }
@@ -27,14 +28,39 @@ describe("per-rule approvals", () => {
     expect(second.choose).toHaveBeenCalledOnce();
   });
 
+  it("records the analysis and allow-once decision for a triggered command", async () => {
+    const guard = new CommandGuard();
+    const ctx = context(ALLOW_ONCE);
+    await guard.handle("code=$?", ctx);
+    expect(ctx.audit).toHaveBeenCalledOnce();
+    expect(ctx.audit.mock.calls[0]?.[0]).toMatchObject({
+      command: "code=$?",
+      cwd: fixture.cwd,
+      rules: [{ name: "analysis-uncertain", description: "Command analysis was incomplete or ambiguous" }],
+      uncertainties: ["assignment value is dynamic or unresolved"],
+      parseFailures: ["code=$?"],
+      fallbackMatches: [],
+      decision: "allow-once",
+      allowedRulesBefore: [],
+      allowedRulesAfter: [],
+    });
+    expect(ctx.audit.mock.calls[0]?.[0].promptDurationMs).toBeTypeOf("number");
+  });
+
   it("allows all displayed rules and suppresses only those rules", async () => {
     const guard = new CommandGuard();
     const approve = context(ALLOW_ALL);
     await guard.handle("sudo rm -rf /opt/example", approve);
     expect(guard.allowedRules).toEqual(new Set(["recursive-delete", "root-path-write", "sudo"]));
+    expect(approve.audit.mock.calls[0]?.[0]).toMatchObject({
+      decision: "allow-all",
+      allowedRulesBefore: [],
+      allowedRulesAfter: ["recursive-delete", "root-path-write", "sudo"],
+    });
     const noPrompt = context(BLOCK);
     expect(await guard.handle("sudo true", noPrompt)).toBeUndefined();
     expect(noPrompt.choose).not.toHaveBeenCalled();
+    expect(noPrompt.audit).not.toHaveBeenCalled();
 
     const unapproved = context(BLOCK);
     await guard.handle("sudo chmod 777 file", unapproved);
@@ -63,11 +89,12 @@ describe("per-rule approvals", () => {
   });
 
   it("blocks and aborts on block, cancel, or dismissal", async () => {
-    for (const choice of [BLOCK, undefined]) {
+    for (const [choice, decision] of [[BLOCK, "block"], [undefined, "dismissed"]] as const) {
       const guard = new CommandGuard();
       const ctx = context(choice);
       expect(await guard.handle("rm -rf /", ctx)).toMatchObject({ block: true });
       expect(ctx.abort).toHaveBeenCalledOnce();
+      expect(ctx.audit.mock.calls[0]?.[0]).toMatchObject({ decision });
     }
   });
 
@@ -81,14 +108,20 @@ describe("per-rule approvals", () => {
   it("fails closed without UI and never calls a dialog", async () => {
     const guard = new CommandGuard();
     const choose = vi.fn();
+    const audit = vi.fn();
     const result = await guard.handle("rm -rf /", {
       cwd: fixture.cwd,
       env: fixture.env,
       hasUI: false,
       choose,
       abort: vi.fn(),
+      audit,
     });
     expect(result).toMatchObject({ block: true });
     expect(choose).not.toHaveBeenCalled();
+    expect(audit.mock.calls[0]?.[0]).toMatchObject({
+      decision: "no-ui-block",
+      promptDurationMs: undefined,
+    });
   });
 });
