@@ -152,8 +152,8 @@ class AgentsDashboard {
 
 	private renderList(width: number, maxLines: number): string[] {
 		const runs = this.runs();
-		let agentWidth = Math.min(24, Math.max(8, width - 27));
-		const mandatoryWidth = 27 + agentWidth;
+		let agentWidth = Math.min(24, Math.max(6, width - 32));
+		const mandatoryWidth = 32 + agentWidth;
 		const showElapsed = width - mandatoryWidth >= 10;
 		const showModel = width - mandatoryWidth - (showElapsed ? 10 : 0) >= 21;
 		const showCurrent = width - mandatoryWidth - (showElapsed ? 10 : 0) - (showModel ? 21 : 0) >= 9;
@@ -162,7 +162,7 @@ class AgentsDashboard {
 		const desiredAgentWidth = Math.max(agentWidth, ...runs.map((run) => visibleWidth(formatAgentLabel(run))));
 		agentWidth += Math.min(spareWidth, desiredAgentWidth - agentWidth);
 
-		let header = ` STATUS ${padColumn("AGENT", agentWidth)} ${padColumnStart("COST", 9)} ${padColumnStart("TOK/S", 7)}`;
+		let header = ` STAT ${padColumn("ACCESS", 6)} ${padColumn("AGENT", agentWidth)} ${padColumnStart("COST", 9)} ${padColumnStart("TOK/S", 7)}`;
 		if (showElapsed) header += ` ${padColumn("ELAPSED", 9)}`;
 		if (showModel) header += ` ${padColumn("MODEL/THINKING", 20)}`;
 		if (showCurrent) header += " CURRENT";
@@ -180,11 +180,12 @@ class AgentsDashboard {
 			const selected = index === this.selected;
 			const elapsed = formatDuration((run.endedAt ?? Date.now()) - (run.startedAt ?? run.createdAt));
 			const model = `${shortModel(run.model)}/${run.thinking}`;
-			const coloredStatus = this.theme.fg(statusColor(run.status), statusLabel(run.status).padEnd(6));
+			const coloredStatus = this.theme.fg(statusColor(run.status), statusLabel(run.status).padEnd(4));
+			const access = padColumn(run.access, 6);
 			const agent = this.theme.fg("accent", padColumn(formatAgentLabel(run), agentWidth));
 			const cost = this.theme.fg("warning", padColumnStart(formatCost(run.usage.cost.total), 9));
 			const tokenRate = this.theme.fg("success", padColumnStart(formatTokenRate(run.tokensPerSecond15s), 7));
-			let line = `${selected ? this.theme.fg("accent", ">") : " "} ${coloredStatus} ${agent} ${cost} ${tokenRate}`;
+			let line = `${selected ? this.theme.fg("accent", ">") : " "} ${coloredStatus} ${access} ${agent} ${cost} ${tokenRate}`;
 			if (showElapsed) line += ` ${elapsed.padEnd(9)}`;
 			if (showModel) line += ` ${model.padEnd(20)}`;
 			if (showCurrent) line += ` ${structuredActivity(run)}`;

@@ -303,7 +303,7 @@ export function formatStatusProgress(response: AgentStatusResponse): string {
 		const activity = operation
 			? `${operation.summary} running ${formatDuration(operation.runningMs)}, quiet ${formatDuration(operation.quietMs)}`
 			: `${run.phase.summary ?? run.phase.kind.replaceAll("_", " ")} ${formatDuration(run.phase.ageMs)}`;
-		return `${formatAgentLabel(run)} ${run.status}: ${activity}`;
+		return `${formatAgentLabel(run)} [${run.access}] ${run.status}: ${activity}`;
 	});
 	if (lines.length < response.agents.length) lines.push(`[${response.agents.length - lines.length} agents omitted]`);
 	const text = lines.join("\n");
@@ -418,10 +418,12 @@ export function renderStatusResult(
 	const failed = details.agents.filter((item) => item.status === "failed").length;
 	const active = details.agents.length - completed - failed - details.agents.filter((item) => item.status === "cancelled" || item.status === "interrupted").length;
 	const summary = `${completed} completed, ${failed} failed, ${active} active`;
+	const access = details.agents.map((item) => `${formatAgentLabel(item)}:${item.access}`).join(" ");
 	const usage = formatUsage(aggregateUsage(details.agents));
 	if (!options.expanded) {
 		return new Text(
 			theme.fg(failed > 0 ? "warning" : details.allTerminal ? "success" : "warning", summary) +
+				(access ? `\n${theme.fg("dim", access)}` : "") +
 				(usage ? `\n${theme.fg("dim", usage)}` : ""),
 			0,
 			0,
@@ -434,7 +436,7 @@ export function renderStatusResult(
 		container.addChild(new Spacer(1));
 		const color = item.status === "completed" ? "success" : item.status === "failed" ? "error" : "muted";
 		container.addChild(new Text(
-			`${theme.fg(color, theme.bold(`${formatAgentLabel(item)} ${item.status}`))} ${theme.fg("dim", `${shortModel(item.model)}/${item.thinking} ${formatDuration(item.elapsedMs)}`)}`,
+			`${theme.fg(color, theme.bold(`${formatAgentLabel(item)} ${item.status}`))} ${theme.fg("dim", `${shortModel(item.model)}/${item.thinking} ${item.access} ${formatDuration(item.elapsedMs)}`)}`,
 			0,
 			0,
 		));

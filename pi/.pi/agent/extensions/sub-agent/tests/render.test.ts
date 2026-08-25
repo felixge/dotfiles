@@ -177,10 +177,11 @@ test("status TUI rendering distinguishes snapshot and wait modes", () => {
 	const response = statusResponseFromSnapshots([structuredSnapshot()], false, 1_000);
 	const details: StatusToolDetails = { ...response, attributedIds: [] };
 	const partial = renderStatusResult({ content: [], details }, { expanded: false, isPartial: true }, plainTheme);
-	assert.match(partial.render(160).join("\n"), /bash: npm test running 0s, quiet 0s/u);
+	assert.match(partial.render(160).join("\n"), /worker \(abc123\) \[read\] running: bash: npm test running 0s, quiet 0s/u);
 	const compact = renderStatusResult({ content: [], details }, { expanded: false, isPartial: false }, plainTheme);
-	assert.match(compact.render(160).join("\n"), /active/u);
+	assert.match(compact.render(160).join("\n"), /worker \(abc123\):read/u);
 	const expanded = renderStatusResult({ content: [], details }, { expanded: true, isPartial: false }, plainTheme);
+	assert.match(expanded.render(160).join("\n"), /model\/high read 0s/u);
 	assert.match(expanded.render(160).join("\n"), /Phase: using_tools/u);
 });
 
