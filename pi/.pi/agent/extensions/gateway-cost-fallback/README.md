@@ -10,6 +10,8 @@ This extension restores estimated live and persisted cost for normal AI Gateway 
 
 Native Gateway cost always wins if it becomes available later. Unsupported Gateway providers remain unpriced rather than using a guessed mapping.
 
+Child Pi processes receive these estimates only when their launcher explicitly loads this extension. Disabling extension discovery with `--no-extensions` does not prevent an explicit `--extension` path from loading it.
+
 ## Limitations
 
 - Values are local estimates based on Pi's direct-model catalog, not negotiated or LLMObs-adjusted cost.

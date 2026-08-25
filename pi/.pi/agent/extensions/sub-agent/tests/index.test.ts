@@ -371,13 +371,30 @@ test("agent_status wait returns mixed terminal results and attributes usage once
 		undefined,
 		context,
 	);
-	runner.complete(second.id);
-	runner.complete(first.id);
+	const pricedUsage = {
+		input: 10,
+		output: 2,
+		cacheRead: 3,
+		cacheWrite: 1,
+		totalTokens: 16,
+		cost: { input: 0.02, output: 0.04, cacheRead: 0.01, cacheWrite: 0.01, total: 0.08 },
+	};
+	runner.complete(second.id, { usage: pricedUsage });
+	runner.complete(first.id, { usage: pricedUsage });
 	const result = await waiting;
 	assert.equal(result.details.waited, true);
 	assert.equal(result.details.allTerminal, true);
 	assert.deepEqual(result.details.agents.map((run: any) => run.id), [first.id, second.id]);
+	assert.deepEqual(result.details.agents.map((run: any) => run.usage), [pricedUsage, pricedUsage]);
 	assert.deepEqual(result.details.attributedIds, [first.id, second.id]);
+	assert.deepEqual(result.usage, {
+		input: 20,
+		output: 4,
+		cacheRead: 6,
+		cacheWrite: 2,
+		totalTokens: 32,
+		cost: { input: 0.04, output: 0.08, cacheRead: 0.02, cacheWrite: 0.02, total: 0.16 },
+	});
 
 	const repeated = await statusTool.execute(
 		"status-2",
@@ -387,6 +404,7 @@ test("agent_status wait returns mixed terminal results and attributes usage once
 		context,
 	);
 	assert.deepEqual(repeated.details.attributedIds, []);
+	assert.equal(repeated.usage, undefined);
 	await manager.shutdown();
 });
 

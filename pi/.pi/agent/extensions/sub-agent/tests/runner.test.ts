@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile, unlink } from "node:fs/promises";
+import { isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
+	DEFAULT_GATEWAY_COST_EXTENSION_PATH,
 	LfDelimitedJsonReader,
 	MAX_ACTIVITY_EVENTS,
 	MAX_FINAL_OUTPUT_BYTES,
@@ -14,6 +17,7 @@ import {
 import type { AgentRunConfig } from "../types.ts";
 
 const fixture = fileURLToPath(new URL("./fixtures/child.mjs", import.meta.url));
+const gatewayCostExtensionPath = "/test/gateway-cost-fallback/index.ts";
 const config: AgentRunConfig = {
 	id: "abc123",
 	originEntryId: "assistant-1",
@@ -35,6 +39,18 @@ test("LF reader handles split UTF-8, multiple lines, CRLF, and an unterminated f
 	reader.push(bytes.subarray(split + 2));
 	reader.end();
 	assert.deepEqual(lines, ['{"value":"héllo"}', '{"value":2}', '{"value":"last"}']);
+});
+
+test("default gateway cost extension path is absolute and points to the bundled fallback", () => {
+	assert.equal(isAbsolute(DEFAULT_GATEWAY_COST_EXTENSION_PATH), true);
+	assert.equal(existsSync(DEFAULT_GATEWAY_COST_EXTENSION_PATH), true);
+});
+
+test("gateway cost extension path rejects child-cwd-relative overrides", () => {
+	assert.throws(
+		() => new PiProcessRunner({ gatewayCostExtensionPath: "../gateway-cost-fallback/index.ts" }),
+		/extension path must be absolute/u,
+	);
 });
 
 test("event reducer tracks output, activity, turns, retries, and usage without retaining thinking", () => {
@@ -83,6 +99,65 @@ test("event reducer tracks output, activity, turns, retries, and usage without r
 	});
 	assert.equal(JSON.stringify(state).includes("do not retain me"), false);
 	assert.equal(state.activity.at(-1)?.summary, "retry 2/3 in 4s");
+});
+
+test("event reducer replaces unpriced streaming usage with priced Gateway usage and sums messages once", () => {
+	const pricedUsage = Object.freeze({
+		input: 100,
+		output: 20,
+		cacheRead: 30,
+		cacheWrite: 10,
+		cacheWrite1h: 4,
+		reasoning: 8,
+		totalTokens: 160,
+		cost: Object.freeze({ input: 0.125, output: 0.25, cacheRead: 0.125, cacheWrite: 0.5, total: 1 }),
+	});
+	const message = {
+		role: "assistant",
+		provider: "ai-gw-anthropic-1m",
+		model: "anthropic/claude-opus-5",
+		content: [{ type: "text", text: "priced response" }],
+		stopReason: "stop",
+		usage: pricedUsage,
+	};
+	let state = reduceJsonEvent(createInitialProgress(), { type: "message_start", message: { role: "assistant" } });
+	state = reduceJsonEvent(state, {
+		type: "message_update",
+		usage: {
+			input: 90,
+			output: 10,
+			cacheRead: 30,
+			cacheWrite: 10,
+			totalTokens: 140,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		assistantMessageEvent: { type: "text_delta", delta: "priced response" },
+	});
+	state = reduceJsonEvent(state, { type: "message_end", message });
+	assert.notEqual(state.usage, pricedUsage);
+	assert.deepEqual(state.usage, {
+		input: 100,
+		output: 20,
+		cacheRead: 30,
+		cacheWrite: 10,
+		cacheWrite1h: 4,
+		reasoning: 8,
+		totalTokens: 160,
+		cost: { input: 0.125, output: 0.25, cacheRead: 0.125, cacheWrite: 0.5, total: 1 },
+	});
+
+	state = reduceJsonEvent(state, { type: "message_start", message: { role: "assistant" } });
+	state = reduceJsonEvent(state, { type: "message_end", message });
+	assert.deepEqual(state.usage, {
+		input: 200,
+		output: 40,
+		cacheRead: 60,
+		cacheWrite: 20,
+		cacheWrite1h: 8,
+		reasoning: 16,
+		totalTokens: 320,
+		cost: { input: 0.25, output: 0.5, cacheRead: 0.25, cacheWrite: 1, total: 2 },
+	});
 });
 
 test("event reducer records deterministic phases, parallel tools, retries, and compaction", () => {
@@ -296,6 +371,7 @@ test("process runner uses the isolated Pi CLI policy and consumes deterministic 
 			piArgs = args;
 			return { command: process.execPath, args: [fixture, "success"] };
 		},
+		gatewayCostExtensionPath,
 		timeoutMs: 2_000,
 	});
 	const updates: string[] = [];
@@ -307,17 +383,25 @@ test("process runner uses the isolated Pi CLI policy and consumes deterministic 
 	assert.equal(result.progress.usage.input, 10);
 	assert.equal(result.progress.agentSettled, true);
 	assert.ok(updates.includes("thinking"));
-	assert.deepEqual(piArgs.slice(0, 8), [
+	assert.deepEqual(piArgs, [
 		"--mode",
 		"json",
 		"-p",
 		"--no-session",
 		"--no-extensions",
+		"--extension",
+		gatewayCostExtensionPath,
 		"--no-skills",
 		"--no-prompt-templates",
 		"--no-approve",
+		"--model",
+		"example/model",
+		"--thinking",
+		"low",
+		"--tools",
+		"read,grep,find,ls",
+		"test",
 	]);
-	assert.equal(piArgs[piArgs.indexOf("--tools") + 1], "read,grep,find,ls");
 });
 
 test("process runner uses its injectable clock for operation timing", async () => {

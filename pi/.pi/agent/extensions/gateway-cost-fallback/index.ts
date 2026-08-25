@@ -3,9 +3,10 @@
  * refresh-models intentionally omits cost metadata, while Pi calculates cost
  * locally from model metadata rather than consuming LLMObs's asynchronous cost.
  *
- * This hook covers normal assistant messages, including child Pi processes. Pi
- * does not expose equivalent replacement hooks for compaction or branch-summary
- * usage, so those entries remain unpriced when generated with Gateway models.
+ * This hook covers normal assistant messages. Child Pi processes are covered
+ * only when their launcher explicitly loads this extension. Pi does not expose
+ * equivalent replacement hooks for compaction or branch-summary usage, so those
+ * entries remain unpriced when generated with Gateway models.
  */
 import { calculateCost, type Api, type Model, type Usage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";

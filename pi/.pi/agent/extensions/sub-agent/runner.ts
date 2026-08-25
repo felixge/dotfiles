@@ -2,8 +2,9 @@ import { spawn as nodeSpawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, isAbsolute, join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
+import { fileURLToPath } from "node:url";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateHead } from "@earendil-works/pi-coding-agent";
 import type {
 	ActivityEvent,
@@ -35,6 +36,9 @@ export const DEFAULT_KILL_GRACE_MS = 5_000;
 
 const READ_TOOLS = "read,grep,find,ls";
 const WRITE_TOOLS = "read,bash,edit,write,grep,find,ls";
+export const DEFAULT_GATEWAY_COST_EXTENSION_PATH = fileURLToPath(
+	new URL("../gateway-cost-fallback/index.ts", import.meta.url),
+);
 
 interface ReadableLike {
 	on(event: "data", listener: (chunk: Buffer | string) => void): this;
@@ -70,6 +74,7 @@ export interface ProcessRunnerOptions {
 	killGraceMs?: number;
 	maxStderrBytes?: number;
 	now?: () => number;
+	gatewayCostExtensionPath?: string;
 }
 
 export function createInitialProgress(now = Date.now()): RunnerProgress {
@@ -531,6 +536,7 @@ export class PiProcessRunner implements AgentRunner {
 	private readonly killGraceMs: number;
 	private readonly maxStderrBytes: number;
 	private readonly now: () => number;
+	private readonly gatewayCostExtensionPath: string;
 
 	constructor(options: ProcessRunnerOptions = {}) {
 		this.spawnProcess = options.spawn ?? defaultSpawn;
@@ -540,6 +546,10 @@ export class PiProcessRunner implements AgentRunner {
 		this.killGraceMs = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
 		this.maxStderrBytes = options.maxStderrBytes ?? MAX_STDERR_BYTES;
 		this.now = options.now ?? Date.now;
+		this.gatewayCostExtensionPath = options.gatewayCostExtensionPath ?? DEFAULT_GATEWAY_COST_EXTENSION_PATH;
+		if (!isAbsolute(this.gatewayCostExtensionPath)) {
+			throw new Error("gateway cost extension path must be absolute");
+		}
 	}
 
 	start(config: AgentRunConfig, onProgress: (progress: RunnerProgress) => void): RunningAgentProcess {
@@ -548,7 +558,10 @@ export class PiProcessRunner implements AgentRunner {
 			"json",
 			"-p",
 			"--no-session",
+			// Keep discovery disabled while explicitly loading only the pure cost hook.
 			"--no-extensions",
+			"--extension",
+			this.gatewayCostExtensionPath,
 			"--no-skills",
 			"--no-prompt-templates",
 			"--no-approve",
