@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { readAgentHistory, TERMINAL_RUN_ENTRY_TYPE } from "../history.ts";
 import { registerSubAgentExtension } from "../index.ts";
 import { AgentManager } from "../manager.ts";
 import { createInitialProgress } from "../runner.ts";
@@ -17,6 +18,7 @@ type Handler = (event: any, ctx: any) => unknown;
 class FakeExtensionApi {
 	readonly handlers = new Map<string, Handler[]>();
 	readonly tools = new Map<string, any>();
+	readonly entries: Array<{ type: "custom"; customType: string; data: unknown }> = [];
 
 	on(event: string, handler: Handler): void {
 		const handlers = this.handlers.get(event) ?? [];
@@ -30,6 +32,11 @@ class FakeExtensionApi {
 
 	registerCommand(): void {}
 
+	appendEntry(customType: string, data: unknown): string {
+		this.entries.push({ type: "custom", customType, data });
+		return `custom-${this.entries.length}`;
+	}
+
 	async emit(event: string, value: any, ctx: any = {}): Promise<void> {
 		for (const handler of this.handlers.get(event) ?? []) await handler(value, ctx);
 	}
@@ -37,6 +44,7 @@ class FakeExtensionApi {
 
 class FakeRunner implements AgentRunner {
 	readonly cancelCalls = new Map<string, number>();
+	private readonly resolvers = new Map<string, (result: RunnerResult) => void>();
 
 	start(config: AgentRunConfig, _onProgress: (progress: RunnerProgress) => void): RunningAgentProcess {
 		let resolve!: (result: RunnerResult) => void;
@@ -44,6 +52,7 @@ class FakeRunner implements AgentRunner {
 		const result = new Promise<RunnerResult>((done) => {
 			resolve = done;
 		});
+		this.resolvers.set(config.id, resolve);
 		return {
 			result,
 			cancel: () => {
@@ -59,6 +68,15 @@ class FakeRunner implements AgentRunner {
 				});
 			},
 		};
+	}
+
+	complete(id: string): void {
+		const progress = createInitialProgress();
+		progress.finalOutput = "done";
+		progress.liveOutput = "done";
+		progress.finalAssistantSeen = true;
+		progress.agentSettled = true;
+		this.resolvers.get(id)?.({ exitCode: 0, signal: null, stderr: "", progress, timedOut: false });
 	}
 }
 
@@ -174,7 +192,7 @@ test("footer follows branch scope and shutdown still cancels every branch", asyn
 	let branch = [{ id: "root" }, { id: "branch-a" }];
 	const statuses: Array<string | undefined> = [];
 	const context = {
-		sessionManager: { getBranch: () => branch },
+		sessionManager: { getBranch: () => branch, getEntries: () => api.entries },
 		ui: { setStatus: (_key: string, value: string | undefined) => statuses.push(value) },
 	};
 
@@ -193,6 +211,34 @@ test("footer follows branch scope and shutdown still cancels every branch", asyn
 	assert.equal(manager.get(branchA.id)?.status, "cancelled");
 	assert.equal(manager.get(branchASecond.id)?.status, "cancelled");
 	assert.equal(manager.get(branchB.id)?.status, "cancelled");
+	assert.equal(api.entries.length, 3);
+	assert.ok(readAgentHistory(api.entries).runs.every((run) => run.status === "cancelled"));
+});
+
+test("terminal runs persist without agent_wait and restore from session history", async () => {
+	const { api, manager, runner } = setup();
+	const context = {
+		sessionManager: {
+			getBranch: () => [{ id: "assistant-1" }],
+			getEntries: () => api.entries,
+		},
+		ui: { setStatus: () => {} },
+	};
+	await api.emit("session_start", { type: "session_start", reason: "startup" }, context);
+	const run = manager.spawn(request("assistant-1", "parent-1"));
+
+	runner.complete(run.id);
+	await tick();
+
+	assert.equal(api.entries.length, 1);
+	assert.equal(api.entries[0]?.customType, TERMINAL_RUN_ENTRY_TYPE);
+	const history = readAgentHistory(api.entries);
+	assert.equal(history.runs[0]?.id, run.id);
+	assert.equal(history.runs[0]?.status, "completed");
+	assert.equal(history.runs[0]?.finalOutput, "done");
+
+	await api.emit("session_shutdown", { type: "session_shutdown", reason: "quit" }, context);
+	assert.equal(api.entries.length, 1);
 });
 
 test("aborting agent_wait cancels every selected active run", async () => {

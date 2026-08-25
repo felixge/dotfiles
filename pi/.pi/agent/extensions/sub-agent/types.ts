@@ -3,8 +3,8 @@ import type { TruncationResult } from "@earendil-works/pi-coding-agent";
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type AgentAccess = "read" | "write";
-export type AgentStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
-export type TerminalAgentStatus = Extract<AgentStatus, "completed" | "failed" | "cancelled">;
+export type AgentStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
+export type TerminalAgentStatus = Extract<AgentStatus, "completed" | "failed" | "cancelled" | "interrupted">;
 export type UsageSummary = Usage;
 
 export function createUsageSummary(): UsageSummary {
@@ -169,5 +169,5 @@ export const EMPTY_USAGE: Readonly<UsageSummary> = Object.freeze({
 });
 
 export function isTerminalStatus(status: AgentStatus): status is TerminalAgentStatus {
-	return status === "completed" || status === "failed" || status === "cancelled";
+	return status === "completed" || status === "failed" || status === "cancelled" || status === "interrupted";
 }

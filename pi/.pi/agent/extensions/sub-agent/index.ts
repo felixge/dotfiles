@@ -2,6 +2,12 @@ import { clampThinkingLevel, StringEnum, type ModelThinkingLevel } from "@earend
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { showAgentsDashboard } from "./dashboard.ts";
+import {
+	mergeAgentRuns,
+	persistedTerminalRun,
+	readAgentHistory,
+	TERMINAL_RUN_ENTRY_TYPE,
+} from "./history.ts";
 import { AgentManager, resolveCanonicalCwd } from "./manager.ts";
 import { branchEntryIds, runsOnBranch } from "./scope.ts";
 import {
@@ -15,7 +21,14 @@ import {
 	waitResultFromSnapshot,
 } from "./render.ts";
 import { PiProcessRunner } from "./runner.ts";
-import type { AgentAccess, AgentSnapshot, ThinkingLevel, WaitResult, WaitToolDetails } from "./types.ts";
+import {
+	isTerminalStatus,
+	type AgentAccess,
+	type AgentSnapshot,
+	type ThinkingLevel,
+	type WaitResult,
+	type WaitToolDetails,
+} from "./types.ts";
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 const ACCESS_LEVELS = ["read", "write"] as const;
@@ -134,12 +147,26 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 	const parentRunIdFactory = options.parentRunIdFactory ?? (() => `parent-${++parentRunSequence}`);
 	let activeParentRunId: string | undefined;
 	let unsubscribeFooter: (() => void) | undefined;
+	let unsubscribePersistence: (() => void) | undefined;
 	let footerTimer: ReturnType<typeof setTimeout> | undefined;
 	let lastFooterUpdate = 0;
 	let activeContext: ExtensionContext | undefined;
+	let archivedRuns: AgentSnapshot[] = [];
+	let persistedTerminalIds = new Set<string>();
 
 	const branchIds = (ctx: ExtensionContext) => branchEntryIds(ctx.sessionManager.getBranch());
-	const visibleRuns = (ctx: ExtensionContext) => runsOnBranch(manager.getAll(), branchIds(ctx));
+	const visibleRuns = (ctx: ExtensionContext) =>
+		runsOnBranch(mergeAgentRuns(archivedRuns, manager.getAll()), branchIds(ctx));
+	const persistTerminalRuns = (snapshots: readonly AgentSnapshot[]) => {
+		if (!activeContext) return;
+		for (const run of snapshots) {
+			if (!isTerminalStatus(run.status) || persistedTerminalIds.has(run.id)) continue;
+			const data = persistedTerminalRun(run);
+			pi.appendEntry(TERMINAL_RUN_ENTRY_TYPE, data);
+			persistedTerminalIds.add(run.id);
+			archivedRuns = mergeAgentRuns(archivedRuns, [data.run]);
+		}
+	};
 	const updateFooter = () => {
 		if (!activeContext) return;
 		lastFooterUpdate = Date.now();
@@ -244,8 +271,14 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 
 	pi.on("session_start", (_event, ctx) => {
 		activeContext = ctx;
+		const history = readAgentHistory(ctx.sessionManager.getEntries());
+		archivedRuns = history.runs;
+		persistedTerminalIds = history.persistedTerminalIds;
 		unsubscribeFooter?.();
+		unsubscribePersistence?.();
 		unsubscribeFooter = manager.subscribe(scheduleFooter);
+		unsubscribePersistence = manager.subscribe(persistTerminalRuns);
+		persistTerminalRuns(manager.getAll());
 		updateFooter();
 	});
 
@@ -273,9 +306,11 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 		if (footerTimer) clearTimeout(footerTimer);
 		footerTimer = undefined;
 		ctx.ui.setStatus("sub-agents", undefined);
-		activeContext = undefined;
 		activeParentRunId = undefined;
 		await manager.shutdown();
+		unsubscribePersistence?.();
+		unsubscribePersistence = undefined;
+		activeContext = undefined;
 	});
 
 	return manager;

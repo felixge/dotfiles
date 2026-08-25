@@ -26,13 +26,15 @@ function statusLabel(status: AgentStatus): string {
 			return "FAIL";
 		case "cancelled":
 			return "CANC";
+		case "interrupted":
+			return "INTR";
 	}
 }
 
 function statusColor(status: AgentStatus): "success" | "error" | "warning" | "muted" {
 	if (status === "completed") return "success";
 	if (status === "failed") return "error";
-	if (status === "running") return "warning";
+	if (status === "running" || status === "interrupted") return "warning";
 	return "muted";
 }
 
