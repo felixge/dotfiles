@@ -142,11 +142,15 @@ class AgentsDashboard {
 
 	private renderList(width: number, maxLines: number): string[] {
 		const runs = this.runs();
-		const agentWidth = Math.min(24, Math.max(8, width - 27));
+		let agentWidth = Math.min(24, Math.max(8, width - 27));
 		const mandatoryWidth = 27 + agentWidth;
 		const showElapsed = width - mandatoryWidth >= 10;
 		const showModel = width - mandatoryWidth - (showElapsed ? 10 : 0) >= 21;
 		const showCurrent = width - mandatoryWidth - (showElapsed ? 10 : 0) - (showModel ? 21 : 0) >= 9;
+		const optionalWidth = (showElapsed ? 10 : 0) + (showModel ? 21 : 0) + (showCurrent ? 9 : 0);
+		const spareWidth = Math.max(0, width - mandatoryWidth - optionalWidth);
+		const desiredAgentWidth = Math.max(agentWidth, ...runs.map((run) => visibleWidth(formatAgentLabel(run))));
+		agentWidth += Math.min(spareWidth, desiredAgentWidth - agentWidth);
 
 		let header = ` STATUS ${padColumn("AGENT", agentWidth)} ${padColumnStart("COST", 9)} ${padColumnStart("TOK/S", 7)}`;
 		if (showElapsed) header += ` ${padColumn("ELAPSED", 9)}`;
