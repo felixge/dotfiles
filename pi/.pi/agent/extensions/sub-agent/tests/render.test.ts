@@ -46,6 +46,8 @@ test("model-visible results omit duplicate truncation content", () => {
 test("wait result preserves terminal snapshot metadata", () => {
 	const snapshot: AgentSnapshot = {
 		id: "abc123",
+		originEntryId: "assistant-1",
+		parentRunId: "parent-1",
 		name: "reviewer",
 		prompt: "task",
 		model: "provider/model",

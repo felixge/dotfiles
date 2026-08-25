@@ -12,6 +12,8 @@ import {
 	shortModel,
 } from "./render.ts";
 
+export type AgentRunProvider = () => AgentSnapshot[];
+
 function statusLabel(status: AgentStatus): string {
 	switch (status) {
 		case "running":
@@ -65,6 +67,7 @@ class AgentsDashboard {
 		private readonly tui: TUI,
 		private readonly theme: Theme,
 		private readonly manager: AgentManager,
+		private readonly getRuns: AgentRunProvider,
 		private readonly done: () => void,
 		private readonly requestCancel: (run: AgentSnapshot) => void,
 	) {
@@ -121,7 +124,7 @@ class AgentsDashboard {
 	}
 
 	private runs(): AgentSnapshot[] {
-		return sortRuns(this.manager.getAll());
+		return sortRuns(this.getRuns());
 	}
 
 	private normalizeSelection(): void {
@@ -153,7 +156,7 @@ class AgentsDashboard {
 			` ${this.theme.fg("accent", this.theme.bold("Sub-agents"))}`,
 			this.theme.fg("dim", truncateToWidth(header, width)),
 		];
-		if (runs.length === 0) lines.push(this.theme.fg("muted", " No sub-agents in this session"));
+		if (runs.length === 0) lines.push(this.theme.fg("muted", " No sub-agents on this branch"));
 
 		const availableRows = Math.max(1, maxLines - 3);
 		let start = Math.max(0, this.selected - availableRows + 1);
@@ -226,7 +229,11 @@ class AgentsDashboard {
 	}
 }
 
-export async function showAgentsDashboard(ctx: ExtensionCommandContext, manager: AgentManager): Promise<void> {
+export async function showAgentsDashboard(
+	ctx: ExtensionCommandContext,
+	manager: AgentManager,
+	getRuns: AgentRunProvider,
+): Promise<void> {
 	await ctx.ui.custom<void>(
 		(tui, theme, _keybindings, done) => {
 			let dashboard: AgentsDashboard;
@@ -236,7 +243,7 @@ export async function showAgentsDashboard(ctx: ExtensionCommandContext, manager:
 					tui.requestRender();
 				});
 			};
-			dashboard = new AgentsDashboard(tui, theme, manager, () => done(), requestCancel);
+			dashboard = new AgentsDashboard(tui, theme, manager, getRuns, () => done(), requestCancel);
 			return {
 				render: (width) => dashboard.render(width),
 				handleInput: (data) => {

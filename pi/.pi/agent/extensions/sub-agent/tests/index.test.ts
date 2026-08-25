@@ -1,0 +1,259 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { registerSubAgentExtension } from "../index.ts";
+import { AgentManager } from "../manager.ts";
+import { createInitialProgress } from "../runner.ts";
+import type {
+	AgentRunConfig,
+	AgentRunner,
+	RunnerProgress,
+	RunnerResult,
+	RunningAgentProcess,
+} from "../types.ts";
+
+type Handler = (event: any, ctx: any) => unknown;
+
+class FakeExtensionApi {
+	readonly handlers = new Map<string, Handler[]>();
+	readonly tools = new Map<string, any>();
+
+	on(event: string, handler: Handler): void {
+		const handlers = this.handlers.get(event) ?? [];
+		handlers.push(handler);
+		this.handlers.set(event, handlers);
+	}
+
+	registerTool(tool: any): void {
+		this.tools.set(tool.name, tool);
+	}
+
+	registerCommand(): void {}
+
+	async emit(event: string, value: any, ctx: any = {}): Promise<void> {
+		for (const handler of this.handlers.get(event) ?? []) await handler(value, ctx);
+	}
+}
+
+class FakeRunner implements AgentRunner {
+	readonly cancelCalls = new Map<string, number>();
+
+	start(config: AgentRunConfig, _onProgress: (progress: RunnerProgress) => void): RunningAgentProcess {
+		let resolve!: (result: RunnerResult) => void;
+		let cancelled = false;
+		const result = new Promise<RunnerResult>((done) => {
+			resolve = done;
+		});
+		return {
+			result,
+			cancel: () => {
+				this.cancelCalls.set(config.id, (this.cancelCalls.get(config.id) ?? 0) + 1);
+				if (cancelled) return;
+				cancelled = true;
+				resolve({
+					exitCode: 0,
+					signal: null,
+					stderr: "",
+					progress: createInitialProgress(),
+					timedOut: false,
+				});
+			},
+		};
+	}
+}
+
+function ids(): () => string {
+	const values = ["aaaaaa", "bbbbbb", "cccccc", "dddddd", "eeeeee", "ffffff"];
+	return () => values.shift()!;
+}
+
+function request(originEntryId: string, parentRunId: string) {
+	return {
+		originEntryId,
+		parentRunId,
+		prompt: "task",
+		model: "provider/model",
+		thinking: "low" as const,
+		cwd: "/repo",
+		access: "read" as const,
+	};
+}
+
+function setup(maxConcurrency = 10) {
+	const api = new FakeExtensionApi();
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { idFactory: ids(), maxConcurrency });
+	registerSubAgentExtension(api as unknown as ExtensionAPI, {
+		manager,
+		parentRunIdFactory: (() => {
+			let sequence = 0;
+			return () => `parent-${++sequence}`;
+		})(),
+	});
+	return { api, manager, runner };
+}
+
+async function tick(): Promise<void> {
+	await new Promise<void>((resolve) => setImmediate(resolve));
+}
+
+test("parent abort cancels only children from that low-level run", async () => {
+	const { api, manager } = setup();
+	await api.emit("agent_start", { type: "agent_start" });
+	const earlier = manager.spawn(request("assistant-1", "parent-1"));
+	await api.emit("agent_end", {
+		type: "agent_end",
+		messages: [{ role: "assistant", stopReason: "stop" }],
+	});
+	assert.equal(manager.get(earlier.id)?.status, "running");
+
+	await api.emit("agent_start", { type: "agent_start" });
+	const aborted = manager.spawn(request("assistant-2", "parent-2"));
+	await api.emit("agent_end", {
+		type: "agent_end",
+		messages: [{ role: "toolResult" }, { role: "assistant", stopReason: "aborted" }],
+	});
+	await tick();
+
+	assert.equal(manager.get(earlier.id)?.status, "running");
+	assert.equal(manager.get(aborted.id)?.status, "cancelled");
+	await manager.shutdown();
+});
+
+test("successful tree navigation cancels abandoned runs and preserves ancestor-owned runs", async () => {
+	const { api, manager } = setup();
+	const ancestor = manager.spawn(request("root", "parent-1"));
+	const abandoned = manager.spawn(request("branch-a", "parent-1"));
+
+	assert.equal(manager.get(abandoned.id)?.status, "running");
+	assert.equal(api.handlers.has("session_before_tree"), false);
+	await api.emit(
+		"session_tree",
+		{ type: "session_tree", oldLeafId: "branch-a", newLeafId: "branch-b" },
+		{ sessionManager: { getBranch: () => [{ id: "root" }, { id: "branch-b" }] } },
+	);
+	await tick();
+
+	assert.equal(manager.get(ancestor.id)?.status, "running");
+	assert.equal(manager.get(abandoned.id)?.status, "cancelled");
+	await api.emit(
+		"session_tree",
+		{ type: "session_tree", oldLeafId: "branch-a", newLeafId: "branch-b" },
+		{ sessionManager: { getBranch: () => [{ id: "root" }, { id: "branch-b" }] } },
+	);
+	assert.equal(manager.get(abandoned.id)?.status, "cancelled");
+	await manager.shutdown();
+});
+
+test("parent abort followed by tree cleanup cancels a child only once", async () => {
+	const { api, manager, runner } = setup();
+	await api.emit("agent_start", { type: "agent_start" });
+	const run = manager.spawn(request("branch-a", "parent-1"));
+
+	await api.emit("agent_end", {
+		type: "agent_end",
+		messages: [{ role: "assistant", stopReason: "aborted" }],
+	});
+	await api.emit(
+		"session_tree",
+		{ type: "session_tree", oldLeafId: "branch-a", newLeafId: "branch-b" },
+		{ sessionManager: { getBranch: () => [{ id: "branch-b" }] } },
+	);
+	await tick();
+
+	assert.equal(runner.cancelCalls.get(run.id), 1);
+	assert.equal(manager.get(run.id)?.status, "cancelled");
+	await manager.shutdown();
+});
+
+test("footer follows branch scope and shutdown still cancels every branch", async () => {
+	const { api, manager } = setup();
+	const branchA = manager.spawn(request("branch-a", "parent-1"));
+	const branchASecond = manager.spawn(request("branch-a", "parent-1"));
+	const branchB = manager.spawn(request("branch-b", "parent-2"));
+	let branch = [{ id: "root" }, { id: "branch-a" }];
+	const statuses: Array<string | undefined> = [];
+	const context = {
+		sessionManager: { getBranch: () => branch },
+		ui: { setStatus: (_key: string, value: string | undefined) => statuses.push(value) },
+	};
+
+	await api.emit("session_start", { type: "session_start", reason: "startup" }, context);
+	assert.equal(statuses.at(-1), "Agents: 2 running");
+	branch = [{ id: "root" }, { id: "branch-b" }];
+	await api.emit(
+		"session_tree",
+		{ type: "session_tree", oldLeafId: "branch-a", newLeafId: "branch-b" },
+		context,
+	);
+	assert.equal(statuses.at(-1), "Agents: 1 running");
+
+	await api.emit("session_shutdown", { type: "session_shutdown", reason: "quit" }, context);
+	assert.equal(statuses.at(-1), undefined);
+	assert.equal(manager.get(branchA.id)?.status, "cancelled");
+	assert.equal(manager.get(branchASecond.id)?.status, "cancelled");
+	assert.equal(manager.get(branchB.id)?.status, "cancelled");
+});
+
+test("aborting agent_wait cancels every selected active run", async () => {
+	const { api, manager } = setup(1);
+	const running = manager.spawn(request("branch-a", "parent-1"));
+	const queued = manager.spawn(request("branch-a", "parent-1"));
+	const waitTool = api.tools.get("agent_wait");
+	assert.ok(waitTool);
+	const controller = new AbortController();
+	const waiting = waitTool.execute("wait-1", { ids: [running.id, queued.id] }, controller.signal);
+	controller.abort();
+
+	await assert.rejects(waiting, { name: "AbortError" });
+	await tick();
+	assert.equal(manager.get(running.id)?.status, "cancelled");
+	assert.equal(manager.get(queued.id)?.status, "cancelled");
+	await manager.shutdown();
+});
+
+test("agent_start binds sibling agent_spawn calls to parent-abort cleanup", async () => {
+	const { api, manager } = setup();
+	const spawnTool = api.tools.get("agent_spawn");
+	assert.ok(spawnTool);
+	await api.emit("agent_start", { type: "agent_start" });
+	const context = {
+		cwd: process.cwd(),
+		model: { provider: "provider", id: "model" },
+		thinkingLevel: "off",
+		modelRegistry: {
+			find: () => ({ provider: "provider", id: "model", reasoning: false }),
+			getApiKeyAndHeaders: async () => ({ ok: true }),
+		},
+		sessionManager: {
+			getLeafId: () => "assistant-1",
+		},
+	};
+
+	const first = await spawnTool.execute("spawn-1", { prompt: "one" }, undefined, undefined, context);
+	const second = await spawnTool.execute("spawn-2", { prompt: "two" }, undefined, undefined, context);
+	const firstRun = manager.get(first.details.run.id);
+	const secondRun = manager.get(second.details.run.id);
+	assert.equal(firstRun?.originEntryId, "assistant-1");
+	assert.equal(firstRun?.parentRunId, "parent-1");
+	assert.equal(secondRun?.parentRunId, "parent-1");
+
+	await assert.rejects(
+		spawnTool.execute(
+			"spawn-3",
+			{ prompt: "three" },
+			undefined,
+			undefined,
+			{ ...context, sessionManager: { getLeafId: () => null } },
+		),
+		/persisted session origin/u,
+	);
+	await api.emit("agent_end", {
+		type: "agent_end",
+		messages: [{ role: "assistant", stopReason: "aborted" }],
+	});
+	await tick();
+	assert.equal(manager.get(firstRun!.id)?.status, "cancelled");
+	assert.equal(manager.get(secondRun!.id)?.status, "cancelled");
+	await manager.shutdown();
+});

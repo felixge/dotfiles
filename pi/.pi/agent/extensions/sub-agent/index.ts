@@ -3,6 +3,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Type } from "typebox";
 import { showAgentsDashboard } from "./dashboard.ts";
 import { AgentManager, resolveCanonicalCwd } from "./manager.ts";
+import { branchEntryIds, runsOnBranch } from "./scope.ts";
 import {
 	formatWaitProgress,
 	renderSpawnCall,
@@ -14,7 +15,7 @@ import {
 	waitResultFromSnapshot,
 } from "./render.ts";
 import { PiProcessRunner } from "./runner.ts";
-import type { AgentAccess, ThinkingLevel, WaitResult, WaitToolDetails } from "./types.ts";
+import type { AgentAccess, AgentSnapshot, ThinkingLevel, WaitResult, WaitToolDetails } from "./types.ts";
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 const ACCESS_LEVELS = ["read", "write"] as const;
@@ -99,7 +100,7 @@ export function modelVisibleResults(results: WaitResult[]): WaitResult[] {
 	});
 }
 
-function footerText(snapshots: ReturnType<AgentManager["getAll"]>): string | undefined {
+export function footerText(snapshots: ReturnType<AgentManager["getAll"]>): string | undefined {
 	const running = snapshots.filter((run) => run.status === "running").length;
 	const queued = snapshots.filter((run) => run.status === "queued").length;
 	if (running === 0 && queued === 0) return undefined;
@@ -109,17 +110,40 @@ function footerText(snapshots: ReturnType<AgentManager["getAll"]>): string | und
 	return `Agents: ${parts.join(", ")}`;
 }
 
-export default function subAgentExtension(pi: ExtensionAPI): void {
-	const manager = new AgentManager(new PiProcessRunner());
+export function agentRunWasAborted(messages: readonly unknown[]): boolean {
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const message = messages[index];
+		if (typeof message !== "object" || message === null || !("role" in message)) continue;
+		if (message.role === "assistant") return "stopReason" in message && message.stopReason === "aborted";
+	}
+	return false;
+}
+
+function isAbortError(error: unknown): boolean {
+	return error instanceof Error && error.name === "AbortError";
+}
+
+export interface SubAgentExtensionOptions {
+	manager?: AgentManager;
+	parentRunIdFactory?: () => string;
+}
+
+export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExtensionOptions = {}): AgentManager {
+	const manager = options.manager ?? new AgentManager(new PiProcessRunner());
+	let parentRunSequence = 0;
+	const parentRunIdFactory = options.parentRunIdFactory ?? (() => `parent-${++parentRunSequence}`);
+	let activeParentRunId: string | undefined;
 	let unsubscribeFooter: (() => void) | undefined;
 	let footerTimer: ReturnType<typeof setTimeout> | undefined;
 	let lastFooterUpdate = 0;
 	let activeContext: ExtensionContext | undefined;
 
+	const branchIds = (ctx: ExtensionContext) => branchEntryIds(ctx.sessionManager.getBranch());
+	const visibleRuns = (ctx: ExtensionContext) => runsOnBranch(manager.getAll(), branchIds(ctx));
 	const updateFooter = () => {
 		if (!activeContext) return;
 		lastFooterUpdate = Date.now();
-		activeContext.ui.setStatus("sub-agents", footerText(manager.getAll()));
+		activeContext.ui.setStatus("sub-agents", footerText(visibleRuns(activeContext)));
 	};
 	const scheduleFooter = () => {
 		if (!activeContext || footerTimer) return;
@@ -140,9 +164,18 @@ export default function subAgentExtension(pi: ExtensionAPI): void {
 			"Use agent_spawn for independent delegated tasks, start all independent sub-agents before using agent_wait, and retain every returned ID.",
 		],
 		parameters: AgentSpawnParams,
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+			const originEntryId = ctx.sessionManager.getLeafId();
+			if (!originEntryId) throw new Error("Cannot spawn a sub-agent without a persisted session origin entry");
+			const parentRunId = activeParentRunId;
+			if (!parentRunId) throw new Error("Cannot spawn a sub-agent outside an active parent agent run");
+			signal?.throwIfAborted();
 			const config = await resolveSpawnConfig(params, ctx);
-			const run = manager.spawn(config);
+			signal?.throwIfAborted();
+			if (activeParentRunId !== parentRunId) {
+				throw new Error("Cannot spawn a sub-agent after its parent agent run has ended");
+			}
+			const run = manager.spawn({ ...config, originEntryId, parentRunId });
 			const response = {
 				id: run.id,
 				...(run.name ? { name: run.name } : {}),
@@ -165,16 +198,22 @@ export default function subAgentExtension(pi: ExtensionAPI): void {
 		name: "agent_wait",
 		label: "Wait for Agents",
 		description:
-			"Wait for one or more background sub-agents. Escaping this tool stops only the wait; it does not cancel any sub-agent. Outputs are capped at 50 KB or 2,000 lines per agent; full truncated output is saved to a temp file.",
+			"Wait for one or more background sub-agents. Escaping this tool cancels the selected queued or running sub-agents. Outputs are capped at 50 KB or 2,000 lines per agent; full truncated output is saved to a temp file.",
 		promptSnippet: "Wait for background sub-agents and collect their results",
 		parameters: AgentWaitParams,
 		async execute(_toolCallId, params, signal, onUpdate) {
-			const snapshots = await manager.wait(params.ids, signal, (partial) => {
-				onUpdate?.({
-					content: [{ type: "text", text: formatWaitProgress(partial) }],
-					details: { final: false, snapshots: partial } satisfies WaitToolDetails,
+			let snapshots: AgentSnapshot[];
+			try {
+				snapshots = await manager.wait(params.ids, signal, (partial) => {
+					onUpdate?.({
+						content: [{ type: "text", text: formatWaitProgress(partial) }],
+						details: { final: false, snapshots: partial } satisfies WaitToolDetails,
+					});
 				});
-			});
+			} catch (error) {
+				if (isAbortError(error)) manager.cancelMany(params.ids);
+				throw error;
+			}
 			const attribution = manager.claimUsage(snapshots);
 			const results = snapshots.map(waitResultFromSnapshot);
 			const visible = modelVisibleResults(results);
@@ -199,7 +238,7 @@ export default function subAgentExtension(pi: ExtensionAPI): void {
 				if (ctx.hasUI) ctx.ui.notify("The sub-agent dashboard is available in TUI mode.", "info");
 				return;
 			}
-			await showAgentsDashboard(ctx, manager);
+			await showAgentsDashboard(ctx, manager, () => visibleRuns(ctx));
 		},
 	});
 
@@ -210,6 +249,24 @@ export default function subAgentExtension(pi: ExtensionAPI): void {
 		updateFooter();
 	});
 
+	pi.on("agent_start", () => {
+		activeParentRunId = parentRunIdFactory();
+	});
+
+	pi.on("agent_end", (event) => {
+		const parentRunId = activeParentRunId;
+		activeParentRunId = undefined;
+		if (parentRunId && agentRunWasAborted(event.messages)) {
+			manager.cancelWhere((run) => run.parentRunId === parentRunId);
+		}
+	});
+
+	pi.on("session_tree", (_event, ctx) => {
+		const activeBranchIds = branchIds(ctx);
+		manager.cancelWhere((run) => !activeBranchIds.has(run.originEntryId));
+		updateFooter();
+	});
+
 	pi.on("session_shutdown", async (_event, ctx) => {
 		unsubscribeFooter?.();
 		unsubscribeFooter = undefined;
@@ -217,6 +274,13 @@ export default function subAgentExtension(pi: ExtensionAPI): void {
 		footerTimer = undefined;
 		ctx.ui.setStatus("sub-agents", undefined);
 		activeContext = undefined;
+		activeParentRunId = undefined;
 		await manager.shutdown();
 	});
+
+	return manager;
+}
+
+export default function subAgentExtension(pi: ExtensionAPI): void {
+	registerSubAgentExtension(pi);
 }

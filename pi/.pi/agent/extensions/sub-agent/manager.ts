@@ -39,6 +39,8 @@ export interface AgentManagerOptions {
 }
 
 export interface SpawnRequest {
+	originEntryId: string;
+	parentRunId: string;
 	name?: string;
 	prompt: string;
 	model: string;
@@ -97,6 +99,8 @@ function cloneSnapshot(run: ManagedRun, now: number): AgentSnapshot {
 	const endpoint = run.endedAt ?? now;
 	return Object.freeze({
 		id: run.id,
+		originEntryId: run.originEntryId,
+		parentRunId: run.parentRunId,
 		name: run.name,
 		prompt: run.prompt,
 		model: run.model,
@@ -198,7 +202,7 @@ export class AgentManager {
 
 	cancel(id: string): boolean {
 		const run = this.runs.get(id);
-		if (!run || isTerminalStatus(run.status)) return false;
+		if (!run || isTerminalStatus(run.status) || run.cancellationRequested) return false;
 		run.cancellationRequested = true;
 		if (run.status === "queued") {
 			run.status = "cancelled";
@@ -215,6 +219,18 @@ export class AgentManager {
 		run.handle?.cancel();
 		this.emit();
 		return true;
+	}
+
+	cancelMany(ids: readonly string[]): string[] {
+		const cancelled: string[] = [];
+		for (const id of new Set(ids)) {
+			if (this.cancel(id)) cancelled.push(id);
+		}
+		return cancelled;
+	}
+
+	cancelWhere(predicate: (run: AgentSnapshot) => boolean): string[] {
+		return this.cancelMany(this.getAll().filter(predicate).map((run) => run.id));
 	}
 
 	async wait(

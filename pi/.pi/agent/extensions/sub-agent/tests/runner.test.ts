@@ -16,6 +16,8 @@ import type { AgentRunConfig } from "../types.ts";
 const fixture = fileURLToPath(new URL("./fixtures/child.mjs", import.meta.url));
 const config: AgentRunConfig = {
 	id: "abc123",
+	originEntryId: "assistant-1",
+	parentRunId: "parent-1",
 	prompt: "test",
 	model: "example/model",
 	thinking: "low",

@@ -66,6 +66,8 @@ export interface ActivityEvent {
 
 export interface AgentRunConfig {
 	id: string;
+	originEntryId: string;
+	parentRunId: string;
 	name?: string;
 	prompt: string;
 	model: string;

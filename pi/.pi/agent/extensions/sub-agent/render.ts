@@ -184,16 +184,14 @@ export function renderWaitResult(
 ): Text | Container {
 	const details = result.details;
 	if (options.isPartial || details?.final === false) {
-		return new Text(
+		const progress =
 			(details?.snapshots ?? [])
 				.map((run) => {
 					const color = run.status === "failed" ? "error" : run.status === "completed" ? "success" : "warning";
 					return `${theme.fg(color, formatAgentLabel(run))} ${theme.fg("muted", run.status)}${run.currentActivity ? ` ${theme.fg("dim", run.currentActivity)}` : ""}`;
 				})
-				.join("\n") || theme.fg("muted", "waiting"),
-			0,
-			0,
-		);
+				.join("\n") || theme.fg("muted", "waiting");
+		return new Text(`${progress}\n${theme.fg("dim", "Esc cancels selected sub-agents")}`, 0, 0);
 	}
 
 	const results = details?.results;

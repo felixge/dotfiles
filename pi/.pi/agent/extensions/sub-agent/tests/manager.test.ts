@@ -72,8 +72,13 @@ function ids(): () => string {
 	return () => values.shift()!;
 }
 
-function request(cwd: string, access: "read" | "write" = "read") {
-	return { prompt: "task", model: "provider/model", thinking: "low" as const, cwd, access };
+function request(
+	cwd: string,
+	access: "read" | "write" = "read",
+	originEntryId = "origin-1",
+	parentRunId = "parent-1",
+) {
+	return { originEntryId, parentRunId, prompt: "task", model: "provider/model", thinking: "low" as const, cwd, access };
 }
 
 async function tick(): Promise<void> {
@@ -105,14 +110,18 @@ test("manager enforces global concurrency and one writer per canonical cwd", asy
 	assert.equal(runner.maxActive, 2);
 });
 
-test("manager preserves optional agent names in snapshots and runner config", async () => {
+test("manager preserves provenance and optional names in snapshots and runner config", async () => {
 	const runner = new FakeRunner();
 	const manager = new AgentManager(runner, { idFactory: ids() });
-	const named = manager.spawn({ ...request("/repo"), name: "reviewer" });
+	const named = manager.spawn({ ...request("/repo", "read", "assistant-1", "parent-7"), name: "reviewer" });
 
 	assert.equal(named.name, "reviewer");
+	assert.equal(named.originEntryId, "assistant-1");
+	assert.equal(named.parentRunId, "parent-7");
 	assert.equal(manager.get(named.id)?.name, "reviewer");
 	assert.equal(runner.runs.get(named.id)?.config.name, "reviewer");
+	assert.equal(runner.runs.get(named.id)?.config.originEntryId, "assistant-1");
+	assert.equal(runner.runs.get(named.id)?.config.parentRunId, "parent-7");
 
 	runner.complete(named.id);
 	await tick();
@@ -150,7 +159,23 @@ test("cancelling a queued run never starts it and cancelling a running run stops
 	assert.equal(manager.get(running.id)?.status, "cancelled");
 });
 
-test("wait preserves input order and aborting wait leaves children running", async () => {
+test("bulk cancellation is selective, idempotent, and releases capacity and writer locks", async () => {
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { maxConcurrency: 1, idFactory: ids() });
+	const abandoned = manager.spawn(request("/repo", "write", "branch-a", "parent-a"));
+	const retained = manager.spawn(request("/repo", "write", "branch-b", "parent-b"));
+
+	assert.deepEqual(manager.cancelWhere((run) => run.parentRunId === "parent-a"), [abandoned.id]);
+	assert.deepEqual(manager.cancelMany([abandoned.id, abandoned.id]), []);
+	await tick();
+	assert.equal(manager.get(abandoned.id)?.status, "cancelled");
+	assert.equal(manager.get(retained.id)?.status, "running");
+
+	runner.complete(retained.id);
+	await tick();
+});
+
+test("manager wait preserves input order and does not own abort cancellation", async () => {
 	const runner = new FakeRunner();
 	const manager = new AgentManager(runner, { maxConcurrency: 2, idFactory: ids() });
 	const first = manager.spawn(request("/one"));
