@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ALLOW_ALL, ALLOW_ONCE, BLOCK, CommandGuard } from "../guard.js";
+import { ALLOW_ONCE, BLOCK, CommandGuard } from "../guard.js";
 import { testFs, type TestFs } from "./helpers.js";
+
+const ALLOW_ALL = "select-allow-all";
 
 describe("per-rule approvals", () => {
   let fixture: TestFs;
@@ -14,7 +16,7 @@ describe("per-rule approvals", () => {
       hasUI: true,
       abort: vi.fn(),
       audit: vi.fn(),
-      choose: vi.fn(async (_title: string, _options: string[]) => choice),
+      choose: vi.fn(async (_title: string, options: string[]) => choice === ALLOW_ALL ? options[1] : choice),
     };
   }
 
@@ -52,6 +54,11 @@ describe("per-rule approvals", () => {
     const approve = context(ALLOW_ALL);
     await guard.handle("sudo rm -rf /opt/example", approve);
     expect(guard.allowedRules).toEqual(new Set(["recursive-delete", "root-path-write", "sudo"]));
+    expect(approve.choose.mock.calls[0]?.[1]).toEqual([
+      "Allow (Once)",
+      "Allow All: recursive-delete, root-path-write, sudo (Session)",
+      "Block",
+    ]);
     expect(approve.audit.mock.calls[0]?.[0]).toMatchObject({
       decision: "allow-all",
       allowedRulesBefore: [],

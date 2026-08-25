@@ -2,9 +2,12 @@ import { analyzeCommand, localExecutionContext } from "./shell.js";
 import { matchingRules } from "./rules.js";
 import type { CommandAnalysis, Rule } from "./types.js";
 
-export const ALLOW_ONCE = "Allow once";
-export const ALLOW_ALL = "Allow all future commands matching these rule(s)";
+export const ALLOW_ONCE = "Allow (Once)";
 export const BLOCK = "Block";
+
+function allowAllChoice(violations: Rule[]): string {
+  return `Allow All: ${violations.map(({ name }) => name).join(", ")} (Session)`;
+}
 
 export type GuardDecision = "allow-once" | "allow-all" | "block" | "dismissed" | "no-ui-block";
 
@@ -84,9 +87,10 @@ export class CommandGuard {
     }
 
     const promptStartedAt = Date.now();
+    const allowAll = allowAllChoice(violations);
     const choice = await context.choose(
       `Potential issue${violations.length > 1 ? "s" : ""} detected:\n\n${issueList}\n\nCommand:\n  ${command}\n`,
-      [ALLOW_ONCE, ALLOW_ALL, BLOCK],
+      [ALLOW_ONCE, allowAll, BLOCK],
     );
     const promptDurationMs = Date.now() - promptStartedAt;
 
@@ -94,7 +98,7 @@ export class CommandGuard {
       audit("allow-once", promptDurationMs);
       return undefined;
     }
-    if (choice === ALLOW_ALL) {
+    if (choice === allowAll) {
       for (const violation of violations) this.allowedRules.add(violation.name);
       audit("allow-all", promptDurationMs);
       return undefined;
