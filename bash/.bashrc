@@ -37,6 +37,22 @@ function codexx() {
     codex --dangerously-bypass-approvals-and-sandbox "$@"
 }
 
+# register and open a directory as an Obsidian vault
+obs() {
+    local dir jsdir
+
+    dir="$(cd -- "${1:-.}" && pwd -P)" || return
+    mkdir -p -- "$dir/.obsidian" || return
+
+    # Encode the path safely as a JavaScript string.
+    jsdir="$(python3 -c \
+        'import json,sys; print(json.dumps(sys.argv[1]))' \
+        "$dir")" || return
+
+    obsidian eval \
+        "code=window.electron.ipcRenderer.sendSync('vault-open', $jsdir, false)"
+}
+
 # Fix stale SSH agent forwarding sockets in tmux on remote hosts.
 # SSH creates a per-connection socket, but old tmux panes keep the old value.
 # On remote SSH sessions, keep a stable symlink pointing at a live forwarded
