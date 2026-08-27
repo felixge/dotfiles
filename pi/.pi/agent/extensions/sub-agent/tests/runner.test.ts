@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import { readFile, unlink } from "node:fs/promises";
 import { isAbsolute } from "node:path";
@@ -11,6 +13,7 @@ import {
 	MAX_FINAL_OUTPUT_BYTES,
 	MAX_FINAL_OUTPUT_LINES,
 	PiProcessRunner,
+	STARTUP_SIGNAL_DEATH_WINDOW_MS,
 	createInitialProgress,
 	reduceJsonEvent,
 } from "../runner.ts";
@@ -28,6 +31,95 @@ const config: AgentRunConfig = {
 	cwd: process.cwd(),
 	access: "read",
 };
+
+class FakeReadable {
+	private readonly events = new EventEmitter();
+
+	on(event: "data", listener: (chunk: Buffer | string) => void): this {
+		this.events.on(event, listener);
+		return this;
+	}
+
+	off(event: "data", listener: (chunk: Buffer | string) => void): this {
+		this.events.off(event, listener);
+		return this;
+	}
+
+	emitData(chunk: Buffer | string): void {
+		this.events.emit("data", chunk);
+	}
+}
+
+class FakeStdin {
+	readonly writes: string[] = [];
+	endCalls = 0;
+	private readonly events = new EventEmitter();
+
+	on(event: "error", listener: (error: Error) => void): this {
+		this.events.on(event, listener);
+		return this;
+	}
+
+	off(event: "error", listener: (error: Error) => void): this {
+		this.events.off(event, listener);
+		return this;
+	}
+
+	write(chunk: string): boolean {
+		this.writes.push(chunk);
+		return true;
+	}
+
+	end(): this {
+		this.endCalls += 1;
+		return this;
+	}
+
+	emitError(code: string, message = "stdin failed"): void {
+		this.events.emit("error", Object.assign(new Error(message), { code }));
+	}
+
+	errorListenerCount(): number {
+		return this.events.listenerCount("error");
+	}
+}
+
+class FakeChildProcess {
+	readonly stdin: FakeStdin | null;
+	readonly stdout = new FakeReadable();
+	readonly stderr = new FakeReadable();
+	readonly killCalls: NodeJS.Signals[] = [];
+	readonly pid?: number;
+	private readonly events = new EventEmitter();
+
+	constructor(options: { pid?: number; stdin?: FakeStdin | null } = {}) {
+		this.pid = options.pid;
+		this.stdin = options.stdin === undefined ? new FakeStdin() : options.stdin;
+	}
+
+	kill(signal: NodeJS.Signals = "SIGTERM"): boolean {
+		this.killCalls.push(signal);
+		return true;
+	}
+
+	on(event: "error", listener: (error: Error) => void): this;
+	on(event: "close", listener: (code: number | null, signal: NodeJS.Signals | null) => void): this;
+	on(event: "error" | "close", listener: (...args: any[]) => void): this {
+		this.events.on(event, listener);
+		return this;
+	}
+
+	off(event: "error", listener: (error: Error) => void): this;
+	off(event: "close", listener: (code: number | null, signal: NodeJS.Signals | null) => void): this;
+	off(event: "error" | "close", listener: (...args: any[]) => void): this {
+		this.events.off(event, listener);
+		return this;
+	}
+
+	emitClose(code: number | null, signal: NodeJS.Signals | null): void {
+		this.events.emit("close", code, signal);
+	}
+}
 
 test("LF reader handles split UTF-8, multiple lines, CRLF, and an unterminated final line", () => {
 	const lines: string[] = [];
@@ -364,25 +456,30 @@ test("event reducer bounds final output and activity", () => {
 	assert.equal(state.finalOutputTruncation?.truncated, true);
 });
 
-test("process runner uses the isolated Pi CLI policy and consumes deterministic JSON output", async () => {
+test("process runner omits the prompt from argv and writes it exactly once to closed stdin", async () => {
+	const prompt = "exact stdin prompt\nwith unicode: π";
 	let piArgs: string[] = [];
 	const runner = new PiProcessRunner({
 		resolveInvocation: (args) => {
 			piArgs = args;
-			return { command: process.execPath, args: [fixture, "success"] };
+			return { command: process.execPath, args: [fixture, "stdin"] };
 		},
 		gatewayCostExtensionPath,
 		timeoutMs: 2_000,
 	});
 	const updates: string[] = [];
-	const child = runner.start(config, (progress) => updates.push(progress.currentActivity ?? ""));
+	const child = runner.start({ ...config, prompt }, (progress) => updates.push(progress.currentActivity ?? ""));
 	const result = await child.result;
 	assert.equal(result.exitCode, 0);
-	assert.equal(result.progress.finalOutput, "fixture result");
+	assert.deepEqual(JSON.parse(result.progress.finalOutput ?? ""), {
+		bytes: Buffer.byteLength(prompt, "utf8"),
+		sha256: createHash("sha256").update(prompt).digest("hex"),
+	});
 	assert.equal(result.progress.turns, 1);
 	assert.equal(result.progress.usage.input, 10);
 	assert.equal(result.progress.agentSettled, true);
 	assert.ok(updates.includes("thinking"));
+	assert.equal(piArgs.includes(prompt), false);
 	assert.deepEqual(piArgs, [
 		"--mode",
 		"json",
@@ -400,8 +497,225 @@ test("process runner uses the isolated Pi CLI policy and consumes deterministic 
 		"low",
 		"--tools",
 		"read,grep,find,ls",
-		"test",
 	]);
+});
+
+test("process runner supports long prompts without adding them to argv", async () => {
+	const marker = "private-long-prompt-marker";
+	const prompt = `${marker}:${"x".repeat(16 * 1024)}`;
+	let piArgs: string[] = [];
+	const runner = new PiProcessRunner({
+		resolveInvocation: (args) => {
+			piArgs = args;
+			return { command: process.execPath, args: [fixture, "stdin"] };
+		},
+		timeoutMs: 2_000,
+	});
+	const result = await runner.start({ ...config, prompt }, () => {}).result;
+	assert.equal(result.exitCode, 0);
+	assert.deepEqual(JSON.parse(result.progress.finalOutput ?? ""), {
+		bytes: Buffer.byteLength(prompt, "utf8"),
+		sha256: createHash("sha256").update(prompt).digest("hex"),
+	});
+	assert.equal(piArgs.some((argument) => argument.includes(marker)), false);
+	assert.ok(Math.max(...piArgs.map((argument) => Buffer.byteLength(argument, "utf8"))) < 1_024);
+});
+
+test("process runner consumes asynchronous closed-stdin errors after writing and ending once", async () => {
+	for (const code of ["EPIPE", "ECONNRESET", "ERR_STREAM_DESTROYED", "ERR_STREAM_WRITE_AFTER_END"]) {
+		const stdin = new FakeStdin();
+		const fakeChild = new FakeChildProcess({ stdin });
+		let stdio: readonly string[] | undefined;
+		const runner = new PiProcessRunner({
+			spawn: (_command, _args, options) => {
+				stdio = options.stdio;
+				return fakeChild;
+			},
+			resolveInvocation: (args) => ({ command: "pi", args }),
+			timeoutMs: 2_000,
+		});
+		const running = runner.start(config, () => {});
+		assert.deepEqual(stdin.writes, [config.prompt]);
+		assert.equal(stdin.endCalls, 1);
+		setImmediate(() => {
+			stdin.emitError(code);
+			fakeChild.emitClose(1, null);
+		});
+		const result = await running.result;
+		assert.deepEqual(stdio, ["pipe", "pipe", "pipe"]);
+		assert.equal(result.exitCode, 1);
+		assert.equal(result.stdinError, undefined);
+		assert.deepEqual(fakeChild.killCalls, []);
+		assert.equal(stdin.errorListenerCount(), 0);
+	}
+});
+
+test("process runner diagnoses unexpected stdin errors without startup misclassification or secrets", async () => {
+	const prompt = "private-prompt-value";
+	const argvValue = "private-argv-value";
+	const stdin = new FakeStdin();
+	const fakeChild = new FakeChildProcess({ stdin });
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: () => ({ command: "pi", args: ["--private-option", argvValue] }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start({ ...config, prompt }, () => {});
+	setImmediate(() => {
+		stdin.emitError("EACCES", `failed for ${prompt} and ${argvValue}`);
+		fakeChild.emitClose(null, "SIGTERM");
+	});
+	const result = await running.result;
+	assert.equal(result.stdinError, "Could not send prompt to Pi stdin (EACCES)");
+	assert.equal(result.spawnError, undefined);
+	assert.equal(result.startupSignalDeath, undefined);
+	assert.deepEqual(fakeChild.killCalls, ["SIGTERM"]);
+	assert.equal(stdin.errorListenerCount(), 0);
+	const diagnostic = JSON.stringify({ stdinError: result.stdinError, startupSignalDeath: result.startupSignalDeath });
+	assert.equal(diagnostic.includes(prompt), false);
+	assert.equal(diagnostic.includes(argvValue), false);
+});
+
+test("process runner retains valid output when an unexpected stdin error arrives late", async () => {
+	const stdin = new FakeStdin();
+	const fakeChild = new FakeChildProcess({ stdin });
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	fakeChild.stdout.emitData(`${JSON.stringify({
+		type: "message_end",
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: "valid completion" }],
+			stopReason: "stop",
+			usage: {},
+		},
+	})}\n`);
+	stdin.emitError("EIO");
+	assert.deepEqual(fakeChild.killCalls, []);
+	setImmediate(() => fakeChild.emitClose(0, null));
+	const result = await running.result;
+	assert.equal(result.exitCode, 0);
+	assert.equal(result.signal, null);
+	assert.deepEqual(fakeChild.killCalls, []);
+	assert.equal(result.progress.finalAssistantSeen, true);
+	assert.equal(result.progress.finalOutput, "valid completion");
+	assert.equal(result.stdinError, "Could not send prompt to Pi stdin (EIO)");
+});
+
+test("process runner handles unavailable stdin without throwing", async () => {
+	const fakeChild = new FakeChildProcess({ stdin: null });
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	assert.deepEqual(fakeChild.killCalls, ["SIGTERM"]);
+	fakeChild.emitClose(null, "SIGTERM");
+	const result = await running.result;
+	assert.equal(result.stdinError, "Could not send prompt to Pi stdin (unavailable)");
+	assert.equal(result.startupSignalDeath, undefined);
+});
+
+test("process runner returns non-sensitive metadata for a signal before the first JSON event", async () => {
+	const prompt = "private-prompt-value";
+	const argvValue = `private-argv-value-${"z".repeat(80)}`;
+	const invocationArgs = ["child-script", "--private-option", argvValue];
+	const fakeChild = new FakeChildProcess({ pid: 42_424 });
+	const times = [100, 137];
+	let piArgs: string[] = [];
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => {
+			piArgs = args;
+			return { command: "private-command-value", args: invocationArgs };
+		},
+		now: () => times.shift() ?? 137,
+		timeoutMs: 2_000,
+	});
+	const running = runner.start({ ...config, prompt }, () => {});
+	fakeChild.emitClose(null, "SIGKILL");
+	const result = await running.result;
+	assert.equal(piArgs.includes(prompt), false);
+	assert.deepEqual(result.startupSignalDeath, {
+		signal: "SIGKILL",
+		elapsedMs: 37,
+		pid: 42_424,
+		argumentCount: invocationArgs.length,
+		maxArgumentBytes: Math.max(...invocationArgs.map((argument) => Buffer.byteLength(argument, "utf8"))),
+	});
+	const diagnostic = JSON.stringify(result.startupSignalDeath);
+	assert.equal(diagnostic.includes(prompt), false);
+	assert.equal(diagnostic.includes(argvValue), false);
+	assert.equal(diagnostic.includes("private-command-value"), false);
+});
+
+test("process runner excludes non-JSON stdout and stderr from startup signal classification", async () => {
+	const withStdout = new FakeChildProcess({ pid: 101 });
+	const stdoutRunner = new PiProcessRunner({
+		spawn: () => withStdout,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const stdoutRun = stdoutRunner.start(config, () => {});
+	withStdout.stdout.emitData("startup warning, not JSON\n");
+	withStdout.emitClose(null, "SIGKILL");
+	const stdoutResult = await stdoutRun.result;
+	assert.equal(stdoutResult.startupSignalDeath, undefined);
+	assert.match(stdoutResult.progress.activity[0]?.summary ?? "", /malformed JSON event/u);
+
+	const withStderr = new FakeChildProcess({ pid: 102 });
+	const stderrRunner = new PiProcessRunner({
+		spawn: () => withStderr,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const stderrRun = stderrRunner.start(config, () => {});
+	withStderr.stderr.emitData("startup stderr");
+	withStderr.emitClose(null, "SIGKILL");
+	assert.equal((await stderrRun.result).startupSignalDeath, undefined);
+});
+
+test("process runner excludes late signal deaths from startup classification", async () => {
+	const fakeChild = new FakeChildProcess({ pid: 103 });
+	const times = [100, 100 + STARTUP_SIGNAL_DEATH_WINDOW_MS + 1];
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		now: () => times.shift() ?? times.at(-1) ?? 0,
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	fakeChild.emitClose(null, "SIGKILL");
+	assert.equal((await running.result).startupSignalDeath, undefined);
+});
+
+test("process runner flushes complete unterminated JSON before startup classification", async () => {
+	const fakeChild = new FakeChildProcess({ pid: 104 });
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	fakeChild.stdout.emitData(JSON.stringify({
+		type: "message_end",
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: "complete final output" }],
+			stopReason: "stop",
+			usage: {},
+		},
+	}));
+	fakeChild.emitClose(null, "SIGKILL");
+	const result = await running.result;
+	assert.equal(result.progress.finalAssistantSeen, true);
+	assert.equal(result.progress.finalOutput, "complete final output");
+	assert.equal(result.startupSignalDeath, undefined);
 });
 
 test("process runner uses its injectable clock for operation timing", async () => {

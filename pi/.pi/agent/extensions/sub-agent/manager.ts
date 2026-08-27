@@ -70,6 +70,17 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
+function startupSignalDeathMessage(diagnostic: NonNullable<RunnerResult["startupSignalDeath"]>): string {
+	const details = [
+		`signal ${diagnostic.signal}`,
+		`${Math.max(0, Math.round(diagnostic.elapsedMs))} ms`,
+		...(diagnostic.pid === undefined ? [] : [`pid ${diagnostic.pid}`]),
+		`${diagnostic.argumentCount} argv elements`,
+		`max argv element ${diagnostic.maxArgumentBytes} bytes`,
+	];
+	return `Pi was killed during startup (${details.join(", ")}). A host security or process policy may be responsible.`;
+}
+
 function appendTokenSample(samples: TokenSample[], tokens: number, timestamp: number): void {
 	const latest = samples.at(-1);
 	if (latest?.tokens === tokens) return;
@@ -486,6 +497,10 @@ export class AgentManager {
 			run.status = "failed";
 			run.error = "Sub-agent timed out after 30 minutes";
 			run.currentActivity = "failed";
+		} else if (result.startupSignalDeath) {
+			run.status = "failed";
+			run.error = startupSignalDeathMessage(result.startupSignalDeath);
+			run.currentActivity = "failed";
 		} else if (result.spawnError) {
 			run.status = "failed";
 			run.error = `Could not start Pi: ${result.spawnError}`;
@@ -493,7 +508,7 @@ export class AgentManager {
 		} else if (result.exitCode !== 0) {
 			run.status = "failed";
 			const processReason = result.signal ? `signal ${result.signal}` : `exit code ${result.exitCode ?? "unknown"}`;
-			run.error = result.progress.finalError || result.stderr.trim() || `Pi exited with ${processReason}`;
+			run.error = result.progress.finalError || result.stdinError || result.stderr.trim() || `Pi exited with ${processReason}`;
 			run.currentActivity = "failed";
 		} else if (result.progress.finalStopReason === "error" || result.progress.finalStopReason === "aborted") {
 			run.status = "failed";
@@ -501,7 +516,7 @@ export class AgentManager {
 			run.currentActivity = "failed";
 		} else if (!result.progress.finalAssistantSeen) {
 			run.status = "failed";
-			run.error = result.stderr.trim() || "Pi exited before producing a final assistant message";
+			run.error = result.stdinError || result.stderr.trim() || "Pi exited before producing a final assistant message";
 			run.currentActivity = "failed";
 		} else {
 			run.status = "completed";

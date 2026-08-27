@@ -167,6 +167,14 @@ export interface RunnerProgress {
 	activity: ActivityEvent[];
 }
 
+export interface StartupSignalDeathDiagnostic {
+	signal: NodeJS.Signals;
+	elapsedMs: number;
+	pid?: number;
+	argumentCount: number;
+	maxArgumentBytes: number;
+}
+
 export interface RunnerResult {
 	exitCode: number | null;
 	signal: NodeJS.Signals | null;
@@ -174,6 +182,8 @@ export interface RunnerResult {
 	progress: RunnerProgress;
 	timedOut: boolean;
 	spawnError?: string;
+	stdinError?: string;
+	startupSignalDeath?: StartupSignalDeathDiagnostic;
 }
 
 export interface RunningAgentProcess {

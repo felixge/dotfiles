@@ -33,9 +33,16 @@ export const MAX_STDERR_BYTES = 64 * 1024;
 export const MAX_JSON_LINE_BYTES = 8 * 1024 * 1024;
 export const DEFAULT_RUN_TIMEOUT_MS = 30 * 60 * 1000;
 export const DEFAULT_KILL_GRACE_MS = 5_000;
+export const STARTUP_SIGNAL_DEATH_WINDOW_MS = 1_000;
 
 const READ_TOOLS = "read,grep,find,ls";
 const WRITE_TOOLS = "read,bash,edit,write,grep,find,ls";
+const BENIGN_STDIN_ERROR_CODES = new Set([
+	"EPIPE",
+	"ECONNRESET",
+	"ERR_STREAM_DESTROYED",
+	"ERR_STREAM_WRITE_AFTER_END",
+]);
 export const DEFAULT_GATEWAY_COST_EXTENSION_PATH = fileURLToPath(
 	new URL("../gateway-cost-fallback/index.ts", import.meta.url),
 );
@@ -45,7 +52,15 @@ interface ReadableLike {
 	off(event: "data", listener: (chunk: Buffer | string) => void): this;
 }
 
+interface WritableLike {
+	write(chunk: string): boolean;
+	end(): this;
+	on(event: "error", listener: (error: Error) => void): this;
+	off(event: "error", listener: (error: Error) => void): this;
+}
+
 export interface ChildProcessLike {
+	stdin: WritableLike | null;
 	stdout: ReadableLike;
 	stderr: ReadableLike;
 	pid?: number;
@@ -59,7 +74,7 @@ export interface ChildProcessLike {
 export interface AgentSpawnOptions {
 	cwd: string;
 	shell: false;
-	stdio: ["ignore", "pipe", "pipe"];
+	stdio: ["pipe", "pipe", "pipe"];
 }
 
 export type SpawnProcess = (command: string, args: readonly string[], options: AgentSpawnOptions) => ChildProcessLike;
@@ -571,17 +586,22 @@ export class PiProcessRunner implements AgentRunner {
 			config.thinking,
 			"--tools",
 			config.access === "write" ? WRITE_TOOLS : READ_TOOLS,
-			config.prompt,
 		];
 		const invocation = this.resolveInvocation(args);
-		let progress = createInitialProgress(this.now());
+		const startupStartedAt = this.now();
+		const argumentCount = invocation.args.length;
+		const maxArgumentBytes = invocation.args.reduce(
+			(maximum, argument) => Math.max(maximum, Buffer.byteLength(argument, "utf8")),
+			0,
+		);
+		let progress = createInitialProgress(startupStartedAt);
 		let child: ChildProcessLike;
 
 		try {
 			child = this.spawnProcess(invocation.command, invocation.args, {
 				cwd: config.cwd,
 				shell: false,
-				stdio: ["ignore", "pipe", "pipe"],
+				stdio: ["pipe", "pipe", "pipe"],
 			});
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -601,10 +621,14 @@ export class PiProcessRunner implements AgentRunner {
 		let stderr = "";
 		let settled = false;
 		let timedOut = false;
+		let observedStdout = false;
+		let terminationRequested = false;
 		let spawnError: string | undefined;
+		let stdinError: string | undefined;
 		let killTimer: ReturnType<typeof setTimeout> | undefined;
 		let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
 		const stderrDecoder = new StringDecoder("utf8");
+		const stdin = child.stdin;
 
 		const publish = (next: RunnerProgress) => {
 			progress = next;
@@ -637,7 +661,12 @@ export class PiProcessRunner implements AgentRunner {
 			diagnostic,
 		);
 
-		const onStdout = (chunk: Buffer | string) => stdoutReader.push(chunk);
+		const onStdout = (chunk: Buffer | string) => {
+			if (typeof chunk === "string" ? Buffer.byteLength(chunk, "utf8") > 0 : chunk.length > 0) {
+				observedStdout = true;
+			}
+			stdoutReader.push(chunk);
+		};
 		const onStderr = (chunk: Buffer | string) => {
 			const decoded = typeof chunk === "string" ? chunk : stderrDecoder.write(chunk);
 			stderr = appendUtf8Tail(stderr, decoded, this.maxStderrBytes);
@@ -648,6 +677,7 @@ export class PiProcessRunner implements AgentRunner {
 
 		const terminate = () => {
 			if (settled) return;
+			terminationRequested = true;
 			try {
 				child.kill("SIGTERM");
 			} catch {}
@@ -660,6 +690,15 @@ export class PiProcessRunner implements AgentRunner {
 				}, this.killGraceMs);
 			}
 		};
+		const onStdinError = (error: Error) => {
+			const code = "code" in error && typeof error.code === "string" ? error.code : undefined;
+			if (code && BENIGN_STDIN_ERROR_CODES.has(code)) return;
+			stdinError ??= `Could not send prompt to Pi stdin${code ? ` (${code})` : ""}`;
+			// The prompt already produced a final assistant message, so let Pi exit on its own
+			// instead of killing it and turning a valid completion into a signal death.
+			if (progress.finalAssistantSeen) return;
+			terminate();
+		};
 
 		const result = new Promise<RunnerResult>((resolve) => {
 			const onClose = (exitCode: number | null, signal: NodeJS.Signals | null) => {
@@ -671,9 +710,37 @@ export class PiProcessRunner implements AgentRunner {
 				if (killTimer) clearTimeout(killTimer);
 				child.stdout.off("data", onStdout);
 				child.stderr.off("data", onStderr);
+				stdin?.off("error", onStdinError);
 				child.off("error", onError);
 				child.off("close", onClose);
-				resolve({ exitCode, signal, stderr, progress: cloneProgress(progress), timedOut, spawnError });
+				const elapsedMs = signal ? Math.max(0, this.now() - startupStartedAt) : undefined;
+				const startupSignalDeath = signal
+					&& elapsedMs !== undefined
+					&& elapsedMs <= STARTUP_SIGNAL_DEATH_WINDOW_MS
+					&& !terminationRequested
+					&& !observedStdout
+					&& stderr.length === 0
+					&& progress.revision === 0
+					&& spawnError === undefined
+					&& stdinError === undefined
+					? {
+						signal,
+						elapsedMs,
+						...(child.pid === undefined ? {} : { pid: child.pid }),
+						argumentCount,
+						maxArgumentBytes,
+					}
+					: undefined;
+				resolve({
+					exitCode,
+					signal,
+					stderr,
+					progress: cloneProgress(progress),
+					timedOut,
+					spawnError,
+					stdinError,
+					...(startupSignalDeath ? { startupSignalDeath } : {}),
+				});
 			};
 
 			child.stdout.on("data", onStdout);
@@ -686,6 +753,23 @@ export class PiProcessRunner implements AgentRunner {
 				terminate();
 			}, this.timeoutMs);
 		});
+
+		if (stdin) {
+			stdin.on("error", onStdinError);
+			try {
+				stdin.write(config.prompt);
+			} catch (error) {
+				onStdinError(error instanceof Error ? error : new Error("stdin write failed"));
+			}
+			try {
+				stdin.end();
+			} catch (error) {
+				onStdinError(error instanceof Error ? error : new Error("stdin close failed"));
+			}
+		} else {
+			stdinError = "Could not send prompt to Pi stdin (unavailable)";
+			terminate();
+		}
 
 		return { result, cancel: terminate };
 	}

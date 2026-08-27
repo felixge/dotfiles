@@ -1,11 +1,23 @@
+import { createHash } from "node:crypto";
+
 const mode = process.argv[2] ?? "success";
+const chunks = [];
+for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
+const prompt = Buffer.concat(chunks);
 
 if (mode === "hang") {
 	setInterval(() => {}, 1_000);
 } else {
 	if (mode === "malformed") process.stdout.write("not-json\n");
 	if (mode === "stderr") process.stderr.write("e".repeat(10_000));
-	const finalOutput = mode === "large" ? Array.from({ length: 2_500 }, (_, index) => `line ${index + 1}`).join("\n") : "fixture result";
+	const finalOutput = mode === "large"
+		? Array.from({ length: 2_500 }, (_, index) => `line ${index + 1}`).join("\n")
+		: mode === "stdin"
+			? JSON.stringify({
+				bytes: prompt.length,
+				sha256: createHash("sha256").update(prompt).digest("hex"),
+			})
+			: "fixture result";
 	const events = [
 		{ type: "agent_start" },
 		{ type: "turn_start", turnIndex: 0 },
@@ -26,12 +38,12 @@ if (mode === "hang") {
 					cacheRead: 2,
 					cacheWrite: 1,
 					totalTokens: 16,
-					cost: { input: 0.002, output: 0.006, cacheRead: 0.001, cacheWrite: 0.001, total: 0.01 }
+					cost: { input: 0.002, output: 0.006, cacheRead: 0.001, cacheWrite: 0.001, total: 0.01 },
 				},
-				stopReason: "stop"
-			}
+				stopReason: "stop",
+			},
 		},
-		{ type: "agent_settled" }
+		{ type: "agent_settled" },
 	];
 	for (const event of events) process.stdout.write(`${JSON.stringify(event)}\n`);
 }

@@ -85,6 +85,16 @@ async function tick(): Promise<void> {
 	await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
+async function settleResult(result: RunnerResult, prompt = "task") {
+	const runner: AgentRunner = {
+		start: () => ({ result: Promise.resolve(result), cancel() {} }),
+	};
+	const manager = new AgentManager(runner, { idFactory: ids() });
+	const run = manager.spawn({ ...request("/repo"), prompt });
+	await tick();
+	return manager.get(run.id)!;
+}
+
 test("manager enforces global concurrency and one writer per canonical cwd", async () => {
 	const runner = new FakeRunner();
 	const manager = new AgentManager(runner, { maxConcurrency: 2, idFactory: ids() });
@@ -333,6 +343,88 @@ test("shutdown cancels all queued and running children", async () => {
 	assert.equal(manager.get(running.id)?.status, "cancelled");
 	assert.equal(manager.get(queued.id)?.status, "cancelled");
 	assert.equal(runner.active, 0);
+});
+
+test("manager reports non-sensitive early signal deaths as startup policy failures", async () => {
+	const prompt = "private prompt marker";
+	const argvValue = "private argv marker".repeat(8);
+	const maxArgumentBytes = Buffer.byteLength(argvValue, "utf8");
+	const run = await settleResult({
+		exitCode: null,
+		signal: "SIGKILL",
+		stderr: "",
+		progress: createInitialProgress(100),
+		timedOut: false,
+		startupSignalDeath: {
+			signal: "SIGKILL",
+			elapsedMs: 37,
+			pid: 42_424,
+			argumentCount: 18,
+			maxArgumentBytes,
+		},
+	}, prompt);
+
+	assert.equal(run.status, "failed");
+	assert.equal(
+		run.error,
+		`Pi was killed during startup (signal SIGKILL, 37 ms, pid 42424, 18 argv elements, max argv element ${maxArgumentBytes} bytes). A host security or process policy may be responsible.`,
+	);
+	assert.equal(run.error?.includes(prompt), false);
+	assert.equal(run.error?.includes(argvValue), false);
+});
+
+test("manager reports stdin failures without overriding a valid completion", async () => {
+	const stdinError = "Could not send prompt to Pi stdin (EIO)";
+	const failed = await settleResult({
+		exitCode: null,
+		signal: "SIGTERM",
+		stderr: "",
+		progress: createInitialProgress(),
+		timedOut: false,
+		stdinError,
+	});
+	assert.equal(failed.status, "failed");
+	assert.equal(failed.error, stdinError);
+
+	const completedProgress = createInitialProgress();
+	completedProgress.finalAssistantSeen = true;
+	completedProgress.finalOutput = "valid completion";
+	completedProgress.finalStopReason = "stop";
+	const completed = await settleResult({
+		exitCode: 0,
+		signal: null,
+		stderr: "",
+		progress: completedProgress,
+		timedOut: false,
+		stdinError,
+	});
+	assert.equal(completed.status, "completed");
+	assert.equal(completed.error, undefined);
+	assert.equal(completed.finalOutput, "valid completion");
+});
+
+test("manager keeps post-start and stderr signal failures on the generic path", async () => {
+	const afterOutputProgress = createInitialProgress();
+	afterOutputProgress.turns = 1;
+	const afterOutput = await settleResult({
+		exitCode: null,
+		signal: "SIGTERM",
+		stderr: "",
+		progress: afterOutputProgress,
+		timedOut: false,
+	});
+	assert.equal(afterOutput.error, "Pi exited with signal SIGTERM");
+	assert.equal(afterOutput.error?.includes("security or process policy"), false);
+
+	const withStderr = await settleResult({
+		exitCode: null,
+		signal: "SIGKILL",
+		stderr: "ordinary child stderr",
+		progress: createInitialProgress(),
+		timedOut: false,
+	});
+	assert.equal(withStderr.error, "ordinary child stderr");
+	assert.equal(withStderr.error?.includes("security or process policy"), false);
 });
 
 test("canonical cwd resolution accepts directories and rejects files", async () => {
