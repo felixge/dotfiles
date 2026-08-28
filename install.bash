@@ -74,20 +74,24 @@ trust_homebrew_taps() {
         anomalyco/tap \
         atlassian-labs/acli \
         datadog-labs/pack
+}
 
-    if is_datadog; then
-        # Tap via SSH to avoid Homebrew prompting for a GitHub username over HTTPS.
-        local tap_output
-        if ! tap_output=$(brew tap datadog/tap git@github.com:DataDog/homebrew-tap.git 2>&1); then
-            if is_macos \
-                || ! brew tap | grep -Fxq "datadog/tap" \
-                || ! brew info datadog/tap/dd-auth > /dev/null 2>&1
-            then
-                echo "$tap_output"
-                return 1
-            fi
-            echo "-> datadog/tap registered despite Homebrew validation errors"
+install_datadog_tap() {
+    # Tap via SSH to avoid Homebrew prompting for a GitHub username over HTTPS.
+    # Do this after all other taps are installed: Homebrew revalidates every
+    # formula when adding a tap, and datadog/tap contains macOS-only formulae.
+    local tap_output
+    if ! tap_output=$(brew tap datadog/tap git@github.com:DataDog/homebrew-tap.git 2>&1); then
+        if is_macos \
+            || ! brew tap | grep -Fxq "datadog/tap" \
+            || ! brew info datadog/tap/dd-auth > /dev/null 2>&1
+        then
+            echo "$tap_output"
+            return 1
         fi
+        echo "-> datadog/tap registered despite Homebrew validation errors"
+    fi
+    if brew help trust > /dev/null 2>&1; then
         brew trust -q --tap datadog/tap
     fi
 }
@@ -161,6 +165,7 @@ install_homebrew_packages() {
         brew install -q bubblewrap
     fi
     if is_datadog; then
+        install_datadog_tap
         # ddoc builds from source on some machines and can take a very long time.
         # brew install -q datadog/tap/ddoc
         brew install -q datadog/tap/dd-auth
