@@ -1,3 +1,9 @@
+# ensure user-installed tools are available in non-login shells
+case ":$PATH:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+
 # source homebrew env, including completions
 if ! command -v brew >/dev/null 2>&1; then
     for prefix in "/opt/homebrew" "/home/linuxbrew/.linuxbrew"; do
