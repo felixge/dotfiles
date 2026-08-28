@@ -48,15 +48,25 @@ obs() {
     local dir jsdir
 
     dir="$(cd -- "${1:-.}" && pwd -P)" || return
-    mkdir -p -- "$dir/.obsidian" || return
+    case "$dir" in
+        "$HOME"|/)
+            printf 'obs: refusing to register unsafe vault root: %s\n' "$dir" >&2
+            return 2
+            ;;
+    esac
 
     # Encode the path safely as a JavaScript string.
     jsdir="$(python3 -c \
         'import json,sys; print(json.dumps(sys.argv[1]))' \
         "$dir")" || return
 
-    obsidian eval \
-        "code=window.electron.ipcRenderer.sendSync('vault-open', $jsdir, false)"
+    # Run outside registered vault trees so Obsidian routes eval through the
+    # currently focused healthy vault. A healthy vault must already be open.
+    (
+        cd / || exit
+        obsidian eval \
+            "code=window.electron.ipcRenderer.sendSync('vault-open', $jsdir, false)"
+    )
 }
 
 # Fix stale SSH agent forwarding sockets in tmux on remote hosts.
