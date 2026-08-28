@@ -127,6 +127,7 @@ install_homebrew_packages() {
         pyright
         ripgrep
         rsync
+        shellcheck
         silicon
         socat
         stow
