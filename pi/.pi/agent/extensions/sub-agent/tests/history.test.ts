@@ -79,6 +79,20 @@ test("terminal custom entries persist final snapshots without duplicate live out
 	assert.deepEqual([...history.persistedTerminalIds], ["aaaaaa"]);
 });
 
+test("terminal history accepts bash access and remains compatible with prior access modes", () => {
+	const runs = [
+		{ ...snapshot("aaaaaa", "completed"), access: "read" as const },
+		{ ...snapshot("bbbbbb", "completed"), access: "bash" as const },
+		{ ...snapshot("cccccc", "completed"), access: "write" as const },
+	];
+	const history = readAgentHistory(runs.map((run, index) => ({
+		type: "custom",
+		customType: TERMINAL_RUN_ENTRY_TYPE,
+		data: { version: index === 0 ? 1 : 2, run },
+	})));
+	assert.deepEqual(history.runs.map((run) => run.access), ["read", "bash", "write"]);
+});
+
 test("version 1 terminal entries restore with normalized structured timing", () => {
 	const completed = snapshot("aaaaaa", "completed");
 	const {

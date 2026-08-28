@@ -119,7 +119,7 @@ function snapshotFrom(value: unknown): AgentSnapshot | undefined {
 		typeof value.thinking !== "string" ||
 		!["off", "minimal", "low", "medium", "high", "xhigh", "max"].includes(value.thinking) ||
 		typeof value.cwd !== "string" ||
-		(value.access !== "read" && value.access !== "write") ||
+		(value.access !== "read" && value.access !== "bash" && value.access !== "write") ||
 		typeof value.createdAt !== "number" ||
 		!Number.isFinite(value.createdAt) ||
 		typeof value.turns !== "number" ||

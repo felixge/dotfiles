@@ -2,7 +2,7 @@ import type { Usage } from "@earendil-works/pi-ai";
 import type { TruncationResult } from "@earendil-works/pi-coding-agent";
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
-export type AgentAccess = "read" | "write";
+export type AgentAccess = "read" | "bash" | "write";
 export type AgentStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
 export type TerminalAgentStatus = Extract<AgentStatus, "completed" | "failed" | "cancelled" | "interrupted">;
 export type UsageSummary = Usage;

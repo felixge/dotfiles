@@ -35,7 +35,7 @@ import {
 } from "./types.ts";
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-const ACCESS_LEVELS = ["read", "write"] as const;
+const ACCESS_LEVELS = ["read", "bash", "write"] as const;
 const DEFAULT_MODEL_DESCRIPTION = "Exact provider/model identifier. Defaults to the parent model.";
 
 export function modelParameterDescription(scopedModels: ExtensionContext["scopedModels"]): string {
@@ -58,7 +58,11 @@ function agentSpawnParams(modelDescription = DEFAULT_MODEL_DESCRIPTION) {
 			Type.String({ description: "Working directory. Relative paths resolve from the parent cwd." }),
 		),
 		access: Type.Optional(
-			StringEnum(ACCESS_LEVELS, { description: "Tool access. Defaults to read.", default: "read" }),
+			StringEnum(ACCESS_LEVELS, {
+				description:
+					"Tool access. read: read, grep, find, ls. bash: read, bash, grep, find, ls for non-mutating commands. write: read, bash, edit, write, grep, find, ls. Defaults to read.",
+				default: "read",
+			}),
 		),
 	});
 }
@@ -195,7 +199,7 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 		name: "agent_spawn",
 		label: "Spawn Agent",
 		description:
-			"Start one isolated background sub-agent and return immediately. An optional name labels the agent in status and results. Start all independent agents before calling agent_status. Read access is the default; write access allows file mutation and is serialized with other writers in the same canonical working directory.",
+			"Start one isolated background sub-agent and return immediately. An optional name labels the agent in status and results. Start all independent agents before calling agent_status. Read access is the default. Bash access adds non-mutating shell commands. Write access allows file mutation. All modes run concurrently subject to the global concurrency limit, including write agents sharing a working directory.",
 		promptSnippet: "Start an isolated background sub-agent",
 		promptGuidelines: [
 			"Before using agent_spawn, ask the user for permission and wait for explicit approval, unless the current user prompt already explicitly requests sub-agent use. Do not treat task complexity or parallelization opportunities as permission. Once authorized, start all independent sub-agents before using agent_status and retain every returned ID. Use agent_status with wait: false for occasional progress checks; avoid tight polling.",

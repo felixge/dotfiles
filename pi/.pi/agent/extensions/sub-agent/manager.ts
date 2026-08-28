@@ -161,7 +161,6 @@ export async function resolveCanonicalCwd(parentCwd: string, requestedCwd?: stri
 export class AgentManager {
 	private readonly runs = new Map<string, ManagedRun>();
 	private readonly listeners = new Set<ManagerListener>();
-	private readonly writerLocks = new Set<string>();
 	private readonly issuedIds = new Set<string>();
 	private readonly attributedIds = new Set<string>();
 	private readonly waiterCounts = new Map<string, number>();
@@ -408,10 +407,6 @@ export class AgentManager {
 				this.updateQueuedPhase(run, "capacity");
 				continue;
 			}
-			if (run.access === "write" && this.writerLocks.has(run.cwd)) {
-				this.updateQueuedPhase(run, "writer lock");
-				continue;
-			}
 			this.startRun(run);
 			running++;
 		}
@@ -435,7 +430,6 @@ export class AgentManager {
 		run.phase = { kind: "starting", startedAt: now };
 		run.tokenSamples = [{ timestamp: run.startedAt, tokens: 0 }];
 		run.currentActivity = "starting";
-		if (run.access === "write") this.writerLocks.add(run.cwd);
 
 		try {
 			const handle = this.runner.start(run, (progress) => this.updateProgress(run, progress));
@@ -558,7 +552,6 @@ export class AgentManager {
 	}
 
 	private finishRun(run: ManagedRun): void {
-		if (run.access === "write") this.writerLocks.delete(run.cwd);
 		run.handle = undefined;
 		this.pump();
 		this.emit();

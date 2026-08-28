@@ -7,6 +7,7 @@ import { isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
+	BASH_ACCESS_ADVISORY,
 	DEFAULT_GATEWAY_COST_EXTENSION_PATH,
 	LfDelimitedJsonReader,
 	MAX_ACTIVITY_EVENTS,
@@ -498,6 +499,39 @@ test("process runner omits the prompt from argv and writes it exactly once to cl
 		"--tools",
 		"read,grep,find,ls",
 	]);
+});
+
+test("process runner configures bash and write access with exact tools and a bash advisory", async () => {
+	for (const expected of [
+		{
+			access: "bash" as const,
+			trailingArgs: [
+				"--tools",
+				"read,bash,grep,find,ls",
+				"--append-system-prompt",
+				BASH_ACCESS_ADVISORY,
+			],
+		},
+		{
+			access: "write" as const,
+			trailingArgs: ["--tools", "read,bash,edit,write,grep,find,ls"],
+		},
+	]) {
+		let piArgs: string[] = [];
+		const runner = new PiProcessRunner({
+			resolveInvocation: (args) => {
+				piArgs = args;
+				return { command: process.execPath, args: [fixture, "stdin"] };
+			},
+			gatewayCostExtensionPath,
+			timeoutMs: 2_000,
+		});
+		const result = await runner.start({ ...config, access: expected.access }, () => {}).result;
+		assert.equal(result.exitCode, 0);
+		assert.deepEqual(piArgs.slice(piArgs.indexOf("--tools")), expected.trailingArgs);
+	}
+	assert.match(BASH_ACCESS_ADVISORY, /Do not modify files through bash/u);
+	assert.match(BASH_ACCESS_ADVISORY, /work around the lack of edit and write tools/u);
 });
 
 test("process runner supports long prompts without adding them to argv", async () => {

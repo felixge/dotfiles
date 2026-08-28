@@ -7,6 +7,7 @@ import { truncateHead } from "@earendil-works/pi-coding-agent";
 import { AgentManager, resolveCanonicalCwd } from "../manager.ts";
 import { createInitialProgress } from "../runner.ts";
 import type {
+	AgentAccess,
 	AgentRunConfig,
 	AgentRunner,
 	RunnerProgress,
@@ -74,7 +75,7 @@ function ids(): () => string {
 
 function request(
 	cwd: string,
-	access: "read" | "write" = "read",
+	access: AgentAccess = "read",
 	originEntryId = "origin-1",
 	parentRunId = "parent-1",
 ) {
@@ -95,7 +96,7 @@ async function settleResult(result: RunnerResult, prompt = "task") {
 	return manager.get(run.id)!;
 }
 
-test("manager enforces global concurrency and one writer per canonical cwd", async () => {
+test("manager applies only global concurrency, including writers sharing a cwd", async () => {
 	const runner = new FakeRunner();
 	const manager = new AgentManager(runner, { maxConcurrency: 2, idFactory: ids() });
 	const firstWriter = manager.spawn(request("/repo", "write"));
@@ -103,20 +104,19 @@ test("manager enforces global concurrency and one writer per canonical cwd", asy
 	const reader = manager.spawn(request("/repo", "read"));
 
 	assert.equal(manager.get(firstWriter.id)?.status, "running");
-	assert.equal(manager.get(secondWriter.id)?.status, "queued");
-	assert.equal(manager.get(secondWriter.id)?.currentActivity, "writer lock");
-	assert.equal(manager.get(reader.id)?.status, "running");
+	assert.equal(manager.get(secondWriter.id)?.status, "running");
+	assert.equal(manager.get(reader.id)?.status, "queued");
+	assert.equal(manager.get(reader.id)?.currentActivity, "capacity");
 	assert.equal(runner.maxActive, 2);
 
-	runner.complete(reader.id);
-	await tick();
-	assert.equal(manager.get(secondWriter.id)?.status, "queued");
 	runner.complete(firstWriter.id);
 	await tick();
-	assert.equal(manager.get(secondWriter.id)?.status, "running");
+	assert.equal(manager.get(reader.id)?.status, "running");
 	runner.complete(secondWriter.id);
+	runner.complete(reader.id);
 	await tick();
 	assert.equal(manager.get(secondWriter.id)?.status, "completed");
+	assert.equal(manager.get(reader.id)?.status, "completed");
 	assert.equal(runner.maxActive, 2);
 });
 
@@ -226,7 +226,7 @@ test("cancelling a queued run never starts it and cancelling a running run stops
 	assert.equal(manager.get(running.id)?.status, "cancelled");
 });
 
-test("bulk cancellation is selective, idempotent, and releases capacity and writer locks", async () => {
+test("bulk cancellation is selective, idempotent, and releases capacity", async () => {
 	const runner = new FakeRunner();
 	const manager = new AgentManager(runner, { maxConcurrency: 1, idFactory: ids() });
 	const abandoned = manager.spawn(request("/repo", "write", "branch-a", "parent-a"));

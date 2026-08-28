@@ -158,6 +158,18 @@ test("empty model scope does not expose alternative models", () => {
 	);
 });
 
+test("agent_spawn publicly exposes read, bash, and write access semantics", async () => {
+	const { api, manager } = setup();
+	const spawnTool = api.tools.get("agent_spawn");
+	assert.ok(spawnTool);
+	const accessSchema = spawnTool.parameters.properties.access;
+	assert.deepEqual(accessSchema.enum, ["read", "bash", "write"]);
+	assert.equal(accessSchema.default, "read");
+	assert.match(accessSchema.description, /bash: read, bash, grep, find, ls for non-mutating commands/u);
+	assert.match(spawnTool.description, /write agents sharing a working directory/u);
+	await manager.shutdown();
+});
+
 test("parent abort leaves background sub-agents running", async () => {
 	const { api, manager } = setup();
 	await api.emit("agent_start", { type: "agent_start" });

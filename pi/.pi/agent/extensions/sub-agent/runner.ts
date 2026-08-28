@@ -35,8 +35,13 @@ export const DEFAULT_RUN_TIMEOUT_MS = 30 * 60 * 1000;
 export const DEFAULT_KILL_GRACE_MS = 5_000;
 export const STARTUP_SIGNAL_DEATH_WINDOW_MS = 1_000;
 
-const READ_TOOLS = "read,grep,find,ls";
-const WRITE_TOOLS = "read,bash,edit,write,grep,find,ls";
+const ACCESS_TOOLS: Record<AgentRunConfig["access"], string> = {
+	read: "read,grep,find,ls",
+	bash: "read,bash,grep,find,ls",
+	write: "read,bash,edit,write,grep,find,ls",
+};
+export const BASH_ACCESS_ADVISORY =
+	"Bash access is for inspection and other non-mutating commands only. Do not modify files through bash or work around the lack of edit and write tools.";
 const BENIGN_STDIN_ERROR_CODES = new Set([
 	"EPIPE",
 	"ECONNRESET",
@@ -585,7 +590,8 @@ export class PiProcessRunner implements AgentRunner {
 			"--thinking",
 			config.thinking,
 			"--tools",
-			config.access === "write" ? WRITE_TOOLS : READ_TOOLS,
+			ACCESS_TOOLS[config.access],
+			...(config.access === "bash" ? ["--append-system-prompt", BASH_ACCESS_ADVISORY] : []),
 		];
 		const invocation = this.resolveInvocation(args);
 		const startupStartedAt = this.now();
