@@ -77,7 +77,17 @@ trust_homebrew_taps() {
 
     if is_datadog; then
         # Tap via SSH to avoid Homebrew prompting for a GitHub username over HTTPS.
-        brew tap datadog/tap git@github.com:DataDog/homebrew-tap.git
+        local tap_output
+        if ! tap_output=$(brew tap datadog/tap git@github.com:DataDog/homebrew-tap.git 2>&1); then
+            if is_macos \
+                || ! brew tap | grep -Fxq "datadog/tap" \
+                || ! brew info datadog/tap/dd-auth > /dev/null 2>&1
+            then
+                echo "$tap_output"
+                return 1
+            fi
+            echo "-> datadog/tap registered despite Homebrew validation errors"
+        fi
         brew trust -q --tap datadog/tap
     fi
 }
