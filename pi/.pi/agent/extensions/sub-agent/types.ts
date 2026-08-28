@@ -277,6 +277,10 @@ export interface AgentObservation {
 export interface AgentStatusResponse {
 	observedAt: string;
 	waited: boolean;
+	timedOut: boolean;
+	waitedMs: number;
+	timeoutMs?: number;
+	remainingMs?: number;
 	allTerminal: boolean;
 	agents: AgentObservation[];
 }
@@ -290,9 +294,12 @@ export interface CancelToolDetails {
 	runs: AgentSnapshot[];
 }
 
-export interface StatusToolDetails extends AgentStatusResponse {
+/** New wait metadata is optional so tool results persisted by older versions remain renderable. */
+export type StatusToolDetails = Omit<AgentStatusResponse, "timedOut" | "waitedMs"> & {
+	timedOut?: boolean;
+	waitedMs?: number;
 	attributedIds?: string[];
-}
+};
 
 export const EMPTY_USAGE: Readonly<UsageSummary> = Object.freeze({
 	...createUsageSummary(),

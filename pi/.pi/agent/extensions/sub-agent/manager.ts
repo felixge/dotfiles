@@ -32,11 +32,31 @@ interface ManagedRun extends AgentRun {
 	tokenSamples: TokenSample[];
 }
 
+export interface WaitTimer {
+	set(callback: () => void, delayMs: number): unknown;
+	clear(handle: unknown): void;
+}
+
+export interface WaitTiming {
+	elapsedMs: number;
+	remainingMs?: number;
+}
+
+export interface WaitOutcome {
+	snapshots: AgentSnapshot[];
+	timedOut: boolean;
+	waitedMs: number;
+}
+
 export interface AgentManagerOptions {
 	maxConcurrency?: number;
 	maxTerminalRuns?: number;
+	/** Wall clock used for persisted agent and snapshot timestamps. */
 	now?: () => number;
+	/** Monotonic clock used only for wait elapsed time and deadlines. */
+	monotonicNow?: () => number;
 	idFactory?: () => string;
+	waitTimer?: WaitTimer;
 }
 
 export interface SpawnRequest {
@@ -53,6 +73,8 @@ export interface SpawnRequest {
 export type ManagerListener = (snapshots: readonly AgentSnapshot[]) => void;
 
 const WAIT_UPDATE_INTERVAL_MS = 100;
+const WAIT_HEARTBEAT_INTERVAL_MS = 1_000;
+const MAX_SET_TIMEOUT_DELAY_MS = 2_147_483_647;
 const TOKEN_RATE_WINDOW_MS = 15_000;
 const ID_PATTERN = /^[a-z0-9]{6}$/u;
 
@@ -167,7 +189,9 @@ export class AgentManager {
 	private readonly maxConcurrency: number;
 	private readonly maxTerminalRuns: number;
 	private readonly now: () => number;
+	private readonly monotonicNow: () => number;
 	private readonly idFactory: () => string;
+	private readonly waitTimer: WaitTimer;
 	private shuttingDown = false;
 
 	constructor(
@@ -177,7 +201,12 @@ export class AgentManager {
 		this.maxConcurrency = Math.max(1, options.maxConcurrency ?? 10);
 		this.maxTerminalRuns = Math.max(0, options.maxTerminalRuns ?? 20);
 		this.now = options.now ?? Date.now;
+		this.monotonicNow = options.monotonicNow ?? (() => performance.now());
 		this.idFactory = options.idFactory ?? createRunId;
+		this.waitTimer = options.waitTimer ?? {
+			set: (callback, delayMs) => setTimeout(callback, delayMs),
+			clear: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+		};
 	}
 
 	spawn(request: SpawnRequest): AgentSnapshot {
@@ -271,32 +300,67 @@ export class AgentManager {
 	async wait(
 		ids: readonly string[],
 		signal?: AbortSignal,
-		onSnapshot?: (snapshots: AgentSnapshot[]) => void,
-	): Promise<AgentSnapshot[]> {
+		onSnapshot?: (snapshots: AgentSnapshot[], timing: WaitTiming) => void,
+		timeoutMs?: number,
+	): Promise<WaitOutcome> {
 		if (ids.length === 0) throw new Error("At least one sub-agent ID is required");
+		if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
+			throw new Error("Sub-agent wait timeout must be a positive finite number");
+		}
 		for (const id of ids) {
 			if (!this.runs.has(id)) throw new Error(`Unknown sub-agent ID: ${id}`);
 		}
 		if (signal?.aborted) throw abortError();
 
+		const startedAt = this.monotonicNow();
+		const deadline = timeoutMs === undefined ? undefined : startedAt + timeoutMs;
+		const timing = (): WaitTiming => {
+			const now = this.monotonicNow();
+			return {
+				elapsedMs: Math.max(0, now - startedAt),
+				...(deadline === undefined ? {} : { remainingMs: Math.max(0, deadline - now) }),
+			};
+		};
 		const selected = () => {
 			const now = this.now();
 			return ids.map((id) => cloneSnapshot(this.runs.get(id)!, now));
 		};
+		const publish = (snapshots: AgentSnapshot[]) => {
+			if (!onSnapshot) return;
+			try {
+				onSnapshot(snapshots, timing());
+			} catch {}
+		};
 		const current = selected();
-		onSnapshot?.(current);
-		if (current.every((run) => isTerminalStatus(run.status))) return current;
+		if (current.every((run) => isTerminalStatus(run.status))) {
+			publish(current);
+			return { snapshots: current, timedOut: false, waitedMs: timing().elapsedMs };
+		}
 
 		const pinnedIds = [...new Set(ids)];
 		for (const id of pinnedIds) this.waiterCounts.set(id, (this.waiterCounts.get(id) ?? 0) + 1);
-		return new Promise<AgentSnapshot[]>((resolvePromise, rejectPromise) => {
+		return new Promise<WaitOutcome>((resolvePromise, rejectPromise) => {
 			let finished = false;
-			let lastUpdate = this.now();
-			let updateTimer: ReturnType<typeof setTimeout> | undefined;
+			let pendingProgress = false;
+			let lastPublishedAt = startedAt;
+			let nextHeartbeatAt = startedAt + WAIT_HEARTBEAT_INTERVAL_MS;
+			let timerHandle: unknown;
+			let timerDueAt: number | undefined;
+			let timerVersion = 0;
+			let unsubscribe = () => {};
 
+			const clearTimer = () => {
+				if (timerDueAt === undefined) return;
+				timerDueAt = undefined;
+				timerVersion++;
+				try {
+					this.waitTimer.clear(timerHandle);
+				} catch {}
+				timerHandle = undefined;
+			};
 			const cleanup = () => {
 				unsubscribe();
-				if (updateTimer) clearTimeout(updateTimer);
+				clearTimer();
 				signal?.removeEventListener("abort", onAbort);
 				for (const id of pinnedIds) {
 					const count = (this.waiterCounts.get(id) ?? 1) - 1;
@@ -305,49 +369,99 @@ export class AgentManager {
 				}
 				if (this.trimTerminalRuns()) this.emit();
 			};
-			const publish = () => {
-				if (finished || !onSnapshot) return;
-				lastUpdate = this.now();
-				try {
-					onSnapshot(selected());
-				} catch {}
+			const resolveWith = (snapshots: AgentSnapshot[], timedOut: boolean) => {
+				if (finished) return;
+				finished = true;
+				const waitedMs = timing().elapsedMs;
+				cleanup();
+				resolvePromise({ snapshots, timedOut, waitedMs });
 			};
-			const schedulePublish = () => {
-				if (!onSnapshot || updateTimer || finished) return;
-				const elapsed = this.now() - lastUpdate;
-				if (elapsed >= WAIT_UPDATE_INTERVAL_MS) {
-					publish();
-					return;
-				}
-				updateTimer = setTimeout(() => {
-					updateTimer = undefined;
-					publish();
-				}, WAIT_UPDATE_INTERVAL_MS - elapsed);
-			};
-			const onAbort = () => {
+			const rejectWith = (error: unknown) => {
 				if (finished) return;
 				finished = true;
 				cleanup();
-				rejectPromise(abortError());
+				rejectPromise(error);
 			};
+			const publishLatest = (snapshots = selected()) => {
+				if (finished) return;
+				lastPublishedAt = this.monotonicNow();
+				pendingProgress = false;
+				if (deadline !== undefined) nextHeartbeatAt = lastPublishedAt + WAIT_HEARTBEAT_INTERVAL_MS;
+				publish(snapshots);
+			};
+			const nextTimerDue = () => {
+				const due: number[] = [];
+				if (deadline !== undefined) due.push(deadline);
+				if (deadline !== undefined && onSnapshot) due.push(nextHeartbeatAt);
+				if (pendingProgress && onSnapshot) due.push(lastPublishedAt + WAIT_UPDATE_INTERVAL_MS);
+				return due.length === 0 ? undefined : Math.min(...due);
+			};
+			const scheduleTimer = () => {
+				if (finished) return;
+				const dueAt = nextTimerDue();
+				if (dueAt === undefined) {
+					clearTimer();
+					return;
+				}
+				if (timerDueAt === dueAt) return;
+				clearTimer();
+				const version = ++timerVersion;
+				timerDueAt = dueAt;
+				try {
+					timerHandle = this.waitTimer.set(
+						() => onTimer(version),
+						Math.min(MAX_SET_TIMEOUT_DELAY_MS, Math.max(0, dueAt - this.monotonicNow())),
+					);
+				} catch (error) {
+					timerDueAt = undefined;
+					timerHandle = undefined;
+					rejectWith(error);
+				}
+			};
+			const onTimer = (version: number) => {
+				if (finished || version !== timerVersion) return;
+				timerDueAt = undefined;
+				timerHandle = undefined;
+				const now = this.monotonicNow();
+				// At the boundary, this timeout callback wins only if it runs first.
+				if (deadline !== undefined && now >= deadline) {
+					resolveWith(selected(), true);
+					return;
+				}
+				if (deadline !== undefined && onSnapshot && now >= nextHeartbeatAt) {
+					publishLatest();
+				} else if (pendingProgress && now >= lastPublishedAt + WAIT_UPDATE_INTERVAL_MS) {
+					publishLatest();
+				}
+				scheduleTimer();
+			};
+			const onAbort = () => rejectWith(abortError());
 			const onChange = () => {
 				if (finished) return;
 				const snapshots = selected();
 				if (snapshots.every((run) => isTerminalStatus(run.status))) {
-					finished = true;
-					cleanup();
-					if (this.now() - lastUpdate >= WAIT_UPDATE_INTERVAL_MS) {
-						try {
-							onSnapshot?.(snapshots);
-						} catch {}
-					}
-					resolvePromise(snapshots);
+					resolveWith(snapshots, false);
 					return;
 				}
-				schedulePublish();
+				pendingProgress = true;
+				if (onSnapshot && this.monotonicNow() >= lastPublishedAt + WAIT_UPDATE_INTERVAL_MS) {
+					publishLatest(snapshots);
+				}
+				scheduleTimer();
 			};
-			const unsubscribe = this.subscribe(onChange);
+			unsubscribe = this.subscribe(onChange);
 			signal?.addEventListener("abort", onAbort, { once: true });
+			if (signal?.aborted) {
+				onAbort();
+			} else {
+				const latest = selected();
+				if (latest.every((run) => isTerminalStatus(run.status))) {
+					resolveWith(latest, false);
+				} else {
+					if (onSnapshot) publishLatest(latest);
+					scheduleTimer();
+				}
+			}
 		});
 	}
 

@@ -174,6 +174,10 @@ test("aggregate pressure never silently omits failed-agent errors", () => {
 test("status TUI rendering distinguishes snapshot and wait modes", () => {
 	assert.match(renderStatusCall({ ids: ["abc123"], wait: false }, plainTheme).render(120).join("\n"), /agent_status snapshot abc123/u);
 	assert.match(renderStatusCall({ ids: ["abc123"], wait: true }, plainTheme).render(120).join("\n"), /agent_status wait abc123/u);
+	assert.match(
+		renderStatusCall({ ids: ["abc123"], wait: true, timeoutSeconds: 60 }, plainTheme).render(120).join("\n"),
+		/agent_status wait up to 60s abc123/u,
+	);
 	const response = statusResponseFromSnapshots([structuredSnapshot()], false, 1_000);
 	const details: StatusToolDetails = { ...response, attributedIds: [] };
 	const partial = renderStatusResult({ content: [], details }, { expanded: false, isPartial: true }, plainTheme);
@@ -182,11 +186,74 @@ test("status TUI rendering distinguishes snapshot and wait modes", () => {
 	const phaseDetails: StatusToolDetails = { ...phaseResponse, attributedIds: [] };
 	const phasePartial = renderStatusResult({ content: [], details: phaseDetails }, { expanded: false, isPartial: true }, plainTheme);
 	assert.match(phasePartial.render(160).join("\n"), /worker \(abc123\) \[read\] running: using tools 9s, quiet 9s/u);
+	const countdownResponse = statusResponseFromSnapshots([structuredSnapshot()], true, 2_250, {
+		waitedMs: 1_250,
+		timeoutMs: 60_000,
+		remainingMs: 58_750,
+	});
+	const countdown = renderStatusResult(
+		{ content: [], details: { ...countdownResponse, attributedIds: [] } },
+		{ expanded: false, isPartial: true },
+		plainTheme,
+	);
+	assert.match(countdown.render(160).join("\n"), /Time remaining: 59s/u);
 	const compact = renderStatusResult({ content: [], details }, { expanded: false, isPartial: false }, plainTheme);
 	assert.match(compact.render(160).join("\n"), /worker \(abc123\):read/u);
+	const timedOutResponse = statusResponseFromSnapshots([structuredSnapshot()], true, 61_000, {
+		timedOut: true,
+		waitedMs: 60_000,
+	});
+	const timedOut = renderStatusResult(
+		{ content: [], details: { ...timedOutResponse, attributedIds: [] } },
+		{ expanded: false, isPartial: false },
+		plainTheme,
+	);
+	assert.match(timedOut.render(160).join("\n"), /timed out after 1m0s/u);
 	const expanded = renderStatusResult({ content: [], details }, { expanded: true, isPartial: false }, plainTheme);
 	assert.match(expanded.render(160).join("\n"), /model\/high read 0s/u);
 	assert.match(expanded.render(160).join("\n"), /Phase: using_tools/u);
+});
+
+test("status rendering accepts historical details without wait metadata", () => {
+	const modern = statusResponseFromSnapshots([structuredSnapshot()], false, 1_000);
+	const { timedOut: _timedOut, waitedMs: _waitedMs, ...historical } = modern;
+	const details: StatusToolDetails = historical;
+
+	assert.doesNotThrow(() => {
+		renderStatusResult({ content: [], details }, { expanded: false, isPartial: true }, plainTheme);
+		renderStatusResult({ content: [], details }, { expanded: false, isPartial: false }, plainTheme);
+	});
+});
+
+test("compact and expanded status summaries use consistent colors", () => {
+	for (const snapshot of [
+		structuredSnapshot(),
+		structuredSnapshot({
+			status: "failed",
+			endedAt: 1_000,
+			phase: { kind: "failed", startedAt: 1_000 },
+			error: "failure",
+		}),
+	]) {
+		const details: StatusToolDetails = {
+			...statusResponseFromSnapshots([snapshot], false, 1_000),
+			attributedIds: [],
+		};
+		const expected = snapshot.status === "failed" ? "error" : "warning";
+		for (const expanded of [false, true]) {
+			const colors: string[] = [];
+			const theme = {
+				fg: (color: string, text: string) => {
+					colors.push(color);
+					return text;
+				},
+				bg: (_color: string, text: string) => text,
+				bold: (text: string) => text,
+			} as unknown as Theme;
+			renderStatusResult({ content: [], details }, { expanded, isPartial: false }, theme);
+			assert.equal(colors[0], expected);
+		}
+	}
 });
 
 test("wait result preserves terminal snapshot metadata", () => {

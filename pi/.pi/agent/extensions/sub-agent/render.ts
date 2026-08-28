@@ -256,6 +256,7 @@ export function statusResponseFromSnapshots(
 	snapshots: readonly AgentSnapshot[],
 	waited: boolean,
 	now = Date.now(),
+	wait: { timedOut?: boolean; waitedMs?: number; timeoutMs?: number; remainingMs?: number } = {},
 ): AgentStatusResponse {
 	const count = Math.max(1, snapshots.length);
 	let activeOperationLimit = 100;
@@ -265,6 +266,10 @@ export function statusResponseFromSnapshots(
 	const build = (): AgentStatusResponse => ({
 		observedAt: iso(now),
 		waited,
+		timedOut: wait.timedOut ?? false,
+		waitedMs: Math.max(0, wait.waitedMs ?? 0),
+		...(wait.timeoutMs === undefined ? {} : { timeoutMs: Math.max(0, wait.timeoutMs) }),
+		...(wait.remainingMs === undefined ? {} : { remainingMs: Math.max(0, wait.remainingMs) }),
 		allTerminal: snapshots.every((run) => isTerminalStatus(run.status)),
 		agents: snapshots.map((run) => observationFromSnapshot(run, now, {
 			activeOperations: activeOperationLimit,
@@ -297,7 +302,7 @@ export function statusResponseFromSnapshots(
 	return response;
 }
 
-export function formatStatusProgress(response: AgentStatusResponse): string {
+export function formatStatusProgress(response: Pick<AgentStatusResponse, "agents">): string {
 	const lines = response.agents.slice(0, STATUS_RESPONSE_MAX_LINES - 1).map((run) => {
 		const operation = run.activeOperations.at(-1);
 		const activity = operation
@@ -357,6 +362,7 @@ export function renderSpawnResult(result: ToolResultLike<SpawnToolDetails>, _opt
 interface AgentIdsArgs {
 	ids?: string[];
 	wait?: boolean;
+	timeoutSeconds?: number;
 }
 
 export function renderCancelCall(args: AgentIdsArgs, theme: Theme): Text {
@@ -391,7 +397,9 @@ export function renderCancelResult(
 }
 
 export function renderStatusCall(args: AgentIdsArgs, theme: Theme): Text {
-	const mode = args.wait ? "wait" : "snapshot";
+	const mode = args.wait
+		? `wait${args.timeoutSeconds === undefined ? "" : ` up to ${args.timeoutSeconds}s`}`
+		: "snapshot";
 	return new Text(
 		theme.fg("toolTitle", theme.bold(`agent_status ${mode} `)) + theme.fg("accent", (args.ids ?? []).join(", ")),
 		0,
@@ -407,8 +415,11 @@ export function renderStatusResult(
 	const details = result.details;
 	if (!details) return new Text(result.content[0]?.text ?? "No sub-agent status", 0, 0);
 	if (options.isPartial) {
+		const countdown = details.remainingMs === undefined
+			? ""
+			: `\n${theme.fg("warning", `Time remaining: ${formatDuration(Math.ceil(details.remainingMs / 1_000) * 1_000)}`)}`;
 		return new Text(
-			`${formatStatusProgress(details)}\n${theme.fg("dim", "Esc stops waiting; sub-agents continue")}`,
+			`${formatStatusProgress(details)}${countdown}\n${theme.fg("dim", "Esc stops waiting; sub-agents continue")}`,
 			0,
 			0,
 		);
@@ -418,11 +429,14 @@ export function renderStatusResult(
 	const failed = details.agents.filter((item) => item.status === "failed").length;
 	const active = details.agents.length - completed - failed - details.agents.filter((item) => item.status === "cancelled" || item.status === "interrupted").length;
 	const summary = `${completed} completed, ${failed} failed, ${active} active`;
+	const waitSummary = details.timedOut ? `timed out after ${formatDuration(details.waitedMs ?? 0)}` : undefined;
 	const access = details.agents.map((item) => `${formatAgentLabel(item)}:${item.access}`).join(" ");
 	const usage = formatUsage(aggregateUsage(details.agents));
+	const resultColor = failed > 0 ? "error" : details.allTerminal ? "success" : "warning";
 	if (!options.expanded) {
 		return new Text(
-			theme.fg(failed > 0 ? "warning" : details.allTerminal ? "success" : "warning", summary) +
+			theme.fg(resultColor, summary) +
+				(waitSummary ? `\n${theme.fg("warning", waitSummary)}` : "") +
 				(access ? `\n${theme.fg("dim", access)}` : "") +
 				(usage ? `\n${theme.fg("dim", usage)}` : ""),
 			0,
@@ -431,7 +445,8 @@ export function renderStatusResult(
 	}
 
 	const container = new Container();
-	container.addChild(new Text(theme.fg(failed > 0 ? "warning" : "success", summary), 0, 0));
+	container.addChild(new Text(theme.fg(resultColor, summary), 0, 0));
+	if (waitSummary) container.addChild(new Text(theme.fg("warning", waitSummary), 0, 0));
 	for (const item of details.agents) {
 		container.addChild(new Spacer(1));
 		const color = item.status === "completed" ? "success" : item.status === "failed" ? "error" : "muted";

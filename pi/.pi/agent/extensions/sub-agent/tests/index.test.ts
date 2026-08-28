@@ -3,7 +3,7 @@ import test from "node:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { readAgentHistory, TERMINAL_RUN_ENTRY_TYPE } from "../history.ts";
 import { modelParameterDescription, registerSubAgentExtension } from "../index.ts";
-import { AgentManager } from "../manager.ts";
+import { AgentManager, type WaitTimer } from "../manager.ts";
 import { createInitialProgress } from "../runner.ts";
 import type {
 	AgentRunConfig,
@@ -12,6 +12,7 @@ import type {
 	RunnerResult,
 	RunningAgentProcess,
 } from "../types.ts";
+import { ManualClock, ManualWaitTimer } from "./helpers.ts";
 
 type Handler = (event: any, ctx: any) => unknown;
 
@@ -45,14 +46,16 @@ class FakeExtensionApi {
 class FakeRunner implements AgentRunner {
 	readonly cancelCalls = new Map<string, number>();
 	private readonly resolvers = new Map<string, (result: RunnerResult) => void>();
+	private readonly progressCallbacks = new Map<string, (progress: RunnerProgress) => void>();
 
-	start(config: AgentRunConfig, _onProgress: (progress: RunnerProgress) => void): RunningAgentProcess {
+	start(config: AgentRunConfig, onProgress: (progress: RunnerProgress) => void): RunningAgentProcess {
 		let resolve!: (result: RunnerResult) => void;
 		let cancelled = false;
 		const result = new Promise<RunnerResult>((done) => {
 			resolve = done;
 		});
 		this.resolvers.set(config.id, resolve);
+		this.progressCallbacks.set(config.id, onProgress);
 		return {
 			result,
 			cancel: () => {
@@ -68,6 +71,12 @@ class FakeRunner implements AgentRunner {
 				});
 			},
 		};
+	}
+
+	progress(id: string, overrides: Partial<RunnerProgress> = {}): void {
+		const progress = createInitialProgress();
+		Object.assign(progress, overrides);
+		this.progressCallbacks.get(id)?.(progress);
 	}
 
 	complete(id: string, overrides: Partial<RunnerProgress> = {}): void {
@@ -99,12 +108,22 @@ function request(originEntryId: string, parentRunId: string) {
 	};
 }
 
-function setup(maxConcurrency = 10, maxTerminalRuns = 20) {
+function setup(
+	maxConcurrency = 10,
+	maxTerminalRuns = 20,
+	timing: { now?: () => number; monotonicNow?: () => number; waitTimer?: WaitTimer } = {},
+) {
 	const api = new FakeExtensionApi();
 	const runner = new FakeRunner();
-	const manager = new AgentManager(runner, { idFactory: ids(), maxConcurrency, maxTerminalRuns });
+	const manager = new AgentManager(runner, {
+		idFactory: ids(),
+		maxConcurrency,
+		maxTerminalRuns,
+		...timing,
+	});
 	registerSubAgentExtension(api as unknown as ExtensionAPI, {
 		manager,
+		now: timing.now,
 		parentRunIdFactory: (() => {
 			let sequence = 0;
 			return () => `parent-${++sequence}`;
@@ -293,37 +312,149 @@ test("terminal runs persist without agent_wait and restore from session history"
 	assert.equal(api.entries.length, 1);
 });
 
-test("agent_status replaces agent_wait and requires wait", () => {
+test("agent_status replaces agent_wait and exposes a validated optional timeout", () => {
 	const { api, manager } = setup();
 	assert.equal(api.tools.has("agent_wait"), false);
 	const statusTool = api.tools.get("agent_status");
 	assert.ok(statusTool);
 	assert.ok(statusTool.parameters.required.includes("wait"));
+	assert.equal(statusTool.parameters.required.includes("timeoutSeconds"), false);
+	assert.equal(statusTool.parameters.properties.timeoutSeconds.exclusiveMinimum, 0);
+	assert.equal("maximum" in statusTool.parameters.properties.timeoutSeconds, false);
+	assert.match(statusTool.description, /timedOut and waitedMs/u);
+	const guidelines = statusTool.promptGuidelines.join("\n");
+	assert.match(guidelines, /timeoutSeconds: 60/u);
+	assert.doesNotMatch(guidelines, /parent task work/u);
+	assert.match(guidelines, /bash sleep or tight polling/u);
+	assert.match(guidelines, /concise progress update/u);
 	void manager.shutdown();
 });
 
-test("aborting agent_status wait stops only the wait", async () => {
-	const { api, manager, runner } = setup(1);
+test("agent_status rejects invalid timeoutSeconds at runtime", async () => {
+	const { api, manager } = setup();
+	const statusTool = api.tools.get("agent_status");
+	const context = { sessionManager: { getBranch: () => [] } };
+	for (const timeoutSeconds of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_VALUE]) {
+		await assert.rejects(
+			statusTool.execute("status-invalid", { ids: ["aaaaaa"], wait: true, timeoutSeconds }, undefined, undefined, context),
+			/timeoutSeconds must convert to a positive finite millisecond duration/u,
+		);
+	}
+	await assert.rejects(
+		statusTool.execute("status-invalid", { ids: ["aaaaaa"], wait: false, timeoutSeconds: 60 }, undefined, undefined, context),
+		/timeoutSeconds is valid only when wait is true/u,
+	);
+
+	const run = manager.spawn(request("branch-a", "parent-1"));
+	const controller = new AbortController();
+	const largeWait = statusTool.execute(
+		"status-large",
+		{ ids: [run.id], wait: true, timeoutSeconds: 86_401 },
+		controller.signal,
+		undefined,
+		{ sessionManager: { getBranch: () => [{ id: "branch-a" }] } },
+	);
+	const largeWaitRejected = assert.rejects(largeWait, { name: "AbortError" });
+	controller.abort();
+	await largeWaitRejected;
+	await manager.shutdown();
+});
+
+test("aborting agent_status bounded wait cleans up the wait and leaves children running", async () => {
+	const timer = new ManualWaitTimer();
+	const { api, manager, runner } = setup(1, 20, { waitTimer: timer });
 	const running = manager.spawn(request("branch-a", "parent-1"));
 	const queued = manager.spawn(request("branch-a", "parent-1"));
 	const statusTool = api.tools.get("agent_status");
 	assert.ok(statusTool);
 	const controller = new AbortController();
+	const updates: any[] = [];
 	const context = { sessionManager: { getBranch: () => [{ id: "branch-a" }] } };
 	const waiting = statusTool.execute(
 		"status-1",
-		{ ids: [running.id, queued.id], wait: true },
+		{ ids: [running.id, queued.id], wait: true, timeoutSeconds: 60 },
 		controller.signal,
-		undefined,
+		(update: any) => updates.push(update),
 		context,
 	);
+	assert.equal(updates.length, 1);
+	const waitRejected = assert.rejects(waiting, { name: "AbortError" });
 	controller.abort();
 
-	await assert.rejects(waiting, { name: "AbortError" });
+	await waitRejected;
 	await tick();
+	const updateCountAfterAbort = updates.length;
+	runner.progress(running.id, { revision: 1, liveOutput: "still running" });
+	assert.equal(updates.length, updateCountAfterAbort);
 	assert.equal(manager.get(running.id)?.status, "running");
 	assert.equal(manager.get(queued.id)?.status, "queued");
 	assert.equal(runner.cancelCalls.size, 0);
+	assert.equal(timer.clearCalls, 1);
+	assert.equal(timer.callback, undefined);
+	await manager.shutdown();
+});
+
+test("agent_status partial timing reaches rendering before terminal response composition", async () => {
+	const clock = new ManualClock(20_000, 0);
+	const timer = new ManualWaitTimer();
+	const { api, manager, runner } = setup(1, 20, {
+		now: clock.wallNow,
+		monotonicNow: clock.monotonicNow,
+		waitTimer: timer,
+	});
+	const run = manager.spawn(request("branch-a", "parent-1"));
+	const statusTool = api.tools.get("agent_status");
+	const context = { sessionManager: { getBranch: () => [{ id: "branch-a" }] } };
+	const updates: any[] = [];
+	const waiting = statusTool.execute(
+		"status-progress",
+		{ ids: [run.id], wait: true, timeoutSeconds: 60 },
+		undefined,
+		(update: any) => updates.push(update),
+		context,
+	);
+
+	assert.equal(updates.length, 1);
+	assert.equal(updates[0].details.waitedMs, 0);
+	assert.equal(updates[0].details.remainingMs, 60_000);
+	assert.equal(updates[0].details.timeoutMs, 60_000);
+	const plainTheme = {
+		fg: (_color: string, text: string) => text,
+		bg: (_color: string, text: string) => text,
+		bold: (text: string) => text,
+	};
+	const initialRender = statusTool.renderResult(
+		updates[0],
+		{ expanded: false, isPartial: true },
+		plainTheme,
+	);
+	assert.match(initialRender.render(160).join("\n"), /Time remaining: 1m0s/u);
+
+	for (let revision = 1; revision <= 10; revision++) {
+		runner.progress(run.id, { revision, liveOutput: `child progress ${revision}` });
+	}
+	assert.equal(updates.length, 1);
+	assert.equal(timer.delayMs, 100);
+	clock.monotonicMs = 100;
+	timer.fire();
+	assert.equal(updates.length, 2);
+	assert.equal(updates.at(-1).details.waitedMs, 100);
+	assert.equal(updates.at(-1).details.remainingMs, 59_900);
+	assert.equal(updates.at(-1).details.timeoutMs, 60_000);
+	assert.equal(updates.at(-1).details.agents[0].liveOutput, "child progress 10");
+
+	clock.monotonicMs = 125;
+	runner.complete(run.id);
+	const result = await waiting;
+	assert.equal(result.details.allTerminal, true);
+	assert.equal(result.details.timedOut, false);
+	assert.equal(result.details.waitedMs, 125);
+	assert.equal(result.details.agents[0].status, "completed");
+	assert.equal(result.details.agents[0].finalOutput, "done");
+	const { attributedIds, ...response } = result.details;
+	assert.deepEqual(attributedIds, [run.id]);
+	assert.deepEqual(JSON.parse(result.content[0].text), response);
+	assert.equal(timer.callback, undefined);
 	await manager.shutdown();
 });
 
@@ -342,9 +473,119 @@ test("agent_status snapshots immediately, preserves input order, and deduplicate
 	);
 
 	assert.equal(result.details.waited, false);
+	assert.equal(result.details.timedOut, false);
+	assert.equal(result.details.waitedMs, 0);
 	assert.equal(result.details.allTerminal, false);
 	assert.deepEqual(result.details.agents.map((run: any) => run.id), [second.id, first.id]);
 	assert.deepEqual(JSON.parse(result.content[0].text).agents.map((run: any) => run.id), [second.id, first.id]);
+	await manager.shutdown();
+});
+
+test("agent_status bounded wait uses the manager timeout outcome and attributes terminal usage", async () => {
+	const clock = new ManualClock(1_000, 50);
+	const timer = new ManualWaitTimer();
+	const { api, manager, runner } = setup(2, 20, {
+		now: clock.wallNow,
+		monotonicNow: clock.monotonicNow,
+		waitTimer: timer,
+	});
+	const first = manager.spawn(request("branch-a", "parent-1"));
+	const second = manager.spawn(request("branch-a", "parent-1"));
+	const statusTool = api.tools.get("agent_status");
+	const context = { sessionManager: { getBranch: () => [{ id: "branch-a" }] } };
+	const usage = {
+		input: 10,
+		output: 2,
+		cacheRead: 0,
+		cacheWrite: 0,
+		totalTokens: 12,
+		cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 },
+	};
+	const updates: any[] = [];
+	const waiting = statusTool.execute(
+		"status-timeout",
+		{ ids: [second.id, first.id], wait: true, timeoutSeconds: 60 },
+		undefined,
+		(update: any) => updates.push(update),
+		context,
+	);
+	assert.equal(timer.delayMs, 1_000);
+	assert.equal(updates[0].details.timeoutMs, 60_000);
+	runner.complete(first.id, { usage });
+	await tick();
+
+	clock.wallMs = 9_000_000;
+	clock.monotonicMs = 60_050;
+	timer.fire();
+	const result = await waiting;
+	assert.equal(result.details.waited, true);
+	assert.equal(result.details.timedOut, true);
+	assert.equal(result.details.waitedMs, 60_000);
+	assert.equal(result.details.remainingMs, 0);
+	assert.equal(result.details.observedAt, new Date(9_000_000).toISOString());
+	assert.equal(result.details.allTerminal, false);
+	assert.deepEqual(result.details.agents.map((run: any) => [run.id, run.status]), [
+		[second.id, "running"],
+		[first.id, "completed"],
+	]);
+	assert.deepEqual(result.details.attributedIds, [first.id]);
+	assert.deepEqual(result.usage, usage);
+	assert.equal(runner.cancelCalls.size, 0);
+	assert.equal(manager.get(second.id)?.status, "running");
+	assert.equal(JSON.parse(result.content[0].text).timedOut, true);
+	assert.equal(timer.callback, undefined);
+	const updateCountAfterTimeout = updates.length;
+	runner.progress(second.id, { revision: 2, liveOutput: "after timeout" });
+	assert.equal(updates.length, updateCountAfterTimeout);
+
+	runner.complete(second.id, { usage });
+	await tick();
+	const completed = await statusTool.execute(
+		"status-after-timeout",
+		{ ids: [second.id, first.id], wait: false },
+		undefined,
+		undefined,
+		context,
+	);
+	assert.equal(completed.details.timedOut, false);
+	assert.equal(completed.details.waitedMs, 0);
+	assert.deepEqual(completed.details.attributedIds, [second.id]);
+	assert.deepEqual(completed.usage, usage);
+	await manager.shutdown();
+});
+
+test("agent_status reports completion before a bounded timeout", async () => {
+	const clock = new ManualClock(2_000, 10);
+	const timer = new ManualWaitTimer();
+	const { api, manager, runner } = setup(2, 20, {
+		now: clock.wallNow,
+		monotonicNow: clock.monotonicNow,
+		waitTimer: timer,
+	});
+	const first = manager.spawn(request("branch-a", "parent-1"));
+	const second = manager.spawn(request("branch-a", "parent-1"));
+	const statusTool = api.tools.get("agent_status");
+	const context = { sessionManager: { getBranch: () => [{ id: "branch-a" }] } };
+	const waiting = statusTool.execute(
+		"status-complete",
+		{ ids: [first.id, second.id], wait: true, timeoutSeconds: 60 },
+		undefined,
+		undefined,
+		context,
+	);
+	assert.equal(timer.delayMs, 60_000);
+
+	clock.wallMs = -10_000;
+	clock.monotonicMs = 510;
+	runner.complete(second.id);
+	runner.complete(first.id);
+	const result = await waiting;
+	assert.equal(result.details.timedOut, false);
+	assert.equal(result.details.waitedMs, 500);
+	assert.equal(result.details.allTerminal, true);
+	assert.deepEqual(result.details.agents.map((run: any) => run.id), [first.id, second.id]);
+	assert.ok(timer.clearCalls >= 1);
+	assert.equal(timer.callback, undefined);
 	await manager.shutdown();
 });
 

@@ -139,7 +139,14 @@ test("agent_status observations restore structured terminal state", () => {
 			message: {
 				role: "toolResult",
 				toolName: "agent_status",
-				details: { observedAt: observation.endedAt, waited: true, allTerminal: true, agents: [observation] },
+				details: {
+					observedAt: observation.endedAt,
+					waited: true,
+					timedOut: false,
+					waitedMs: 15,
+					allTerminal: true,
+					agents: [observation],
+				},
 			},
 		},
 	]);

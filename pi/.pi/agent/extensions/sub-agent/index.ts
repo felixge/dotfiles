@@ -8,7 +8,7 @@ import {
 	readAgentHistory,
 	TERMINAL_RUN_ENTRY_TYPE,
 } from "./history.ts";
-import { AgentManager, resolveCanonicalCwd } from "./manager.ts";
+import { AgentManager, resolveCanonicalCwd, type WaitTimer, type WaitTiming } from "./manager.ts";
 import { branchEntryIds, runsOnBranch } from "./scope.ts";
 import {
 	formatStatusProgress,
@@ -73,8 +73,12 @@ const AgentStatusParams = Type.Object({
 		description: "Sub-agent IDs to observe",
 	}),
 	wait: Type.Boolean({
-		description: "False returns immediately. True waits until all selected agents finish.",
+		description: "False returns immediately. True waits until all selected agents finish or timeoutSeconds expires.",
 	}),
+	timeoutSeconds: Type.Optional(Type.Number({
+		description: "Positive finite wait bound in seconds. Valid only when wait is true; expiry returns a snapshot without cancelling agents.",
+		exclusiveMinimum: 0,
+	})),
 });
 
 const AgentCancelParams = Type.Object({
@@ -151,10 +155,20 @@ export function footerText(snapshots: ReturnType<AgentManager["getAll"]>): strin
 export interface SubAgentExtensionOptions {
 	manager?: AgentManager;
 	parentRunIdFactory?: () => string;
+	/** Wall clock used for observedAt and agent timestamps. */
+	now?: () => number;
+	/** Monotonic clock used for bounded wait deadlines and elapsed time. */
+	monotonicNow?: () => number;
+	waitTimer?: WaitTimer;
 }
 
 export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExtensionOptions = {}): AgentManager {
-	const manager = options.manager ?? new AgentManager(new PiProcessRunner());
+	const manager = options.manager ?? new AgentManager(new PiProcessRunner(), {
+		now: options.now,
+		monotonicNow: options.monotonicNow,
+		waitTimer: options.waitTimer,
+	});
+	const now = options.now ?? Date.now;
 	let parentRunSequence = 0;
 	const parentRunIdFactory = options.parentRunIdFactory ?? (() => `parent-${++parentRunSequence}`);
 	let activeParentRunId: string | undefined;
@@ -202,7 +216,7 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 			"Start one isolated background sub-agent and return immediately. An optional name labels the agent in status and results. Start all independent agents before calling agent_status. Read access is the default. Bash access adds non-mutating shell commands. Write access allows file mutation. All modes run concurrently subject to the global concurrency limit, including write agents sharing a working directory.",
 		promptSnippet: "Start an isolated background sub-agent",
 		promptGuidelines: [
-			"Before using agent_spawn, ask the user for permission and wait for explicit approval, unless the current user prompt already explicitly requests sub-agent use. Do not treat task complexity or parallelization opportunities as permission. Once authorized, start all independent sub-agents before using agent_status and retain every returned ID. Use agent_status with wait: false for occasional progress checks; avoid tight polling.",
+			"Before using agent_spawn, ask the user for permission and wait for explicit approval, unless the current user prompt already explicitly requests sub-agent use. Do not treat task complexity or parallelization opportunities as permission. Once authorized, start all independent sub-agents before using agent_status and retain every returned ID. Use agent_status with wait: true and timeoutSeconds: 60 for bounded watches. Do not use bash sleep or tight polling. After each bounded nonterminal return, provide the user a concise progress update before waiting again. Use wait: false only for an immediate observation.",
 		],
 		parameters: agentSpawnParams(modelDescription),
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
@@ -241,13 +255,26 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 		name: "agent_status",
 		label: "Agent Status",
 		description:
-			"Observe one or more background sub-agents. Set wait to false for an immediate snapshot or true to wait for all selected agents to finish. Aborting a waiting call stops only the wait. The complete response is capped below 50 KB and 2,000 lines.",
+			"Observe one or more background sub-agents. Set wait to false for an immediate snapshot. Set wait to true to wait indefinitely for all selected agents, or add timeoutSeconds to return the current snapshot normally when that bound expires. A timeout or aborted wait never cancels agents. Responses include timedOut and waitedMs and are capped below 50 KB and 2,000 lines.",
 		promptSnippet: "Observe background sub-agent status or wait for results",
 		promptGuidelines: [
-			"Use wait: false for occasional progress checks and avoid tight polling. Use wait: true when all selected results are needed.",
+			"Prefer agent_status with wait: true and timeoutSeconds: 60 for bounded watches. Do not use bash sleep or tight polling. After each bounded return with any nonterminal child, provide the user a concise progress update before waiting again. Use wait: false only for an immediate observation, and use an indefinite wait only when bounded progress updates are not needed.",
 		],
 		parameters: AgentStatusParams,
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
+			let timeoutMs: number | undefined;
+			if (params.timeoutSeconds !== undefined) {
+				timeoutMs = params.timeoutSeconds * 1_000;
+				if (
+					!Number.isFinite(params.timeoutSeconds) || params.timeoutSeconds <= 0 ||
+					!Number.isFinite(timeoutMs) || timeoutMs <= 0
+				) {
+					throw new Error("timeoutSeconds must convert to a positive finite millisecond duration");
+				}
+			}
+			if (!params.wait && timeoutMs !== undefined) {
+				throw new Error("timeoutSeconds is valid only when wait is true");
+			}
 			const ids = [...new Set(params.ids)];
 			const initiallyVisible = visibleRuns(ctx);
 			const initialById = new Map(initiallyVisible.map((run) => [run.id, run]));
@@ -256,31 +283,46 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 			}
 
 			let selected = ids.map((id) => initialById.get(id)!);
-			let waitedSnapshots: AgentSnapshot[] | undefined;
+			let waitOutcome: Awaited<ReturnType<AgentManager["wait"]>> | undefined;
 			if (params.wait) {
 				signal?.throwIfAborted();
 				const liveIds = ids.filter((id) => manager.get(id) !== undefined);
 				if (liveIds.some((id) => !isTerminalStatus(manager.get(id)!.status))) {
-					waitedSnapshots = await manager.wait(liveIds, signal, (partial) => {
-						const partialById = new Map(partial.map((run) => [run.id, run]));
-						const combined = selected.map((run) => partialById.get(run.id) ?? run);
-						const response = statusResponseFromSnapshots(combined, true);
-						onUpdate?.({
-							content: [{ type: "text", text: formatStatusProgress(response) }],
-							details: response satisfies StatusToolDetails,
-						});
-					});
-					const waitedById = new Map(waitedSnapshots.map((run) => [run.id, run]));
+					const onSnapshot = onUpdate
+						? (partial: AgentSnapshot[], timing: WaitTiming) => {
+							const partialById = new Map(partial.map((run) => [run.id, run]));
+							const combined = selected.map((run) => partialById.get(run.id) ?? run);
+							const response = statusResponseFromSnapshots(combined, true, now(), {
+								waitedMs: timing.elapsedMs,
+								remainingMs: timing.remainingMs,
+								timeoutMs,
+							});
+							onUpdate({
+								content: [{ type: "text", text: formatStatusProgress(response) }],
+								details: response satisfies StatusToolDetails,
+							});
+						}
+						: undefined;
+					waitOutcome = await manager.wait(liveIds, signal, onSnapshot, timeoutMs);
+					const waitedById = new Map(waitOutcome.snapshots.map((run) => [run.id, run]));
 					selected = selected.map((run) => waitedById.get(run.id) ?? run);
 				}
 			}
 
-			const liveById = new Map((waitedSnapshots ?? manager.getAll()).map((run) => [run.id, run]));
+			const liveSnapshots = waitOutcome?.snapshots ?? manager.getAll();
+			const liveById = new Map(liveSnapshots.map((run) => [run.id, run]));
 			selected = selected.map((run) => liveById.get(run.id) ?? run);
 			const terminalLive = selected.filter((run) => liveById.has(run.id) && isTerminalStatus(run.status));
 			// Projection can reject oversized non-elidable metadata. Build it before
 			// mutating exactly-once usage attribution state.
-			const response = statusResponseFromSnapshots(selected, params.wait);
+			const response = statusResponseFromSnapshots(selected, params.wait, now(), {
+				timedOut: waitOutcome?.timedOut ?? false,
+				waitedMs: waitOutcome?.waitedMs ?? 0,
+				...(timeoutMs === undefined ? {} : {
+					timeoutMs,
+					remainingMs: Math.max(0, timeoutMs - (waitOutcome?.waitedMs ?? 0)),
+				}),
+			});
 			const attribution = manager.claimUsage(terminalLive);
 			const details: StatusToolDetails = { ...response, attributedIds: attribution.attributedIds };
 			return {
