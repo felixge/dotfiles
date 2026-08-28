@@ -2,10 +2,17 @@
 
 These are my dotfiles. I don't recommend you to use them as-is, but rather to serve as an inspiration for your own configurations.
 
-```
+```bash
 # initial installation
 git clone https://github.com/felixge/dotfiles.git ~/dotfiles
-source dotfiles/install.bash
+"$HOME/dotfiles/install.bash"
+```
+
+To load individual installation functions without running the full bootstrap:
+
+```bash
+cd "$HOME/dotfiles"
+source ./install.bash
 ```
 
 ## Testing

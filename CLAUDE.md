@@ -6,7 +6,14 @@ Personal dotfiles for macOS and Linux, managed with [GNU Stow](https://www.gnu.o
 
 ```bash
 git clone https://github.com/felixge/dotfiles.git ~/dotfiles
-source dotfiles/install.bash
+"$HOME/dotfiles/install.bash"
+```
+
+Source the script from the repository root to load individual installation functions without running the full bootstrap:
+
+```bash
+cd "$HOME/dotfiles"
+source ./install.bash
 ```
 
 `install.bash` handles the full bootstrap: Homebrew, packages, shell config, stow, neovim plugins, mise tools, and Go packages. Testing is done via Docker (`make test-ubuntu`).

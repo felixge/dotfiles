@@ -4,6 +4,7 @@ DOTFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 main() {
     set -eu
+    cd "$DOTFILES_DIR"
     install_basics
     install_homebrew
     trust_github
@@ -72,29 +73,41 @@ trust_homebrew_taps() {
     echo "-> trust homebrew taps"
     brew trust -q --tap \
         anomalyco/tap \
-        atlassian-labs/acli \
         datadog-labs/pack
 }
 
-install_datadog_tap() {
+tap_datadog() {
     # Tap via SSH to avoid Homebrew prompting for a GitHub username over HTTPS.
-    # Do this after all other taps are installed: Homebrew revalidates every
-    # formula when adding a tap, and datadog/tap contains macOS-only formulae.
-    local tap_output
-    if ! tap_output=$(brew tap datadog/tap git@github.com:DataDog/homebrew-tap.git 2>&1); then
-        if is_macos \
-            || ! brew tap | grep -Fxq "datadog/tap" \
-            || ! brew info datadog/tap/dd-auth > /dev/null 2>&1
-        then
-            echo "$tap_output"
-            return 1
-        fi
-        echo "-> datadog/tap registered despite Homebrew validation errors"
-    fi
+    brew tap datadog/tap git@github.com:DataDog/homebrew-tap.git
     if brew help trust > /dev/null 2>&1; then
         brew trust -q --tap datadog/tap
     fi
 }
+
+install_datadog_workspaces_linux() (
+    local version="v0.55.0"
+    local sha256="0c43a9877013dc6ae56a66298d42b62de306733b42efb0cda58e7a7dad676826"
+    local arch
+    case "$(uname -m)" in
+        aarch64 | arm64) arch="arm64" ;;
+        x86_64 | amd64) arch="amd64" ;;
+        *) echo "unsupported workspaces architecture: $(uname -m)"; return 1 ;;
+    esac
+
+    local tmpdir
+    tmpdir="$(mktemp -d)"
+    trap 'rm -rf "$tmpdir"' EXIT
+
+    local archive="$tmpdir/workspaces.tar.gz"
+    curl -fsSL \
+        "https://binaries.ddbuild.io/dd-source/workspaces/$version/workspaces-tar.tar.gz" \
+        -o "$archive"
+    echo "$sha256  $archive" | sha256sum --check --status
+    tar -xzf "$archive" -C "$tmpdir" "datadog-workspaces-linux-$arch"
+    install -m 0755 \
+        "$tmpdir/datadog-workspaces-linux-$arch" \
+        "$HOMEBREW_PREFIX/bin/workspaces"
+)
 
 install_homebrew_packages() {
     echo "-> install homebrew packages"
@@ -102,7 +115,6 @@ install_homebrew_packages() {
 	    protobuf
         agg
         asciinema
-        atlassian-labs/acli/acli
         bash-completion@2
         bat
         black
@@ -165,12 +177,16 @@ install_homebrew_packages() {
         brew install -q bubblewrap
     fi
     if is_datadog; then
-        install_datadog_tap
-        # ddoc builds from source on some machines and can take a very long time.
-        # brew install -q datadog/tap/ddoc
-        brew install -q datadog/tap/dd-auth
         if is_macos; then
-            brew install -q --cask datadog/tap/bzl datadog/tap/datadog-workspaces
+            tap_datadog
+            # ddoc builds from source on some machines and can take a very long time.
+            # brew install -q datadog/tap/ddoc
+            brew install -q --cask \
+                datadog/tap/dd-auth \
+                datadog/tap/bzl \
+                datadog/tap/datadog-workspaces
+        else
+            install_datadog_workspaces_linux
         fi
     fi
 }
