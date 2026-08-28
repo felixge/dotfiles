@@ -16,6 +16,7 @@ function snapshot(id: string, originEntryId: string, status: AgentStatus): Agent
 		access: "read",
 		status,
 		createdAt: 1,
+		steerCount: 0,
 		revision: 0,
 		lastProgressAt: 1,
 		phase: { kind: status === "running" ? "starting" : status === "queued" ? "queued" : status, startedAt: 1 },

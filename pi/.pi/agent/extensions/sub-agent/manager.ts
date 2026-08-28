@@ -28,6 +28,7 @@ interface ManagedRun extends AgentRun {
 	handle?: RunningAgentProcess;
 	completion?: Promise<void>;
 	cancellationRequested: boolean;
+	logicalSettlementObserved: boolean;
 	runnerRevision: number;
 	tokenSamples: TokenSample[];
 }
@@ -143,6 +144,8 @@ function cloneSnapshot(run: ManagedRun, now: number): AgentSnapshot {
 		access: run.access,
 		status: run.status,
 		createdAt: run.createdAt,
+		steerCount: run.steerCount,
+		lastSteeredAt: run.lastSteeredAt,
 		startedAt: run.startedAt,
 		endedAt: run.endedAt,
 		revision: run.revision,
@@ -219,6 +222,7 @@ export class AgentManager {
 			...request,
 			status: "queued",
 			createdAt,
+			steerCount: 0,
 			revision: 0,
 			lastProgressAt: createdAt,
 			phase: { kind: "queued", startedAt: createdAt },
@@ -232,6 +236,7 @@ export class AgentManager {
 			stderr: "",
 			activity: [],
 			cancellationRequested: false,
+			logicalSettlementObserved: false,
 			runnerRevision: 0,
 			tokenSamples: [],
 		};
@@ -251,6 +256,27 @@ export class AgentManager {
 		return Array.from(this.runs.values(), (run) => cloneSnapshot(run, now));
 	}
 
+	async steer(id: string, message: string): Promise<AgentSnapshot> {
+		if (!message.trim()) throw new Error("Steering message must not be empty");
+		const run = this.runs.get(id);
+		if (!run) throw new Error(`Unknown sub-agent ID: ${id}`);
+		if (run.status === "queued") {
+			throw new Error(`Sub-agent ${id} is queued; wait until it starts before steering`);
+		}
+		if (run.cancellationRequested) throw new Error(`Sub-agent ${id} is being cancelled`);
+		if (run.status !== "running") throw new Error(`Sub-agent ${id} is not running (${run.status})`);
+		const handle = run.handle;
+		if (!handle) throw new Error(`Sub-agent ${id} has no active process`);
+
+		await handle.steer(message);
+		// A successful RPC acknowledgement is the linearization point; later teardown cannot reject it.
+		run.steerCount += 1;
+		run.lastSteeredAt = this.now();
+		run.revision += 1;
+		this.emit();
+		return cloneSnapshot(run, this.now());
+	}
+
 	subscribe(listener: ManagerListener): () => void {
 		this.listeners.add(listener);
 		return () => this.listeners.delete(listener);
@@ -258,7 +284,9 @@ export class AgentManager {
 
 	cancel(id: string): boolean {
 		const run = this.runs.get(id);
-		if (!run || isTerminalStatus(run.status) || run.cancellationRequested) return false;
+		if (
+			!run || isTerminalStatus(run.status) || run.cancellationRequested || run.logicalSettlementObserved
+		) return false;
 		run.cancellationRequested = true;
 		if (run.status === "queued") {
 			const now = this.now();
@@ -584,6 +612,7 @@ export class AgentManager {
 		run.fullOutputPath = progress.fullOutputPath;
 		run.liveOutput = progress.liveOutput;
 		run.activity = progress.activity.map((event) => ({ ...event }));
+		run.logicalSettlementObserved ||= progress.agentSettled;
 		if (progress.finalError) {
 			run.error = progress.finalError;
 			run.errorOriginalBytes = Buffer.byteLength(progress.finalError, "utf8");
@@ -597,14 +626,17 @@ export class AgentManager {
 		run.stderr = result.stderr;
 		run.endedAt = this.now();
 
-		if (run.cancellationRequested) {
-			run.status = "cancelled";
-			run.error = "Cancelled";
-			run.currentActivity = "cancelled";
-		} else if (result.timedOut) {
+		if (result.terminationCause === "timeout" || result.timedOut) {
 			run.status = "failed";
 			run.error = "Sub-agent timed out after 30 minutes";
 			run.currentActivity = "failed";
+		} else if (
+			result.terminationCause === "cancelled"
+			|| (result.terminationCause === undefined && run.cancellationRequested)
+		) {
+			run.status = "cancelled";
+			run.error = "Cancelled";
+			run.currentActivity = "cancelled";
 		} else if (result.startupSignalDeath) {
 			run.status = "failed";
 			run.error = startupSignalDeathMessage(result.startupSignalDeath);
@@ -613,10 +645,17 @@ export class AgentManager {
 			run.status = "failed";
 			run.error = `Could not start Pi: ${result.spawnError}`;
 			run.currentActivity = "failed";
-		} else if (result.exitCode !== 0) {
+		} else if (result.teardownError) {
+			run.status = "failed";
+			run.error = result.teardownError;
+			run.currentActivity = "failed";
+		} else if (!result.expectedSettlementTeardown || !result.progress.agentSettled) {
 			run.status = "failed";
 			const processReason = result.signal ? `signal ${result.signal}` : `exit code ${result.exitCode ?? "unknown"}`;
-			run.error = result.progress.finalError || result.stdinError || result.stderr.trim() || `Pi exited with ${processReason}`;
+			run.error = result.progress.finalError
+				|| result.stdinError
+				|| result.stderr.trim()
+				|| `Pi exited before agent_settled (${processReason})`;
 			run.currentActivity = "failed";
 		} else if (result.progress.finalStopReason === "error" || result.progress.finalStopReason === "aborted") {
 			run.status = "failed";

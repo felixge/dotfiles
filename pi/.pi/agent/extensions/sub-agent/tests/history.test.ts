@@ -24,6 +24,7 @@ function snapshot(id: string, status: AgentStatus = "running"): AgentSnapshot {
 		status,
 		createdAt: 10,
 		...(status === "running" ? { startedAt: 11 } : { startedAt: 11, endedAt: 20 }),
+		steerCount: 0,
 		revision: 3,
 		lastProgressAt: status === "running" ? 15 : 20,
 		phase: { kind: status === "running" ? "thinking" : status, startedAt: 14 },
@@ -54,6 +55,13 @@ function spawnEntry(run: AgentSnapshot): unknown {
 	};
 }
 
+function steerEntry(run: AgentSnapshot): unknown {
+	return {
+		type: "message",
+		message: { role: "toolResult", toolName: "agent_steer", details: { run } },
+	};
+}
+
 test("session history marks spawns without terminal records as interrupted", () => {
 	const history = readAgentHistory([spawnEntry(snapshot("aaaaaa"))]);
 
@@ -63,8 +71,8 @@ test("session history marks spawns without terminal records as interrupted", () 
 	assert.match(history.runs[0]?.error ?? "", /before recording a terminal result/u);
 });
 
-test("terminal custom entries persist final snapshots without duplicate live output", () => {
-	const completed = snapshot("aaaaaa", "completed");
+test("terminal custom entries persist final snapshots and steering metadata without duplicate live output", () => {
+	const completed = { ...snapshot("aaaaaa", "completed"), steerCount: 2, lastSteeredAt: 18 };
 	const data = persistedTerminalRun(completed);
 	const history = readAgentHistory([
 		{ type: "custom", customType: TERMINAL_RUN_ENTRY_TYPE, data },
@@ -76,6 +84,8 @@ test("terminal custom entries persist final snapshots without duplicate live out
 	assert.equal(data.run.tokensPerSecond15s, undefined);
 	assert.equal(history.runs[0]?.status, "completed");
 	assert.equal(history.runs[0]?.finalOutput, "done");
+	assert.equal(history.runs[0]?.steerCount, 2);
+	assert.equal(history.runs[0]?.lastSteeredAt, 18);
 	assert.deepEqual([...history.persistedTerminalIds], ["aaaaaa"]);
 });
 
@@ -101,6 +111,7 @@ test("version 1 terminal entries restore with normalized structured timing", () 
 		phase: _phase,
 		activeOperations: _activeOperations,
 		recentOperations: _recentOperations,
+		steerCount: _steerCount,
 		...versionOne
 	} = completed;
 	const history = readAgentHistory([{
@@ -113,6 +124,61 @@ test("version 1 terminal entries restore with normalized structured timing", () 
 	assert.equal(history.runs[0]?.phase.kind, "completed");
 	assert.equal(history.runs[0]?.phase.startedAt, 20);
 	assert.deepEqual(history.runs[0]?.activeOperations, []);
+	assert.equal(history.runs[0]?.steerCount, 0);
+	assert.equal(history.runs[0]?.lastSteeredAt, undefined);
+});
+
+test("agent_steer tool details restore acknowledgement metadata", () => {
+	const running = snapshot("aaaaaa");
+	const steered = { ...running, steerCount: 1, lastSteeredAt: 17, revision: running.revision + 1 };
+	const history = readAgentHistory([spawnEntry(running), steerEntry(steered)]);
+	assert.equal(history.runs[0]?.status, "interrupted");
+	assert.equal(history.runs[0]?.steerCount, 1);
+	assert.equal(history.runs[0]?.lastSteeredAt, 17);
+});
+
+test("agent_steer history retains the highest revision when acknowledgements are persisted in reverse order", () => {
+	const running = snapshot("aaaaaa");
+	const lowerRevision = { ...running, steerCount: 1, lastSteeredAt: 17, revision: 4 };
+	const higherRevision = { ...running, steerCount: 2, lastSteeredAt: 19, revision: 5 };
+	const history = readAgentHistory([
+		spawnEntry(running),
+		steerEntry(higherRevision),
+		steerEntry(lowerRevision),
+	]);
+
+	assert.equal(history.runs[0]?.status, "interrupted");
+	assert.equal(history.runs[0]?.revision, higherRevision.revision + 1);
+	assert.equal(history.runs[0]?.steerCount, 2);
+	assert.equal(history.runs[0]?.lastSteeredAt, 19);
+});
+
+test("terminal history retains the highest revision within the terminal classification", () => {
+	const higherRevision = { ...snapshot("aaaaaa", "completed"), revision: 8, finalOutput: "newer terminal" };
+	const lowerRevision = { ...snapshot("aaaaaa", "failed"), revision: 7, finalOutput: "older terminal" };
+	const history = readAgentHistory([
+		{ type: "custom", customType: TERMINAL_RUN_ENTRY_TYPE, data: persistedTerminalRun(higherRevision) },
+		{ type: "custom", customType: TERMINAL_RUN_ENTRY_TYPE, data: persistedTerminalRun(lowerRevision) },
+	]);
+
+	assert.equal(history.runs[0]?.status, "completed");
+	assert.equal(history.runs[0]?.revision, 8);
+	assert.equal(history.runs[0]?.finalOutput, "newer terminal");
+});
+
+test("legacy terminal snapshots supersede newer nonterminal revisions in either entry order", () => {
+	const running = { ...snapshot("aaaaaa"), revision: 100 };
+	const { revision: _revision, ...legacyTerminal } = snapshot("aaaaaa", "completed");
+	const laterRunning = { ...running, steerCount: 3, lastSteeredAt: 25, revision: 200 };
+	const history = readAgentHistory([
+		spawnEntry(running),
+		{ type: "custom", customType: TERMINAL_RUN_ENTRY_TYPE, data: { version: 1, run: legacyTerminal } },
+		steerEntry(laterRunning),
+	]);
+
+	assert.equal(history.runs[0]?.status, "completed");
+	assert.equal(history.runs[0]?.revision, 0);
+	assert.equal(history.runs[0]?.finalOutput, "done");
 });
 
 test("malformed terminal entries are ignored", () => {

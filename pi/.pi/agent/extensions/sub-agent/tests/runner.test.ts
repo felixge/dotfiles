@@ -6,6 +6,7 @@ import { readFile, unlink } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { AgentManager } from "../manager.ts";
 import {
 	BASH_ACCESS_ADVISORY,
 	DEFAULT_GATEWAY_COST_EXTENSION_PATH,
@@ -18,7 +19,7 @@ import {
 	createInitialProgress,
 	reduceJsonEvent,
 } from "../runner.ts";
-import type { AgentRunConfig } from "../types.ts";
+import type { AgentRunConfig, RunnerProgress } from "../types.ts";
 
 const fixture = fileURLToPath(new URL("./fixtures/child.mjs", import.meta.url));
 const gatewayCostExtensionPath = "/test/gateway-cost-fallback/index.ts";
@@ -48,6 +49,10 @@ class FakeReadable {
 
 	emitData(chunk: Buffer | string): void {
 		this.events.emit("data", chunk);
+	}
+
+	dataListenerCount(): number {
+		return this.events.listenerCount("data");
 	}
 }
 
@@ -92,15 +97,21 @@ class FakeChildProcess {
 	readonly killCalls: NodeJS.Signals[] = [];
 	readonly pid?: number;
 	private readonly events = new EventEmitter();
+	private readonly killHandler?: (signal: NodeJS.Signals) => boolean;
 
-	constructor(options: { pid?: number; stdin?: FakeStdin | null } = {}) {
+	constructor(options: {
+		pid?: number;
+		stdin?: FakeStdin | null;
+		killHandler?: (signal: NodeJS.Signals) => boolean;
+	} = {}) {
 		this.pid = options.pid;
 		this.stdin = options.stdin === undefined ? new FakeStdin() : options.stdin;
+		this.killHandler = options.killHandler;
 	}
 
 	kill(signal: NodeJS.Signals = "SIGTERM"): boolean {
 		this.killCalls.push(signal);
-		return true;
+		return this.killHandler?.(signal) ?? true;
 	}
 
 	on(event: "error", listener: (error: Error) => void): this;
@@ -119,6 +130,47 @@ class FakeChildProcess {
 
 	emitClose(code: number | null, signal: NodeJS.Signals | null): void {
 		this.events.emit("close", code, signal);
+	}
+
+	listenerCount(event: "error" | "close"): number {
+		return this.events.listenerCount(event);
+	}
+}
+
+function emitJson(child: FakeChildProcess, value: unknown): void {
+	child.stdout.emitData(`${JSON.stringify(value)}\n`);
+}
+
+function acknowledgePrompt(child: FakeChildProcess): void {
+	emitJson(child, { id: "prompt-1", type: "response", command: "prompt", success: true });
+}
+
+function emitSuccessfulSettlement(child: FakeChildProcess, output = "done"): void {
+	emitJson(child, {
+		type: "message_end",
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: output }],
+			stopReason: "stop",
+			usage: {},
+		},
+	});
+	emitJson(child, { type: "agent_settled" });
+}
+
+async function immediate(): Promise<void> {
+	await new Promise<void>((resolve) => setImmediate(resolve));
+}
+
+async function delay(ms: number): Promise<void> {
+	await new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 500): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (!predicate()) {
+		if (Date.now() >= deadline) throw new Error("Timed out waiting for test condition");
+		await delay(1);
 	}
 }
 
@@ -457,7 +509,7 @@ test("event reducer bounds final output and activity", () => {
 	assert.equal(state.finalOutputTruncation?.truncated, true);
 });
 
-test("process runner omits the prompt from argv and writes it exactly once to closed stdin", async () => {
+test("process runner sends one RPC prompt, keeps stdin open, and retains isolation flags", async () => {
 	const prompt = "exact stdin prompt\nwith unicode: π";
 	let piArgs: string[] = [];
 	const runner = new PiProcessRunner({
@@ -471,7 +523,8 @@ test("process runner omits the prompt from argv and writes it exactly once to cl
 	const updates: string[] = [];
 	const child = runner.start({ ...config, prompt }, (progress) => updates.push(progress.currentActivity ?? ""));
 	const result = await child.result;
-	assert.equal(result.exitCode, 0);
+	assert.equal(result.expectedSettlementTeardown, true);
+	assert.equal(result.signal, "SIGTERM");
 	assert.deepEqual(JSON.parse(result.progress.finalOutput ?? ""), {
 		bytes: Buffer.byteLength(prompt, "utf8"),
 		sha256: createHash("sha256").update(prompt).digest("hex"),
@@ -483,8 +536,7 @@ test("process runner omits the prompt from argv and writes it exactly once to cl
 	assert.equal(piArgs.includes(prompt), false);
 	assert.deepEqual(piArgs, [
 		"--mode",
-		"json",
-		"-p",
+		"rpc",
 		"--no-session",
 		"--no-extensions",
 		"--extension",
@@ -527,7 +579,7 @@ test("process runner configures bash and write access with exact tools and a bas
 			timeoutMs: 2_000,
 		});
 		const result = await runner.start({ ...config, access: expected.access }, () => {}).result;
-		assert.equal(result.exitCode, 0);
+		assert.equal(result.expectedSettlementTeardown, true);
 		assert.deepEqual(piArgs.slice(piArgs.indexOf("--tools")), expected.trailingArgs);
 	}
 	assert.match(BASH_ACCESS_ADVISORY, /Do not modify files through bash/u);
@@ -546,7 +598,7 @@ test("process runner supports long prompts without adding them to argv", async (
 		timeoutMs: 2_000,
 	});
 	const result = await runner.start({ ...config, prompt }, () => {}).result;
-	assert.equal(result.exitCode, 0);
+	assert.equal(result.expectedSettlementTeardown, true);
 	assert.deepEqual(JSON.parse(result.progress.finalOutput ?? ""), {
 		bytes: Buffer.byteLength(prompt, "utf8"),
 		sha256: createHash("sha256").update(prompt).digest("hex"),
@@ -555,7 +607,310 @@ test("process runner supports long prompts without adding them to argv", async (
 	assert.ok(Math.max(...piArgs.map((argument) => Buffer.byteLength(argument, "utf8"))) < 1_024);
 });
 
-test("process runner consumes asynchronous closed-stdin errors after writing and ending once", async () => {
+test("RPC commands preserve multiline text, quotes, backslashes, and Unicode as one LF record", async () => {
+	const prompt = "line one\nquoted: \"value\" \\ path 😀 π";
+	const fakeChild = new FakeChildProcess();
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start({ ...config, prompt }, () => {});
+	assert.equal(fakeChild.stdin?.writes.length, 1);
+	assert.equal(
+		fakeChild.stdin?.writes[0],
+		`${JSON.stringify({ id: "prompt-1", type: "prompt", message: prompt })}\n`,
+	);
+	assert.deepEqual(JSON.parse(fakeChild.stdin!.writes[0]!.slice(0, -1)), {
+		id: "prompt-1",
+		type: "prompt",
+		message: prompt,
+	});
+	assert.equal(fakeChild.stdin?.endCalls, 0);
+	acknowledgePrompt(fakeChild);
+	let processFinished = false;
+	void running.result.then(() => {
+		processFinished = true;
+	});
+	await immediate();
+	assert.equal(processFinished, false);
+	emitSuccessfulSettlement(fakeChild);
+	assert.deepEqual(fakeChild.killCalls, ["SIGTERM"]);
+	fakeChild.emitClose(null, "SIGTERM");
+	assert.equal((await running.result).expectedSettlementTeardown, true);
+});
+
+test("steering resolves only for its matching acknowledgement and ignores queue contents", async () => {
+	const fakeChild = new FakeChildProcess();
+	const updates: RunnerProgress[] = [];
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, (progress) => updates.push(progress));
+	acknowledgePrompt(fakeChild);
+	let accepted = false;
+	const steering = running.steer("focus on parser").then(() => {
+		accepted = true;
+	});
+	assert.equal(fakeChild.stdin?.writes[1], `${JSON.stringify({
+		id: "steer-2",
+		type: "steer",
+		message: "focus on parser",
+	})}\n`);
+	emitJson(fakeChild, { type: "queue_update", steering: ["focus on parser"], followUp: [] });
+	emitJson(fakeChild, { id: "other", type: "response", command: "steer", success: true });
+	await immediate();
+	assert.equal(accepted, false);
+	assert.equal(JSON.stringify(updates).includes("focus on parser"), false);
+	emitJson(fakeChild, { id: "steer-2", type: "response", command: "steer", success: true });
+	await steering;
+	assert.equal(accepted, true);
+	emitSuccessfulSettlement(fakeChild);
+	fakeChild.emitClose(null, "SIGTERM");
+	await running.result;
+});
+
+test("concurrent steering writes ordered records and correlates out-of-order responses", async () => {
+	const fakeChild = new FakeChildProcess();
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	acknowledgePrompt(fakeChild);
+	const accepted: string[] = [];
+	const first = running.steer("first").then(() => accepted.push("first"));
+	const second = running.steer("second").then(() => accepted.push("second"));
+	assert.deepEqual(fakeChild.stdin?.writes.slice(1).map((line) => JSON.parse(line)), [
+		{ id: "steer-2", type: "steer", message: "first" },
+		{ id: "steer-3", type: "steer", message: "second" },
+	]);
+	emitJson(fakeChild, { id: "steer-3", type: "response", command: "steer", success: true });
+	await immediate();
+	assert.deepEqual(accepted, ["second"]);
+	emitJson(fakeChild, { id: "steer-2", type: "response", command: "steer", success: true });
+	await Promise.all([first, second]);
+	assert.deepEqual(accepted, ["second", "first"]);
+	emitSuccessfulSettlement(fakeChild);
+	fakeChild.emitClose(null, "SIGTERM");
+	await running.result;
+});
+
+test("RPC child fixture accepts steering and stays alive until agent settlement", async () => {
+	const runner = new PiProcessRunner({
+		resolveInvocation: () => ({ command: process.execPath, args: [fixture, "steer"] }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	await running.steer("first instruction");
+	await running.steer("finish");
+	const result = await running.result;
+	assert.equal(result.expectedSettlementTeardown, true);
+	assert.equal(result.signal, "SIGTERM");
+	assert.equal(result.progress.finalOutput, "fixture result");
+});
+
+test("failed steering acknowledgements reject with the child diagnostic", async () => {
+	const fakeChild = new FakeChildProcess();
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	acknowledgePrompt(fakeChild);
+	const steering = running.steer("bad instruction");
+	emitJson(fakeChild, {
+		id: "steer-2",
+		type: "response",
+		command: "steer",
+		success: false,
+		error: "steering queue is unavailable",
+	});
+	await assert.rejects(steering, /steering queue is unavailable/u);
+	running.cancel();
+	fakeChild.emitClose(null, "SIGTERM");
+	await running.result;
+});
+
+test("clean RPC exit before agent_settled remains unexpected despite a valid final message", async () => {
+	const fakeChild = new FakeChildProcess();
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	acknowledgePrompt(fakeChild);
+	emitJson(fakeChild, {
+		type: "message_end",
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: "not logically settled" }],
+			stopReason: "stop",
+			usage: {},
+		},
+	});
+	fakeChild.emitClose(0, null);
+	const result = await running.result;
+	assert.equal(result.exitCode, 0);
+	assert.equal(result.progress.finalAssistantSeen, true);
+	assert.equal(result.progress.agentSettled, false);
+	assert.equal(result.terminationCause, undefined);
+	assert.equal(result.expectedSettlementTeardown, undefined);
+});
+
+test("process exit rejects pending steering requests", async () => {
+	const fakeChild = new FakeChildProcess();
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	acknowledgePrompt(fakeChild);
+	const steering = running.steer("still pending");
+	fakeChild.emitClose(1, null);
+	await assert.rejects(steering, /exited before acknowledging/u);
+	assert.equal((await running.result).expectedSettlementTeardown, undefined);
+});
+
+test("RPC stdin errors reject pending steering without exposing command contents", async () => {
+	const secret = "private steering instruction";
+	const fakeChild = new FakeChildProcess();
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	acknowledgePrompt(fakeChild);
+	const steering = running.steer(secret);
+	fakeChild.stdin?.emitError("EIO", `failed while writing ${secret}`);
+	await assert.rejects(steering, /Could not write to Pi RPC stdin \(EIO\)/u);
+	fakeChild.emitClose(null, "SIGTERM");
+	const result = await running.result;
+	assert.equal(JSON.stringify(result).includes(secret), false);
+});
+
+test("agent settlement rejects later steering and triggers expected teardown", async () => {
+	const fakeChild = new FakeChildProcess();
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	acknowledgePrompt(fakeChild);
+	emitSuccessfulSettlement(fakeChild, "valid final output");
+	assert.deepEqual(fakeChild.killCalls, ["SIGTERM"]);
+	await assert.rejects(running.steer("too late"), /no longer accepting RPC commands/u);
+	fakeChild.emitClose(null, "SIGTERM");
+	const result = await running.result;
+	assert.equal(result.expectedSettlementTeardown, true);
+	assert.equal(result.timedOut, false);
+	assert.equal(result.progress.finalOutput, "valid final output");
+});
+
+test("settlement teardown escalates normally from SIGTERM to SIGKILL", async () => {
+	let fakeChild!: FakeChildProcess;
+	fakeChild = new FakeChildProcess({
+		killHandler: (signal) => {
+			if (signal === "SIGKILL") queueMicrotask(() => fakeChild.emitClose(null, "SIGKILL"));
+			return true;
+		},
+	});
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+		killGraceMs: 5,
+	});
+	const running = runner.start(config, () => {});
+	acknowledgePrompt(fakeChild);
+	emitSuccessfulSettlement(fakeChild);
+	const result = await running.result;
+	assert.deepEqual(fakeChild.killCalls, ["SIGTERM", "SIGKILL"]);
+	assert.equal(result.terminationCause, "settled");
+	assert.equal(result.expectedSettlementTeardown, true);
+	assert.equal(result.teardownError, undefined);
+});
+
+test("failed SIGTERM dispatch escalates immediately and is surfaced", async () => {
+	const fakeChild = new FakeChildProcess({
+		killHandler: (signal) => signal !== "SIGTERM",
+	});
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+		killGraceMs: 20,
+	});
+	const running = runner.start(config, () => {});
+	acknowledgePrompt(fakeChild);
+	emitSuccessfulSettlement(fakeChild);
+	assert.deepEqual(fakeChild.killCalls, ["SIGTERM", "SIGKILL"]);
+	fakeChild.emitClose(null, "SIGKILL");
+	const result = await running.result;
+	assert.equal(result.expectedSettlementTeardown, true);
+	assert.equal(result.teardownError, "Could not send SIGTERM to Pi RPC process");
+});
+
+test("failed SIGKILL and missing close settle result after bounded cleanup", async () => {
+	const fakeChild = new FakeChildProcess({
+		killHandler: (signal) => signal !== "SIGKILL",
+	});
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+		killGraceMs: 5,
+	});
+	const running = runner.start(config, () => {});
+	acknowledgePrompt(fakeChild);
+	emitSuccessfulSettlement(fakeChild);
+	const result = await running.result;
+	assert.deepEqual(fakeChild.killCalls, ["SIGTERM", "SIGKILL"]);
+	assert.equal(result.expectedSettlementTeardown, true);
+	assert.match(result.teardownError ?? "", /Could not send SIGKILL/u);
+	assert.match(result.teardownError ?? "", /did not close within 5 ms/u);
+	assert.equal(fakeChild.stdout.dataListenerCount(), 0);
+	assert.equal(fakeChild.stderr.dataListenerCount(), 0);
+	assert.equal(fakeChild.stdin?.errorListenerCount(), 0);
+	assert.equal(fakeChild.listenerCount("close"), 0);
+	assert.equal(fakeChild.listenerCount("error"), 0);
+});
+
+test("bounded settlement cleanup also guarantees manager shutdown resolves", async () => {
+	const fakeChild = new FakeChildProcess();
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+		killGraceMs: 5,
+	});
+	const manager = new AgentManager(runner, { idFactory: () => "abc123" });
+	const snapshot = manager.spawn({
+		originEntryId: config.originEntryId,
+		parentRunId: config.parentRunId,
+		prompt: config.prompt,
+		model: config.model,
+		thinking: config.thinking,
+		cwd: config.cwd,
+		access: config.access,
+	});
+	acknowledgePrompt(fakeChild);
+	emitSuccessfulSettlement(fakeChild);
+	await manager.shutdown();
+	assert.deepEqual(fakeChild.killCalls, ["SIGTERM", "SIGKILL"]);
+	assert.equal(manager.get(snapshot.id)?.status, "failed");
+	assert.match(manager.get(snapshot.id)?.error ?? "", /did not close within 5 ms/u);
+});
+
+test("process runner treats asynchronous RPC stdin errors as transport failures", async () => {
 	for (const code of ["EPIPE", "ECONNRESET", "ERR_STREAM_DESTROYED", "ERR_STREAM_WRITE_AFTER_END"]) {
 		const stdin = new FakeStdin();
 		const fakeChild = new FakeChildProcess({ stdin });
@@ -569,8 +924,8 @@ test("process runner consumes asynchronous closed-stdin errors after writing and
 			timeoutMs: 2_000,
 		});
 		const running = runner.start(config, () => {});
-		assert.deepEqual(stdin.writes, [config.prompt]);
-		assert.equal(stdin.endCalls, 1);
+		assert.deepEqual(stdin.writes, [`${JSON.stringify({ id: "prompt-1", type: "prompt", message: config.prompt })}\n`]);
+		assert.equal(stdin.endCalls, 0);
 		setImmediate(() => {
 			stdin.emitError(code);
 			fakeChild.emitClose(1, null);
@@ -578,8 +933,8 @@ test("process runner consumes asynchronous closed-stdin errors after writing and
 		const result = await running.result;
 		assert.deepEqual(stdio, ["pipe", "pipe", "pipe"]);
 		assert.equal(result.exitCode, 1);
-		assert.equal(result.stdinError, undefined);
-		assert.deepEqual(fakeChild.killCalls, []);
+		assert.equal(result.stdinError, `Could not write to Pi RPC stdin (${code})`);
+		assert.deepEqual(fakeChild.killCalls, ["SIGTERM"]);
 		assert.equal(stdin.errorListenerCount(), 0);
 	}
 });
@@ -600,7 +955,7 @@ test("process runner diagnoses unexpected stdin errors without startup misclassi
 		fakeChild.emitClose(null, "SIGTERM");
 	});
 	const result = await running.result;
-	assert.equal(result.stdinError, "Could not send prompt to Pi stdin (EACCES)");
+	assert.equal(result.stdinError, "Could not write to Pi RPC stdin (EACCES)");
 	assert.equal(result.spawnError, undefined);
 	assert.equal(result.startupSignalDeath, undefined);
 	assert.deepEqual(fakeChild.killCalls, ["SIGTERM"]);
@@ -610,7 +965,7 @@ test("process runner diagnoses unexpected stdin errors without startup misclassi
 	assert.equal(diagnostic.includes(argvValue), false);
 });
 
-test("process runner retains valid output when an unexpected stdin error arrives late", async () => {
+test("process runner terminates on a late RPC stdin error while retaining valid output", async () => {
 	const stdin = new FakeStdin();
 	const fakeChild = new FakeChildProcess({ stdin });
 	const runner = new PiProcessRunner({
@@ -629,15 +984,15 @@ test("process runner retains valid output when an unexpected stdin error arrives
 		},
 	})}\n`);
 	stdin.emitError("EIO");
-	assert.deepEqual(fakeChild.killCalls, []);
-	setImmediate(() => fakeChild.emitClose(0, null));
+	assert.deepEqual(fakeChild.killCalls, ["SIGTERM"]);
+	setImmediate(() => fakeChild.emitClose(null, "SIGTERM"));
 	const result = await running.result;
-	assert.equal(result.exitCode, 0);
-	assert.equal(result.signal, null);
-	assert.deepEqual(fakeChild.killCalls, []);
+	assert.equal(result.exitCode, null);
+	assert.equal(result.signal, "SIGTERM");
+	assert.deepEqual(fakeChild.killCalls, ["SIGTERM"]);
 	assert.equal(result.progress.finalAssistantSeen, true);
 	assert.equal(result.progress.finalOutput, "valid completion");
-	assert.equal(result.stdinError, "Could not send prompt to Pi stdin (EIO)");
+	assert.equal(result.stdinError, "Could not write to Pi RPC stdin (EIO)");
 });
 
 test("process runner handles unavailable stdin without throwing", async () => {
@@ -651,7 +1006,7 @@ test("process runner handles unavailable stdin without throwing", async () => {
 	assert.deepEqual(fakeChild.killCalls, ["SIGTERM"]);
 	fakeChild.emitClose(null, "SIGTERM");
 	const result = await running.result;
-	assert.equal(result.stdinError, "Could not send prompt to Pi stdin (unavailable)");
+	assert.equal(result.stdinError, "Could not write to Pi RPC stdin (unavailable)");
 	assert.equal(result.startupSignalDeath, undefined);
 });
 
@@ -752,6 +1107,122 @@ test("process runner flushes complete unterminated JSON before startup classific
 	assert.equal(result.startupSignalDeath, undefined);
 });
 
+test("process runner honors an unterminated final agent_settled record without signalling a closed process", async () => {
+	const fakeChild = new FakeChildProcess();
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	acknowledgePrompt(fakeChild);
+	emitJson(fakeChild, {
+		type: "message_end",
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: "complete before close" }],
+			stopReason: "stop",
+			usage: {},
+		},
+	});
+	fakeChild.stdout.emitData(JSON.stringify({ type: "agent_settled" }));
+	fakeChild.emitClose(0, null);
+
+	const result = await running.result;
+	assert.equal(result.terminationCause, "settled");
+	assert.equal(result.expectedSettlementTeardown, true);
+	assert.equal(result.progress.agentSettled, true);
+	assert.equal(result.progress.finalOutput, "complete before close");
+	assert.deepEqual(fakeChild.killCalls, []);
+});
+
+test("manager completes a run settled by the final unterminated stdout record", async () => {
+	const fakeChild = new FakeChildProcess();
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const manager = new AgentManager(runner, { idFactory: () => "abc123" });
+	const spawned = manager.spawn({
+		originEntryId: config.originEntryId,
+		parentRunId: config.parentRunId,
+		prompt: config.prompt,
+		model: config.model,
+		thinking: config.thinking,
+		cwd: config.cwd,
+		access: config.access,
+	});
+	acknowledgePrompt(fakeChild);
+	emitJson(fakeChild, {
+		type: "message_end",
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: "manager completion" }],
+			stopReason: "stop",
+			usage: {},
+		},
+	});
+	fakeChild.stdout.emitData(JSON.stringify({ type: "agent_settled" }));
+	fakeChild.emitClose(0, null);
+
+	const outcome = await manager.wait([spawned.id]);
+	assert.equal(outcome.snapshots[0]?.status, "completed");
+	assert.equal(outcome.snapshots[0]?.error, undefined);
+	assert.equal(outcome.snapshots[0]?.finalOutput, "manager completion");
+	assert.deepEqual(fakeChild.killCalls, []);
+});
+
+test("partial final JSON remains malformed and does not imply settlement", async () => {
+	const fakeChild = new FakeChildProcess();
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	acknowledgePrompt(fakeChild);
+	emitJson(fakeChild, {
+		type: "message_end",
+		message: {
+			role: "assistant",
+			content: [{ type: "text", text: "message without settlement" }],
+			stopReason: "stop",
+			usage: {},
+		},
+	});
+	fakeChild.stdout.emitData('{"type":"agent_settled"');
+	fakeChild.emitClose(0, null);
+
+	const result = await running.result;
+	assert.equal(result.progress.finalAssistantSeen, true);
+	assert.equal(result.progress.agentSettled, false);
+	assert.equal(result.terminationCause, undefined);
+	assert.equal(result.expectedSettlementTeardown, undefined);
+	assert.ok(result.progress.activity.some((event) => event.summary.includes("malformed JSON event")));
+	assert.deepEqual(fakeChild.killCalls, []);
+});
+
+test("cancellation remains first when final stdout flush discovers settlement", async () => {
+	const fakeChild = new FakeChildProcess();
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 2_000,
+	});
+	const running = runner.start(config, () => {});
+	acknowledgePrompt(fakeChild);
+	running.cancel();
+	fakeChild.stdout.emitData(JSON.stringify({ type: "agent_settled" }));
+	fakeChild.emitClose(null, "SIGTERM");
+
+	const result = await running.result;
+	assert.equal(result.progress.agentSettled, true);
+	assert.equal(result.terminationCause, "cancelled");
+	assert.equal(result.expectedSettlementTeardown, undefined);
+	assert.deepEqual(fakeChild.killCalls, ["SIGTERM"]);
+});
+
 test("process runner uses its injectable clock for operation timing", async () => {
 	let now = 90;
 	const runner = new PiProcessRunner({
@@ -814,6 +1285,48 @@ test("process runner records malformed JSON diagnostics and bounds stderr", asyn
 	});
 	const stderr = await stderrRunner.start(config, () => {}).result;
 	assert.ok(Buffer.byteLength(stderr.stderr, "utf8") <= 100);
+});
+
+test("timeout remains the first termination cause when cancellation races afterward", async () => {
+	const fakeChild = new FakeChildProcess();
+	const updates: RunnerProgress[] = [];
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 5,
+		killGraceMs: 100,
+	});
+	const running = runner.start(config, (progress) => updates.push(progress));
+	acknowledgePrompt(fakeChild);
+	await waitFor(() => fakeChild.killCalls.length > 0);
+	running.cancel();
+	fakeChild.emitClose(null, "SIGTERM");
+	const result = await running.result;
+	assert.equal(result.terminationCause, "timeout");
+	assert.equal(result.timedOut, true);
+	assert.equal(updates.filter((progress) => progress.activity.some((event) => event.summary.includes("timed out"))).length, 1);
+	assert.deepEqual(fakeChild.killCalls, ["SIGTERM"]);
+});
+
+test("cancellation clears the run timeout so its original deadline cannot reclassify the run", async () => {
+	const fakeChild = new FakeChildProcess();
+	const updates: RunnerProgress[] = [];
+	const runner = new PiProcessRunner({
+		spawn: () => fakeChild,
+		resolveInvocation: (args) => ({ command: "pi", args }),
+		timeoutMs: 10,
+		killGraceMs: 100,
+	});
+	const running = runner.start(config, (progress) => updates.push(progress));
+	acknowledgePrompt(fakeChild);
+	running.cancel();
+	await delay(25);
+	assert.deepEqual(fakeChild.killCalls, ["SIGTERM"]);
+	fakeChild.emitClose(null, "SIGTERM");
+	const result = await running.result;
+	assert.equal(result.terminationCause, "cancelled");
+	assert.equal(result.timedOut, false);
+	assert.equal(updates.some((progress) => progress.activity.some((event) => event.summary.includes("timed out"))), false);
 });
 
 test("process runner cancellation terminates a hanging child without marking a timeout", async () => {

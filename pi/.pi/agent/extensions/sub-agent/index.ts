@@ -18,6 +18,8 @@ import {
 	renderSpawnResult,
 	renderStatusCall,
 	renderStatusResult,
+	renderSteerCall,
+	renderSteerResult,
 	statusResponseFromSnapshots,
 	truncateModelVisibleDiagnostic,
 	truncateModelVisibleOutput,
@@ -30,6 +32,7 @@ import {
 	type CancelToolDetails,
 	type SpawnToolDetails,
 	type StatusToolDetails,
+	type SteerToolDetails,
 	type ThinkingLevel,
 	type WaitResult,
 } from "./types.ts";
@@ -79,6 +82,16 @@ const AgentStatusParams = Type.Object({
 		description: "Positive finite wait bound in seconds. Valid only when wait is true; expiry returns a snapshot without cancelling agents.",
 		exclusiveMinimum: 0,
 	})),
+});
+
+export const AgentSteerParams = Type.Object({
+	id: Type.String({
+		description: "Running sub-agent ID",
+	}),
+	message: Type.String({
+		minLength: 1,
+		description: "Instruction queued for the sub-agent after its current assistant turn and tool calls",
+	}),
 });
 
 const AgentCancelParams = Type.Object({
@@ -333,6 +346,37 @@ export function registerSubAgentExtension(pi: ExtensionAPI, options: SubAgentExt
 		},
 		renderCall: renderStatusCall,
 		renderResult: renderStatusResult,
+	});
+
+	pi.registerTool({
+		name: "agent_steer",
+		label: "Steer Agent",
+		description:
+			"Queue an instruction for one running sub-agent. The instruction is delivered after the current assistant turn finishes its tool calls and before the next model call. It does not interrupt an active model response or tool execution.",
+		promptSnippet: "Queue an updated instruction for one running sub-agent",
+		promptGuidelines: [
+			"Use agent_steer when new information or priorities should change a running sub-agent's work. Steering is queued and does not stop active tools. Use agent_cancel to stop an agent. Continue observing a steered agent with agent_status using bounded waits.",
+		],
+		parameters: AgentSteerParams,
+		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+			if (!params.message.trim()) throw new Error("Steering message must not be empty");
+			signal?.throwIfAborted();
+			const visible = new Map(visibleRuns(ctx).map((run) => [run.id, run]));
+			if (!visible.has(params.id)) throw new Error(`Unknown sub-agent ID: ${params.id}`);
+			const run = await manager.steer(params.id, params.message);
+			const response = {
+				id: run.id,
+				...(run.name ? { name: run.name } : {}),
+				accepted: true,
+				status: run.status,
+			};
+			return {
+				content: [{ type: "text", text: JSON.stringify(response, null, 2) }],
+				details: { run } satisfies SteerToolDetails,
+			};
+		},
+		renderCall: renderSteerCall,
+		renderResult: renderSteerResult,
 	});
 
 	pi.registerTool({

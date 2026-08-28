@@ -45,6 +45,8 @@ class FakeExtensionApi {
 
 class FakeRunner implements AgentRunner {
 	readonly cancelCalls = new Map<string, number>();
+	readonly steerCalls = new Map<string, string[]>();
+	steerError?: Error;
 	private readonly resolvers = new Map<string, (result: RunnerResult) => void>();
 	private readonly progressCallbacks = new Map<string, (progress: RunnerProgress) => void>();
 
@@ -58,6 +60,10 @@ class FakeRunner implements AgentRunner {
 		this.progressCallbacks.set(config.id, onProgress);
 		return {
 			result,
+			steer: async (message) => {
+				this.steerCalls.set(config.id, [...(this.steerCalls.get(config.id) ?? []), message]);
+				if (this.steerError) throw this.steerError;
+			},
 			cancel: () => {
 				this.cancelCalls.set(config.id, (this.cancelCalls.get(config.id) ?? 0) + 1);
 				if (cancelled) return;
@@ -68,6 +74,7 @@ class FakeRunner implements AgentRunner {
 					stderr: "",
 					progress: createInitialProgress(),
 					timedOut: false,
+					terminationCause: "cancelled",
 				});
 			},
 		};
@@ -86,7 +93,15 @@ class FakeRunner implements AgentRunner {
 		progress.finalAssistantSeen = true;
 		progress.agentSettled = true;
 		Object.assign(progress, overrides);
-		this.resolvers.get(id)?.({ exitCode: 0, signal: null, stderr: "", progress, timedOut: false });
+		this.resolvers.get(id)?.({
+			exitCode: 0,
+			signal: null,
+			stderr: "",
+			progress,
+			timedOut: false,
+			terminationCause: "settled",
+			expectedSettlementTeardown: true,
+		});
 	}
 }
 
@@ -328,6 +343,79 @@ test("agent_status replaces agent_wait and exposes a validated optional timeout"
 	assert.match(guidelines, /bash sleep or tight polling/u);
 	assert.match(guidelines, /concise progress update/u);
 	void manager.shutdown();
+});
+
+test("agent_steer exposes the intended schema, description, and prompt guideline", async () => {
+	const { api, manager } = setup();
+	const steerTool = api.tools.get("agent_steer");
+	assert.ok(steerTool);
+	assert.deepEqual(steerTool.parameters.required, ["id", "message"]);
+	assert.equal(steerTool.parameters.properties.id.description, "Running sub-agent ID");
+	assert.equal(steerTool.parameters.properties.message.minLength, 1);
+	assert.match(steerTool.parameters.properties.message.description, /after its current assistant turn and tool calls/u);
+	assert.match(steerTool.description, /does not interrupt an active model response or tool execution/u);
+	const guideline = steerTool.promptGuidelines.join("\n");
+	assert.match(guideline, /Use agent_steer when new information or priorities/u);
+	assert.match(guideline, /Use agent_cancel to stop an agent/u);
+	assert.match(guideline, /agent_status using bounded waits/u);
+	await manager.shutdown();
+});
+
+test("agent_steer rejects empty messages, unknown IDs, branch-hidden IDs, and aborted calls before mutation", async () => {
+	const { api, manager, runner } = setup();
+	const visible = manager.spawn(request("branch-a", "parent-1"));
+	const hidden = manager.spawn(request("branch-b", "parent-1"));
+	const steerTool = api.tools.get("agent_steer");
+	const context = { sessionManager: { getBranch: () => [{ id: "branch-a" }] } };
+	for (const message of ["", "   \n\t"]) {
+		await assert.rejects(
+			steerTool.execute("steer-empty", { id: visible.id, message }, undefined, undefined, context),
+			/Steering message must not be empty/u,
+		);
+	}
+	await assert.rejects(
+		steerTool.execute("steer-unknown", { id: "unknown", message: "task" }, undefined, undefined, context),
+		/Unknown sub-agent ID: unknown/u,
+	);
+	await assert.rejects(
+		steerTool.execute("steer-hidden", { id: hidden.id, message: "task" }, undefined, undefined, context),
+		new RegExp(`Unknown sub-agent ID: ${hidden.id}`, "u"),
+	);
+	const controller = new AbortController();
+	controller.abort();
+	await assert.rejects(
+		steerTool.execute("steer-aborted", { id: visible.id, message: "task" }, controller.signal, undefined, context),
+		{ name: "AbortError" },
+	);
+	assert.equal(runner.steerCalls.size, 0);
+	await manager.shutdown();
+});
+
+test("agent_steer reports accepted acknowledgement and updated snapshot details", async () => {
+	const clock = new ManualClock(1_000, 0);
+	const { api, manager, runner } = setup(10, 20, { now: clock.wallNow });
+	const run = manager.spawn({ ...request("branch-a", "parent-1"), name: "reviewer" });
+	clock.wallMs = 1_500;
+	const result = await api.tools.get("agent_steer").execute(
+		"steer-1",
+		{ id: run.id, message: "Focus on the parser regression." },
+		undefined,
+		undefined,
+		{ sessionManager: { getBranch: () => [{ id: "branch-a" }] } },
+	);
+	const response = JSON.parse(result.content[0].text);
+	assert.deepEqual(response, {
+		id: run.id,
+		name: "reviewer",
+		accepted: true,
+		status: "running",
+	});
+	assert.equal("delivered" in response, false);
+	assert.equal(result.details.run.steerCount, 1);
+	assert.equal(result.details.run.lastSteeredAt, 1_500);
+	assert.notEqual(result.details.run, manager.get(run.id));
+	assert.deepEqual(runner.steerCalls.get(run.id), ["Focus on the parser regression."]);
+	await manager.shutdown();
 });
 
 test("agent_status rejects invalid timeoutSeconds at runtime", async () => {

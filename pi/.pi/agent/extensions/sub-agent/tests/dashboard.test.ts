@@ -16,6 +16,7 @@ function snapshot(overrides: Partial<AgentSnapshot> = {}): AgentSnapshot {
 		status: "running",
 		createdAt: 1_000,
 		startedAt: 2_000,
+		steerCount: 0,
 		revision: 1,
 		lastProgressAt: 9_000,
 		phase: { kind: "thinking", startedAt: 5_000 },

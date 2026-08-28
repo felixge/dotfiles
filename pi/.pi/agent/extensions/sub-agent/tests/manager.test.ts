@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { truncateHead } from "@earendil-works/pi-coding-agent";
+import { readAgentHistory } from "../history.ts";
 import { AgentManager, resolveCanonicalCwd } from "../manager.ts";
 import { createInitialProgress } from "../runner.ts";
 import type {
@@ -16,11 +17,18 @@ import type {
 } from "../types.ts";
 import { ManualClock, ManualWaitTimer } from "./helpers.ts";
 
+interface DeferredSteer {
+	message: string;
+	resolve: () => void;
+	reject: (error: Error) => void;
+}
+
 interface DeferredRun {
 	config: AgentRunConfig;
 	onProgress: (progress: RunnerProgress) => void;
 	resolve: (result: RunnerResult) => void;
 	cancelled: boolean;
+	steerRequests: DeferredSteer[];
 }
 
 class FakeRunner implements AgentRunner {
@@ -38,33 +46,64 @@ class FakeRunner implements AgentRunner {
 				done(value);
 			};
 		});
-		const deferred: DeferredRun = { config, onProgress, resolve, cancelled: false };
+		const deferred: DeferredRun = { config, onProgress, resolve, cancelled: false, steerRequests: [] };
 		this.runs.set(config.id, deferred);
 		return {
 			result,
+			steer: (message) => new Promise<void>((resolveSteer, rejectSteer) => {
+				deferred.steerRequests.push({ message, resolve: resolveSteer, reject: rejectSteer });
+			}),
 			cancel: () => {
 				if (deferred.cancelled) return;
 				deferred.cancelled = true;
-				deferred.resolve(this.result({ finalAssistantSeen: false }));
+				for (const request of deferred.steerRequests.splice(0)) {
+					request.reject(new Error("fake runner cancelled"));
+				}
+				deferred.resolve(this.result({ finalAssistantSeen: false }, "cancelled"));
 			},
 		};
+	}
+
+	acknowledgeSteer(id: string, index = 0): void {
+		const request = this.runs.get(id)?.steerRequests.splice(index, 1)[0];
+		assert.ok(request, `missing fake steer request ${id}`);
+		request.resolve();
+	}
+
+	rejectSteer(id: string, error = new Error("fake steering rejected"), index = 0): void {
+		const request = this.runs.get(id)?.steerRequests.splice(index, 1)[0];
+		assert.ok(request, `missing fake steer request ${id}`);
+		request.reject(error);
 	}
 
 	complete(id: string, overrides: Partial<RunnerProgress> = {}): void {
 		const run = this.runs.get(id);
 		assert.ok(run, `missing fake run ${id}`);
-		const progress = { ...createInitialProgress(), finalAssistantSeen: true, finalOutput: `output ${id}`, ...overrides };
+		for (const request of run.steerRequests.splice(0)) request.reject(new Error("fake runner completed"));
+		const progress = {
+			...createInitialProgress(),
+			finalAssistantSeen: true,
+			agentSettled: true,
+			finalOutput: `output ${id}`,
+			...overrides,
+		};
 		run.onProgress(progress);
-		run.resolve(this.result(progress));
+		run.resolve(this.result(progress, "settled"));
 	}
 
-	private result(progressOverrides: Partial<RunnerProgress>): RunnerResult {
+	private result(
+		progressOverrides: Partial<RunnerProgress>,
+		terminationCause?: RunnerResult["terminationCause"],
+	): RunnerResult {
+		const progress = { ...createInitialProgress(), ...progressOverrides };
 		return {
 			exitCode: 0,
 			signal: null,
 			stderr: "",
-			progress: { ...createInitialProgress(), ...progressOverrides },
-			timedOut: false,
+			progress,
+			timedOut: terminationCause === "timeout",
+			terminationCause,
+			...(terminationCause === "settled" ? { expectedSettlementTeardown: true } : {}),
 		};
 	}
 }
@@ -89,7 +128,7 @@ async function tick(): Promise<void> {
 
 async function settleResult(result: RunnerResult, prompt = "task") {
 	const runner: AgentRunner = {
-		start: () => ({ result: Promise.resolve(result), cancel() {} }),
+		start: () => ({ result: Promise.resolve(result), steer: async () => {}, cancel() {} }),
 	};
 	const manager = new AgentManager(runner, { idFactory: ids() });
 	const run = manager.spawn({ ...request("/repo"), prompt });
@@ -187,6 +226,162 @@ test("manager preserves structured progress and returns immutable snapshots", as
 	await tick();
 });
 
+test("manager records acknowledged steering metadata, revision, updates, and immutable snapshots", async () => {
+	const clock = new ManualClock(100, 0);
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { idFactory: ids(), now: clock.wallNow });
+	const run = manager.spawn(request("/repo"));
+	const revision = run.revision;
+	let updates = 0;
+	const unsubscribe = manager.subscribe(() => updates++);
+	const steering = manager.steer(run.id, "focus on parser");
+	assert.equal(runner.runs.get(run.id)?.steerRequests[0]?.message, "focus on parser");
+	assert.equal(manager.get(run.id)?.steerCount, 0);
+	clock.wallMs = 250;
+	runner.acknowledgeSteer(run.id);
+	const snapshot = await steering;
+	assert.equal(snapshot.steerCount, 1);
+	assert.equal(snapshot.lastSteeredAt, 250);
+	assert.equal(snapshot.revision, revision + 1);
+	assert.equal(updates, 1);
+	assert.ok(Object.isFrozen(snapshot));
+	assert.throws(() => {
+		(snapshot as { steerCount: number }).steerCount = 99;
+	}, TypeError);
+	assert.equal(manager.get(run.id)?.steerCount, 1);
+	unsubscribe();
+	runner.complete(run.id);
+	await tick();
+});
+
+test("manager leaves steering metadata unchanged when RPC acknowledgement fails", async () => {
+	const clock = new ManualClock(100, 0);
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { idFactory: ids(), now: clock.wallNow });
+	const run = manager.spawn(request("/repo"));
+	const revision = run.revision;
+	const steering = manager.steer(run.id, "rejected instruction");
+	clock.wallMs = 500;
+	runner.rejectSteer(run.id, new Error("RPC rejected steering"));
+	await assert.rejects(steering, /RPC rejected steering/u);
+	const snapshot = manager.get(run.id)!;
+	assert.equal(snapshot.steerCount, 0);
+	assert.equal(snapshot.lastSteeredAt, undefined);
+	assert.equal(snapshot.revision, revision);
+	runner.complete(run.id);
+	await tick();
+	await assert.rejects(manager.steer(run.id, "after completion"), /not running \(completed\)/u);
+});
+
+test("manager rejects empty, queued, cancelling, and terminal steering", async () => {
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { maxConcurrency: 1, idFactory: ids() });
+	const running = manager.spawn({ ...request("/running"), prompt: "original running prompt" });
+	const queued = manager.spawn({ ...request("/queued"), prompt: "original queued prompt" });
+	await assert.rejects(manager.steer(running.id, "   "), /must not be empty/u);
+	await assert.rejects(manager.steer(queued.id, "new queued task"), /queued; wait until it starts/u);
+	assert.equal(manager.get(queued.id)?.prompt, "original queued prompt");
+	assert.equal(runner.runs.has(queued.id), false);
+	assert.equal(manager.cancel(running.id), true);
+	await assert.rejects(manager.steer(running.id, "too late"), /being cancelled/u);
+	await tick();
+	await assert.rejects(manager.steer(running.id, "terminal"), /being cancelled|not running/u);
+	assert.equal(manager.cancel(queued.id), true);
+	await assert.rejects(manager.steer(queued.id, "terminal"), /being cancelled|not running/u);
+});
+
+test("acknowledgement before cancellation records steering and returns a fresh immutable snapshot", async () => {
+	const clock = new ManualClock(100, 0);
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { idFactory: ids(), now: clock.wallNow });
+	const run = manager.spawn(request("/repo"));
+	const steering = manager.steer(run.id, "accepted before cancellation");
+
+	clock.wallMs = 200;
+	runner.acknowledgeSteer(run.id);
+	assert.equal(manager.cancel(run.id), true);
+	const accepted = await steering;
+
+	assert.equal(accepted.steerCount, 1);
+	assert.equal(accepted.lastSteeredAt, 200);
+	assert.equal(accepted.status, "running");
+	assert.equal(accepted.phase.kind, "cancelling");
+	assert.ok(Object.isFrozen(accepted));
+	assert.notEqual(accepted, manager.get(run.id));
+	await tick();
+	assert.equal(manager.get(run.id)?.steerCount, 1);
+	assert.equal(manager.get(run.id)?.status, "cancelled");
+});
+
+test("acknowledgement before shutdown records steering and returns a fresh immutable snapshot", async () => {
+	const clock = new ManualClock(100, 0);
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { idFactory: ids(), now: clock.wallNow });
+	const run = manager.spawn(request("/repo"));
+	const steering = manager.steer(run.id, "accepted before shutdown");
+
+	clock.wallMs = 300;
+	runner.acknowledgeSteer(run.id);
+	const shutdown = manager.shutdown();
+	const accepted = await steering;
+
+	assert.equal(accepted.steerCount, 1);
+	assert.equal(accepted.lastSteeredAt, 300);
+	assert.equal(accepted.status, "running");
+	assert.equal(accepted.phase.kind, "cancelling");
+	assert.ok(Object.isFrozen(accepted));
+	assert.notEqual(accepted, manager.get(run.id));
+	await shutdown;
+	assert.equal(manager.get(run.id)?.steerCount, 1);
+	assert.equal(manager.get(run.id)?.status, "cancelled");
+});
+
+test("cancellation and shutdown before acknowledgement reject pending steering cleanly", async () => {
+	for (const shutdown of [false, true]) {
+		const runner = new FakeRunner();
+		const manager = new AgentManager(runner, { idFactory: ids() });
+		const run = manager.spawn(request("/repo"));
+		const steering = manager.steer(run.id, "pending instruction");
+		const rejected = assert.rejects(steering, /fake runner cancelled/u);
+		if (shutdown) await manager.shutdown();
+		else manager.cancel(run.id);
+		await rejected;
+		await tick();
+		assert.equal(manager.get(run.id)?.steerCount, 0);
+		assert.equal(manager.get(run.id)?.status, "cancelled");
+		if (!shutdown) await manager.shutdown();
+	}
+});
+
+test("parallel out-of-order acknowledgements retain the newest snapshot in history", async () => {
+	const clock = new ManualClock(100, 0);
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { idFactory: ids(), now: clock.wallNow });
+	const spawned = manager.spawn(request("/repo"));
+	const firstCall = manager.steer(spawned.id, "first call");
+	const secondCall = manager.steer(spawned.id, "second call");
+
+	clock.wallMs = 200;
+	runner.acknowledgeSteer(spawned.id, 1);
+	const lowerRevision = await secondCall;
+	clock.wallMs = 300;
+	runner.acknowledgeSteer(spawned.id);
+	const higherRevision = await firstCall;
+	assert.ok(higherRevision.revision > lowerRevision.revision);
+
+	const history = readAgentHistory([
+		{ type: "message", message: { role: "toolResult", toolName: "agent_spawn", details: { run: spawned } } },
+		{ type: "message", message: { role: "toolResult", toolName: "agent_steer", details: { run: higherRevision } } },
+		{ type: "message", message: { role: "toolResult", toolName: "agent_steer", details: { run: lowerRevision } } },
+	]);
+	assert.equal(history.runs[0]?.steerCount, 2);
+	assert.equal(history.runs[0]?.lastSteeredAt, 300);
+	assert.equal(history.runs[0]?.revision, higherRevision.revision + 1);
+
+	runner.complete(spawned.id);
+	await tick();
+});
+
 test("manager snapshots preserve truncated output metadata", async () => {
 	const runner = new FakeRunner();
 	const manager = new AgentManager(runner, { idFactory: ids() });
@@ -225,6 +420,48 @@ test("cancelling a queued run never starts it and cancelling a running run stops
 	await tick();
 	assert.equal(runner.runs.get(running.id)?.cancelled, true);
 	assert.equal(manager.get(running.id)?.status, "cancelled");
+});
+
+test("an immutable timeout cause wins over a later manager cancellation request", async () => {
+	let resolveResult!: (result: RunnerResult) => void;
+	let cancelCalls = 0;
+	const result = new Promise<RunnerResult>((resolve) => {
+		resolveResult = resolve;
+	});
+	const runner: AgentRunner = {
+		start: () => ({
+			result,
+			steer: async () => {},
+			cancel: () => { cancelCalls++; },
+		}),
+	};
+	const manager = new AgentManager(runner, { idFactory: ids() });
+	const run = manager.spawn(request("/repo"));
+	const progress = createInitialProgress();
+	progress.activity.push({ timestamp: 1, summary: "run timed out after 30 minutes", isError: true });
+	assert.equal(manager.cancel(run.id), true);
+	assert.equal(cancelCalls, 1);
+	resolveResult({
+		exitCode: null,
+		signal: "SIGTERM",
+		stderr: "",
+		progress,
+		timedOut: true,
+		terminationCause: "timeout",
+	});
+	await tick();
+	assert.equal(manager.get(run.id)?.status, "failed");
+	assert.equal(manager.get(run.id)?.error, "Sub-agent timed out after 30 minutes");
+});
+
+test("cancellation after logical agent settlement does not override successful completion", async () => {
+	const runner = new FakeRunner();
+	const manager = new AgentManager(runner, { idFactory: ids() });
+	const run = manager.spawn(request("/repo"));
+	runner.complete(run.id, { agentSettled: true });
+	assert.equal(manager.cancel(run.id), false);
+	await tick();
+	assert.equal(manager.get(run.id)?.status, "completed");
 });
 
 test("bulk cancellation is selective, idempotent, and releases capacity", async () => {
@@ -697,7 +934,27 @@ test("manager reports non-sensitive early signal deaths as startup policy failur
 	assert.equal(run.error?.includes(argvValue), false);
 });
 
-test("manager reports stdin failures without overriding a valid completion", async () => {
+test("manager classifies expected post-settlement SIGTERM teardown as completion", async () => {
+	const progress = createInitialProgress();
+	progress.finalAssistantSeen = true;
+	progress.agentSettled = true;
+	progress.finalOutput = "valid completion";
+	progress.finalStopReason = "stop";
+	const completed = await settleResult({
+		exitCode: null,
+		signal: "SIGTERM",
+		stderr: "",
+		progress,
+		timedOut: false,
+		terminationCause: "settled",
+		expectedSettlementTeardown: true,
+	});
+	assert.equal(completed.status, "completed");
+	assert.equal(completed.error, undefined);
+	assert.equal(completed.finalOutput, "valid completion");
+});
+
+test("manager reports stdin failures and never completes before logical settlement", async () => {
 	const stdinError = "Could not send prompt to Pi stdin (EIO)";
 	const failed = await settleResult({
 		exitCode: null,
@@ -710,21 +967,57 @@ test("manager reports stdin failures without overriding a valid completion", asy
 	assert.equal(failed.status, "failed");
 	assert.equal(failed.error, stdinError);
 
-	const completedProgress = createInitialProgress();
-	completedProgress.finalAssistantSeen = true;
-	completedProgress.finalOutput = "valid completion";
-	completedProgress.finalStopReason = "stop";
-	const completed = await settleResult({
+	const exitedProgress = createInitialProgress();
+	exitedProgress.finalAssistantSeen = true;
+	exitedProgress.finalOutput = "valid final message before clean exit";
+	exitedProgress.finalStopReason = "stop";
+	const exited = await settleResult({
 		exitCode: 0,
 		signal: null,
 		stderr: "",
-		progress: completedProgress,
+		progress: exitedProgress,
 		timedOut: false,
 		stdinError,
 	});
-	assert.equal(completed.status, "completed");
-	assert.equal(completed.error, undefined);
-	assert.equal(completed.finalOutput, "valid completion");
+	assert.equal(exited.status, "failed");
+	assert.equal(exited.error, stdinError);
+	assert.equal(exited.finalOutput, "valid final message before clean exit");
+});
+
+test("manager rejects clean exit zero before agent_settled even with a valid final message", async () => {
+	const progress = createInitialProgress();
+	progress.finalAssistantSeen = true;
+	progress.finalOutput = "apparently complete";
+	progress.finalStopReason = "stop";
+	const exited = await settleResult({
+		exitCode: 0,
+		signal: null,
+		stderr: "",
+		progress,
+		timedOut: false,
+	});
+	assert.equal(exited.status, "failed");
+	assert.equal(exited.error, "Pi exited before agent_settled (exit code 0)");
+	assert.equal(exited.finalOutput, "apparently complete");
+});
+
+test("manager surfaces expected-settlement teardown failures", async () => {
+	const progress = createInitialProgress();
+	progress.finalAssistantSeen = true;
+	progress.agentSettled = true;
+	progress.finalOutput = "valid completion";
+	const failed = await settleResult({
+		exitCode: null,
+		signal: null,
+		stderr: "",
+		progress,
+		timedOut: false,
+		terminationCause: "settled",
+		expectedSettlementTeardown: true,
+		teardownError: "Pi RPC process did not close after SIGKILL",
+	});
+	assert.equal(failed.status, "failed");
+	assert.equal(failed.error, "Pi RPC process did not close after SIGKILL");
 });
 
 test("manager keeps post-start and stderr signal failures on the generic path", async () => {
@@ -737,7 +1030,7 @@ test("manager keeps post-start and stderr signal failures on the generic path", 
 		progress: afterOutputProgress,
 		timedOut: false,
 	});
-	assert.equal(afterOutput.error, "Pi exited with signal SIGTERM");
+	assert.equal(afterOutput.error, "Pi exited before agent_settled (signal SIGTERM)");
 	assert.equal(afterOutput.error?.includes("security or process policy"), false);
 
 	const withStderr = await settleResult({

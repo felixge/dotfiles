@@ -12,6 +12,7 @@ import type {
 	AgentRunner,
 	RunnerProgress,
 	RunnerResult,
+	RunnerTerminationCause,
 	RunningAgentProcess,
 	UsageSummary,
 } from "./types.ts";
@@ -42,12 +43,6 @@ const ACCESS_TOOLS: Record<AgentRunConfig["access"], string> = {
 };
 export const BASH_ACCESS_ADVISORY =
 	"Bash access is for inspection and other non-mutating commands only. Do not modify files through bash or work around the lack of edit and write tools.";
-const BENIGN_STDIN_ERROR_CODES = new Set([
-	"EPIPE",
-	"ECONNRESET",
-	"ERR_STREAM_DESTROYED",
-	"ERR_STREAM_WRITE_AFTER_END",
-]);
 export const DEFAULT_GATEWAY_COST_EXTENSION_PATH = fileURLToPath(
 	new URL("../gateway-cost-fallback/index.ts", import.meta.url),
 );
@@ -575,8 +570,7 @@ export class PiProcessRunner implements AgentRunner {
 	start(config: AgentRunConfig, onProgress: (progress: RunnerProgress) => void): RunningAgentProcess {
 		const args = [
 			"--mode",
-			"json",
-			"-p",
+			"rpc",
 			"--no-session",
 			// Keep discovery disabled while explicitly loading only the pure cost hook.
 			"--no-extensions",
@@ -612,6 +606,7 @@ export class PiProcessRunner implements AgentRunner {
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			return {
+				steer: async () => Promise.reject(new Error("Sub-agent process is unavailable")),
 				cancel() {},
 				result: Promise.resolve({
 					exitCode: null,
@@ -624,15 +619,31 @@ export class PiProcessRunner implements AgentRunner {
 			};
 		}
 
+		type RpcCommand = "prompt" | "steer";
+		interface PendingRequest {
+			command: RpcCommand;
+			resolve: () => void;
+			reject: (error: Error) => void;
+		}
+
 		let stderr = "";
-		let settled = false;
+		let processSettled = false;
+		let processClosed = false;
+		let logicallySettled = false;
 		let timedOut = false;
 		let observedStdout = false;
-		let terminationRequested = false;
+		let terminationCause: RunnerTerminationCause | undefined;
 		let spawnError: string | undefined;
 		let stdinError: string | undefined;
 		let killTimer: ReturnType<typeof setTimeout> | undefined;
+		let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
 		let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+		let requestSequence = 0;
+		let flushingWrites = false;
+		let forceFinish = (_message: string) => {};
+		const writeQueue: string[] = [];
+		const pendingRequests = new Map<string, PendingRequest>();
+		const teardownErrors: string[] = [];
 		const stderrDecoder = new StringDecoder("utf8");
 		const stdin = child.stdin;
 
@@ -641,13 +652,115 @@ export class PiProcessRunner implements AgentRunner {
 			onProgress(cloneProgress(progress));
 		};
 		const diagnostic = (message: string) => publish(addDiagnostic(progress, message, this.now()));
+		const rejectPending = (error: Error) => {
+			for (const pending of pendingRequests.values()) pending.reject(error);
+			pendingRequests.clear();
+		};
+		const recordTeardownError = (message: string) => {
+			if (!teardownErrors.includes(message)) teardownErrors.push(message);
+		};
+		const sendSignal = (signal: NodeJS.Signals): boolean => {
+			try {
+				if (child.kill(signal)) return true;
+			} catch {}
+			recordTeardownError(`Could not send ${signal} to Pi RPC process`);
+			return false;
+		};
+		const escalate = () => {
+			if (processSettled || cleanupTimer) return;
+			if (killTimer) clearTimeout(killTimer);
+			killTimer = undefined;
+			sendSignal("SIGKILL");
+			cleanupTimer = setTimeout(() => {
+				if (processSettled) return;
+				forceFinish(`Pi RPC process did not close within ${this.killGraceMs} ms after SIGKILL`);
+			}, this.killGraceMs);
+		};
+		const terminate = (cause: RunnerTerminationCause): boolean => {
+			if (processSettled || terminationCause !== undefined) return false;
+			// After close, only stdout that was already buffered may refine an
+			// otherwise unexpected exit into logical settlement.
+			if (processClosed && cause !== "settled") return false;
+			terminationCause = cause;
+			if (timeoutTimer) clearTimeout(timeoutTimer);
+			timeoutTimer = undefined;
+			if (cause === "timeout") {
+				timedOut = true;
+				diagnostic(`run timed out after ${Math.round(this.timeoutMs / 60_000)} minutes`);
+			}
+			if (cause !== "settled") rejectPending(new Error("Sub-agent RPC process is terminating"));
+			// Close is ordered after all stdout bytes. A settlement discovered while
+			// flushing the final unterminated record is logical completion, but the
+			// already-closed process must not be signalled again.
+			if (processClosed) return true;
+			if (sendSignal("SIGTERM")) {
+				killTimer = setTimeout(escalate, this.killGraceMs);
+			} else {
+				escalate();
+			}
+			return true;
+		};
+		const onStdinError = (error: Error) => {
+			const code = "code" in error && typeof error.code === "string" ? error.code : undefined;
+			stdinError ??= `Could not write to Pi RPC stdin${code ? ` (${code})` : ""}`;
+			rejectPending(new Error(stdinError));
+			if (!logicallySettled) terminate("transport");
+		};
+		const flushWrites = () => {
+			if (flushingWrites || processSettled || processClosed || !stdin) return;
+			flushingWrites = true;
+			try {
+				while (writeQueue.length > 0 && !processSettled && !processClosed) stdin.write(writeQueue.shift()!);
+			} catch (error) {
+				onStdinError(error instanceof Error ? error : new Error("stdin write failed"));
+			} finally {
+				flushingWrites = false;
+			}
+		};
+		const request = (command: RpcCommand, message: string): Promise<void> => {
+			if (processSettled || processClosed || logicallySettled || terminationCause !== undefined) {
+				return Promise.reject(new Error("Sub-agent is no longer accepting RPC commands"));
+			}
+			if (!stdin) return Promise.reject(new Error("Sub-agent RPC stdin is unavailable"));
+			const id = `${command}-${++requestSequence}`;
+			const response = new Promise<void>((resolve, reject) => {
+				pendingRequests.set(id, { command, resolve, reject });
+			});
+			writeQueue.push(`${JSON.stringify({ id, type: command, message })}\n`);
+			flushWrites();
+			return response;
+		};
+		const settleLogically = () => {
+			if (logicallySettled) return;
+			logicallySettled = true;
+			rejectPending(new Error("Sub-agent settled before acknowledging the RPC request"));
+			terminate("settled");
+		};
+		const routeResponse = (value: unknown): boolean => {
+			const response = recordValue(value);
+			if (response.type !== "response") return false;
+			const id = stringValue(response.id);
+			if (!id) return true;
+			const pending = pendingRequests.get(id);
+			if (!pending) return true;
+			pendingRequests.delete(id);
+			const command = stringValue(response.command);
+			if (command !== pending.command) {
+				pending.reject(new Error(`Pi RPC response command mismatch for ${id}`));
+			} else if (response.success === true) {
+				pending.resolve();
+			} else {
+				pending.reject(new Error(stringValue(response.error) ?? `Pi rejected the ${pending.command} command`));
+			}
+			return true;
+		};
 		const stdoutReader = new LfDelimitedJsonReader(
 			(line) => {
 				try {
 					const parsed = JSON.parse(line) as unknown;
-					const reducedEvent = parsed;
-					let next = reduceJsonEvent(progress, reducedEvent, this.now());
-					const fullOutput = finalAssistantOutput(reducedEvent);
+					if (routeResponse(parsed)) return;
+					let next = reduceJsonEvent(progress, parsed, this.now());
+					const fullOutput = finalAssistantOutput(parsed);
 					if (fullOutput !== undefined && next.finalOutputTruncation?.truncated) {
 						try {
 							const fullOutputPath = createFullOutputPath(config.id);
@@ -658,7 +771,8 @@ export class PiProcessRunner implements AgentRunner {
 							next = addDiagnostic(next, `could not save full output: ${message}`, this.now());
 						}
 					}
-					publish(next);
+					if (next !== progress) publish(next);
+					if (next.agentSettled) settleLogically();
 				} catch (error) {
 					const message = error instanceof Error ? error.message : String(error);
 					diagnostic(`malformed JSON event: ${message}`);
@@ -681,39 +795,22 @@ export class PiProcessRunner implements AgentRunner {
 			spawnError = error.message;
 		};
 
-		const terminate = () => {
-			if (settled) return;
-			terminationRequested = true;
-			try {
-				child.kill("SIGTERM");
-			} catch {}
-			if (!killTimer) {
-				killTimer = setTimeout(() => {
-					if (settled) return;
-					try {
-						child.kill("SIGKILL");
-					} catch {}
-				}, this.killGraceMs);
-			}
-		};
-		const onStdinError = (error: Error) => {
-			const code = "code" in error && typeof error.code === "string" ? error.code : undefined;
-			if (code && BENIGN_STDIN_ERROR_CODES.has(code)) return;
-			stdinError ??= `Could not send prompt to Pi stdin${code ? ` (${code})` : ""}`;
-			// The prompt already produced a final assistant message, so let Pi exit on its own
-			// instead of killing it and turning a valid completion into a signal death.
-			if (progress.finalAssistantSeen) return;
-			terminate();
-		};
-
 		const result = new Promise<RunnerResult>((resolve) => {
-			const onClose = (exitCode: number | null, signal: NodeJS.Signals | null) => {
-				if (settled) return;
-				settled = true;
+			const finish = (exitCode: number | null, signal: NodeJS.Signals | null) => {
+				if (processSettled) return;
+				// Flush buffered stdout before finalizing the exit. This makes records
+				// written before close authoritative, including a final record without LF.
 				stdoutReader.end();
+				processSettled = true;
 				stderr = appendUtf8Tail(stderr, stderrDecoder.end(), this.maxStderrBytes);
+				rejectPending(new Error("Sub-agent RPC process exited before acknowledging the request"));
+				writeQueue.length = 0;
 				if (timeoutTimer) clearTimeout(timeoutTimer);
 				if (killTimer) clearTimeout(killTimer);
+				if (cleanupTimer) clearTimeout(cleanupTimer);
+				timeoutTimer = undefined;
+				killTimer = undefined;
+				cleanupTimer = undefined;
 				child.stdout.off("data", onStdout);
 				child.stderr.off("data", onStderr);
 				stdin?.off("error", onStdinError);
@@ -723,7 +820,7 @@ export class PiProcessRunner implements AgentRunner {
 				const startupSignalDeath = signal
 					&& elapsedMs !== undefined
 					&& elapsedMs <= STARTUP_SIGNAL_DEATH_WINDOW_MS
-					&& !terminationRequested
+					&& terminationCause === undefined
 					&& !observedStdout
 					&& stderr.length === 0
 					&& progress.revision === 0
@@ -743,40 +840,46 @@ export class PiProcessRunner implements AgentRunner {
 					stderr,
 					progress: cloneProgress(progress),
 					timedOut,
+					terminationCause,
+					...(terminationCause === "settled" ? { expectedSettlementTeardown: true } : {}),
+					...(teardownErrors.length > 0 ? { teardownError: teardownErrors.join("; ") } : {}),
 					spawnError,
 					stdinError,
 					...(startupSignalDeath ? { startupSignalDeath } : {}),
 				});
+			};
+			const onClose = (exitCode: number | null, signal: NodeJS.Signals | null) => {
+				processClosed = true;
+				finish(exitCode, signal);
+			};
+			forceFinish = (message) => {
+				recordTeardownError(message);
+				finish(null, null);
 			};
 
 			child.stdout.on("data", onStdout);
 			child.stderr.on("data", onStderr);
 			child.on("error", onError);
 			child.on("close", onClose);
-			timeoutTimer = setTimeout(() => {
-				timedOut = true;
-				diagnostic(`run timed out after ${Math.round(this.timeoutMs / 60_000)} minutes`);
-				terminate();
-			}, this.timeoutMs);
+			timeoutTimer = setTimeout(() => terminate("timeout"), this.timeoutMs);
 		});
 
 		if (stdin) {
 			stdin.on("error", onStdinError);
-			try {
-				stdin.write(config.prompt);
-			} catch (error) {
-				onStdinError(error instanceof Error ? error : new Error("stdin write failed"));
-			}
-			try {
-				stdin.end();
-			} catch (error) {
-				onStdinError(error instanceof Error ? error : new Error("stdin close failed"));
-			}
+			void request("prompt", config.prompt).catch((error) => {
+				if (logicallySettled || processSettled || terminationCause !== undefined) return;
+				stdinError = `Pi rejected the initial RPC prompt: ${error instanceof Error ? error.message : String(error)}`;
+				terminate("transport");
+			});
 		} else {
-			stdinError = "Could not send prompt to Pi stdin (unavailable)";
-			terminate();
+			stdinError = "Could not write to Pi RPC stdin (unavailable)";
+			terminate("transport");
 		}
 
-		return { result, cancel: terminate };
+		return {
+			result,
+			steer: (message) => request("steer", message),
+			cancel: () => { terminate("cancelled"); },
+		};
 	}
 }

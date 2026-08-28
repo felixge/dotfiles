@@ -212,6 +212,8 @@ class AgentsDashboard {
 			` Cwd: ${run.cwd}`,
 			` Elapsed: ${elapsed}`,
 			` Turns: ${run.turns}`,
+			` Steers accepted: ${run.steerCount}`,
+			...(run.lastSteeredAt === undefined ? [] : [` Last steered: ${new Date(run.lastSteeredAt).toISOString()}`]),
 			` Cost: ${formatCost(run.usage.cost.total)}`,
 			` Token rate (15s avg): ${formatTokenRate(run.tokensPerSecond15s)} tok/s`,
 			` Usage: ${formatUsage(run.usage) || "none"}`,

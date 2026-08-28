@@ -114,6 +114,8 @@ export interface AgentRunConfig {
 export interface AgentRun extends AgentRunConfig {
 	status: AgentStatus;
 	createdAt: number;
+	steerCount: number;
+	lastSteeredAt?: number;
 	startedAt?: number;
 	endedAt?: number;
 	revision: number;
@@ -175,12 +177,17 @@ export interface StartupSignalDeathDiagnostic {
 	maxArgumentBytes: number;
 }
 
+export type RunnerTerminationCause = "settled" | "cancelled" | "timeout" | "transport";
+
 export interface RunnerResult {
 	exitCode: number | null;
 	signal: NodeJS.Signals | null;
 	stderr: string;
 	progress: RunnerProgress;
 	timedOut: boolean;
+	terminationCause?: RunnerTerminationCause;
+	expectedSettlementTeardown?: boolean;
+	teardownError?: string;
 	spawnError?: string;
 	stdinError?: string;
 	startupSignalDeath?: StartupSignalDeathDiagnostic;
@@ -188,6 +195,7 @@ export interface RunnerResult {
 
 export interface RunningAgentProcess {
 	result: Promise<RunnerResult>;
+	steer(message: string): Promise<void>;
 	cancel(): void;
 }
 
@@ -243,6 +251,8 @@ export interface AgentObservation {
 	createdAt: string;
 	startedAt?: string;
 	endedAt?: string;
+	steerCount: number;
+	lastSteeredAt?: string;
 	elapsedMs: number;
 	lastProgressAt: string;
 	quietMs: number;
@@ -292,6 +302,10 @@ export interface SpawnToolDetails {
 export interface CancelToolDetails {
 	cancelledIds: string[];
 	runs: AgentSnapshot[];
+}
+
+export interface SteerToolDetails {
+	run: AgentSnapshot;
 }
 
 /** New wait metadata is optional so tool results persisted by older versions remain renderable. */

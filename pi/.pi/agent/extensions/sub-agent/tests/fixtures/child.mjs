@@ -1,21 +1,27 @@
 import { createHash } from "node:crypto";
+import { StringDecoder } from "node:string_decoder";
 
 const mode = process.argv[2] ?? "success";
-const chunks = [];
-for await (const chunk of process.stdin) chunks.push(Buffer.from(chunk));
-const prompt = Buffer.concat(chunks);
+let pending = "";
+const decoder = new StringDecoder("utf8");
+let promptMessage = "";
+let finished = false;
 
-if (mode === "hang") {
-	setInterval(() => {}, 1_000);
-} else {
+function write(value) {
+	process.stdout.write(`${JSON.stringify(value)}\n`);
+}
+
+function finalEvents() {
+	if (finished) return;
+	finished = true;
 	if (mode === "malformed") process.stdout.write("not-json\n");
 	if (mode === "stderr") process.stderr.write("e".repeat(10_000));
 	const finalOutput = mode === "large"
 		? Array.from({ length: 2_500 }, (_, index) => `line ${index + 1}`).join("\n")
 		: mode === "stdin"
 			? JSON.stringify({
-				bytes: prompt.length,
-				sha256: createHash("sha256").update(prompt).digest("hex"),
+				bytes: Buffer.byteLength(promptMessage, "utf8"),
+				sha256: createHash("sha256").update(promptMessage).digest("hex"),
 			})
 			: "fixture result";
 	const events = [
@@ -45,5 +51,46 @@ if (mode === "hang") {
 		},
 		{ type: "agent_settled" },
 	];
-	for (const event of events) process.stdout.write(`${JSON.stringify(event)}\n`);
+	for (const event of events) write(event);
 }
+
+function handleLine(line) {
+	if (!line.trim()) return;
+	let command;
+	try {
+		command = JSON.parse(line.endsWith("\r") ? line.slice(0, -1) : line);
+	} catch (error) {
+		write({ type: "response", command: "parse", success: false, error: error.message });
+		return;
+	}
+	if (command.type === "prompt") {
+		promptMessage = command.message;
+		write({ id: command.id, type: "response", command: "prompt", success: true });
+		if (mode !== "hang" && mode !== "steer") finalEvents();
+		else if (mode === "steer") write({ type: "agent_start" });
+		return;
+	}
+	if (command.type === "steer") {
+		if (command.message === "reject") {
+			write({ id: command.id, type: "response", command: "steer", success: false, error: "fixture rejected steering" });
+		} else {
+			write({ id: command.id, type: "response", command: "steer", success: true });
+			if (mode === "steer" && command.message === "finish") finalEvents();
+		}
+		return;
+	}
+	write({ id: command.id, type: "response", command: command.type, success: false, error: "unsupported fixture command" });
+}
+
+for await (const chunk of process.stdin) {
+	pending += decoder.write(chunk);
+	while (true) {
+		const newline = pending.indexOf("\n");
+		if (newline < 0) break;
+		const line = pending.slice(0, newline);
+		pending = pending.slice(newline + 1);
+		handleLine(line);
+	}
+}
+pending += decoder.end();
+if (pending) handleLine(pending);

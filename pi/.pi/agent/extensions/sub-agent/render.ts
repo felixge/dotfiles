@@ -16,6 +16,7 @@ import type {
 	CancelToolDetails,
 	SpawnToolDetails,
 	StatusToolDetails,
+	SteerToolDetails,
 	UsageSummary,
 	WaitResult,
 } from "./types.ts";
@@ -186,6 +187,8 @@ export function observationFromSnapshot(
 		createdAt: iso(run.createdAt),
 		...(run.startedAt !== undefined ? { startedAt: iso(run.startedAt) } : {}),
 		...(run.endedAt !== undefined ? { endedAt: iso(run.endedAt) } : {}),
+		steerCount: run.steerCount,
+		...(run.lastSteeredAt !== undefined ? { lastSteeredAt: iso(run.lastSteeredAt) } : {}),
 		elapsedMs: Math.max(0, endpoint - elapsedStart),
 		lastProgressAt: iso(run.lastProgressAt),
 		quietMs: Math.max(0, endpoint - run.lastProgressAt),
@@ -354,6 +357,35 @@ export function renderSpawnResult(result: ToolResultLike<SpawnToolDetails>, _opt
 	return new Text(
 		`${theme.fg(run.status === "running" ? "success" : "warning", formatAgentLabel(run))} ${theme.fg("muted", state)} ` +
 			theme.fg("dim", `${shortModel(run.model)}/${run.thinking} ${run.access}`),
+		0,
+		0,
+	);
+}
+
+interface SteerCallArgs {
+	id?: string;
+	message?: string;
+}
+
+export function renderSteerCall(args: SteerCallArgs, theme: Theme): Text {
+	return new Text(
+		theme.fg("toolTitle", theme.bold("agent_steer ")) +
+			theme.fg("accent", args.id ?? "...") +
+			` ${theme.fg("dim", preview(args.message ?? "..."))}`,
+		0,
+		0,
+	);
+}
+
+export function renderSteerResult(
+	result: ToolResultLike<SteerToolDetails>,
+	_options: unknown,
+	theme: Theme,
+): Text {
+	const run = result.details?.run;
+	if (!run) return new Text(result.content[0]?.text ?? "No sub-agent steering result", 0, 0);
+	return new Text(
+		`${theme.fg("success", formatAgentLabel(run))} ${theme.fg("muted", "steering accepted")}`,
 		0,
 		0,
 	);

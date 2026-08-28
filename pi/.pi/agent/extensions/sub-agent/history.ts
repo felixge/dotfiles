@@ -133,6 +133,10 @@ function snapshotFrom(value: unknown): AgentSnapshot | undefined {
 	const fallbackTimestamp = numberOr(value.endedAt, numberOr(value.startedAt, value.createdAt));
 	return {
 		...(value as unknown as AgentSnapshot),
+		steerCount: Math.max(0, Math.floor(numberOr(value.steerCount, 0))),
+		lastSteeredAt: typeof value.lastSteeredAt === "number" && Number.isFinite(value.lastSteeredAt)
+			? value.lastSteeredAt
+			: undefined,
 		revision: numberOr(value.revision, 0),
 		lastProgressAt: numberOr(value.lastProgressAt, fallbackTimestamp),
 		phase: phaseFrom(value.phase, value.status, fallbackTimestamp, typeof value.currentActivity === "string" ? value.currentActivity : undefined),
@@ -184,6 +188,8 @@ function restoreObservation(existing: AgentSnapshot, observation: AgentObservati
 		createdAt,
 		...(startedAt !== undefined ? { startedAt } : {}),
 		...(endedAt !== undefined ? { endedAt } : {}),
+		steerCount: Math.max(0, Math.floor(numberOr(observation.steerCount, existing.steerCount))),
+		lastSteeredAt: timestamp(observation.lastSteeredAt) ?? existing.lastSteeredAt,
 		revision: observation.revision,
 		lastProgressAt,
 		phase: {
@@ -263,13 +269,27 @@ export function readAgentHistory(entries: readonly unknown[]): AgentHistory {
 	const persistedTerminalIds = new Set<string>();
 	const store = (run: AgentSnapshot) => {
 		const existing = runs.get(run.id);
-		if (!existing || isTerminalStatus(run.status) || !isTerminalStatus(existing.status)) runs.set(run.id, run);
+		if (!existing) {
+			runs.set(run.id, run);
+			return;
+		}
+		const runIsTerminal = isTerminalStatus(run.status);
+		const existingIsTerminal = isTerminalStatus(existing.status);
+		if (runIsTerminal !== existingIsTerminal) {
+			if (runIsTerminal) runs.set(run.id, run);
+			return;
+		}
+		if (run.revision >= existing.revision) runs.set(run.id, run);
 	};
 
 	for (const entry of entries) {
 		if (!isRecord(entry)) continue;
 		if (entry.type === "message" && isRecord(entry.message) && entry.message.role === "toolResult") {
 			if (entry.message.toolName === "agent_spawn" && isRecord(entry.message.details)) {
+				const run = snapshotFrom(entry.message.details.run);
+				if (run) store(run);
+			}
+			if (entry.message.toolName === "agent_steer" && isRecord(entry.message.details)) {
 				const run = snapshotFrom(entry.message.details.run);
 				if (run) store(run);
 			}

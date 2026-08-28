@@ -8,6 +8,8 @@ import {
 	observationFromSnapshot,
 	renderStatusCall,
 	renderStatusResult,
+	renderSteerCall,
+	renderSteerResult,
 	statusResponseFromSnapshots,
 	truncateModelVisibleOutput,
 	waitResultFromSnapshot,
@@ -28,6 +30,7 @@ function structuredSnapshot(overrides: Partial<AgentSnapshot> = {}): AgentSnapsh
 		status: "running",
 		createdAt: 100,
 		startedAt: 120,
+		steerCount: 0,
 		revision: 5,
 		lastProgressAt: 800,
 		phase: { kind: "using_tools", startedAt: 500 },
@@ -106,10 +109,12 @@ test("model-visible results omit duplicate truncation content", () => {
 	assert.match(visible.output, /Full output: \/tmp\/full-output\.log/u);
 });
 
-test("observation projection exposes absolute timestamps and objective durations", () => {
-	const observation = observationFromSnapshot(structuredSnapshot(), 1_000);
+test("observation projection exposes timestamps, steering metadata, and objective durations", () => {
+	const observation = observationFromSnapshot(structuredSnapshot({ steerCount: 2, lastSteeredAt: 900 }), 1_000);
 	assert.equal(observation.createdAt, "1970-01-01T00:00:00.100Z");
 	assert.equal(observation.startedAt, "1970-01-01T00:00:00.120Z");
+	assert.equal(observation.steerCount, 2);
+	assert.equal(observation.lastSteeredAt, "1970-01-01T00:00:00.900Z");
 	assert.equal(observation.elapsedMs, 880);
 	assert.equal(observation.lastProgressAt, "1970-01-01T00:00:00.800Z");
 	assert.equal(observation.quietMs, 200);
@@ -169,6 +174,28 @@ test("aggregate pressure never silently omits failed-agent errors", () => {
 		assert.equal(agent.errorTruncation?.truncated, true);
 		assert.ok((agent.errorTruncation?.originalBytes ?? 0) > (agent.errorTruncation?.visibleBytes ?? 0));
 	}
+});
+
+test("steering rendering previews calls, keeps results compact, and falls back to raw content", () => {
+	const message = `Focus on the parser regression. ${"extra detail ".repeat(20)}`;
+	const call = renderSteerCall({ id: "abc123", message }, plainTheme).render(200).join("\n").trimEnd();
+	assert.match(call, /^agent_steer abc123 Focus on the parser regression\./u);
+	assert.match(call, /\.\.\.$/u);
+	assert.ok(call.length < message.length);
+
+	const result = renderSteerResult(
+		{ content: [{ type: "text", text: "full instruction must not be repeated" }], details: { run: structuredSnapshot() } },
+		{ expanded: false },
+		plainTheme,
+	).render(200).join("\n").trimEnd();
+	assert.equal(result, "worker (abc123) steering accepted");
+	assert.doesNotMatch(result, /full instruction/u);
+	const fallback = renderSteerResult(
+		{ content: [{ type: "text", text: "raw steering response" }] },
+		{ expanded: false },
+		plainTheme,
+	).render(200).join("\n").trimEnd();
+	assert.equal(fallback, "raw steering response");
 });
 
 test("status TUI rendering distinguishes snapshot and wait modes", () => {
@@ -271,6 +298,7 @@ test("wait result preserves terminal snapshot metadata", () => {
 		createdAt: 100,
 		startedAt: 150,
 		endedAt: 250,
+		steerCount: 0,
 		revision: 4,
 		lastProgressAt: 250,
 		phase: { kind: "failed", startedAt: 250 },
