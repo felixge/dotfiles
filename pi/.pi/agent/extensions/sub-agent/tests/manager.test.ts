@@ -163,7 +163,11 @@ test("manager applies only global concurrency, including writers sharing a cwd",
 test("manager preserves provenance and optional names in snapshots and runner config", async () => {
 	const runner = new FakeRunner();
 	const manager = new AgentManager(runner, { idFactory: ids() });
-	const named = manager.spawn({ ...request("/repo", "read", "assistant-1", "parent-7"), name: "reviewer" });
+	const named = manager.spawn({
+		...request("/repo", "read", "assistant-1", "parent-7"),
+		name: "reviewer",
+		contextWindow: 200_000,
+	});
 
 	assert.equal(named.name, "reviewer");
 	assert.equal(named.originEntryId, "assistant-1");
@@ -172,6 +176,9 @@ test("manager preserves provenance and optional names in snapshots and runner co
 	assert.equal(runner.runs.get(named.id)?.config.name, "reviewer");
 	assert.equal(runner.runs.get(named.id)?.config.originEntryId, "assistant-1");
 	assert.equal(runner.runs.get(named.id)?.config.parentRunId, "parent-7");
+	assert.equal(runner.runs.get(named.id)?.config.contextWindow, 200_000);
+	assert.equal(named.contextWindow, 200_000);
+	assert.equal(named.contextTokens, null);
 
 	runner.complete(named.id);
 	await tick();
@@ -181,7 +188,7 @@ test("manager preserves structured progress and returns immutable snapshots", as
 	let now = 100;
 	const runner = new FakeRunner();
 	const manager = new AgentManager(runner, { idFactory: ids(), now: () => now });
-	const run = manager.spawn(request("/repo"));
+	const run = manager.spawn({ ...request("/repo"), contextWindow: 200_000 });
 	const deferred = runner.runs.get(run.id);
 	assert.ok(deferred);
 	const progress = createInitialProgress(100);
@@ -189,6 +196,8 @@ test("manager preserves structured progress and returns immutable snapshots", as
 	progress.lastProgressAt = 180;
 	progress.phase = { kind: "using_tools", startedAt: 150 };
 	progress.currentActivity = "bash: npm test";
+	progress.contextTokens = 100;
+	progress.streamingContextTokens = 120;
 	progress.activeOperations = [{
 		toolCallId: "tool-1",
 		tool: "bash",
@@ -211,6 +220,8 @@ test("manager preserves structured progress and returns immutable snapshots", as
 	assert.equal(snapshot.phase.kind, "using_tools");
 	assert.equal(snapshot.activeOperations[0]?.lastUpdatedAt, 170);
 	assert.equal(snapshot.recentOperations[0]?.endedAt, 140);
+	assert.equal(snapshot.contextWindow, 200_000);
+	assert.equal(snapshot.contextTokens, 120);
 	assert.ok(Object.isFrozen(snapshot));
 	assert.ok(Object.isFrozen(snapshot.phase));
 	assert.ok(Object.isFrozen(snapshot.activeOperations));
@@ -224,6 +235,22 @@ test("manager preserves structured progress and returns immutable snapshots", as
 
 	runner.complete(run.id);
 	await tick();
+});
+
+test("terminal snapshots discard provisional streaming context after transport failure", async () => {
+	const progress = createInitialProgress();
+	progress.contextTokens = 100;
+	progress.streamingContextTokens = 140;
+	const failed = await settleResult({
+		exitCode: 1,
+		signal: null,
+		stderr: "transport failed",
+		progress,
+		timedOut: false,
+	});
+
+	assert.equal(failed.status, "failed");
+	assert.equal(failed.contextTokens, 100);
 });
 
 test("manager records acknowledged steering metadata, revision, updates, and immutable snapshots", async () => {

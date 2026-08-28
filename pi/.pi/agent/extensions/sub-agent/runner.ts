@@ -102,6 +102,7 @@ export function createInitialProgress(now = Date.now()): RunnerProgress {
 		currentActivity: "starting",
 		turns: 0,
 		usage: createUsageSummary(),
+		contextTokens: null,
 		outputTokens: 0,
 		liveOutput: "",
 		finalAssistantSeen: false,
@@ -153,42 +154,47 @@ function stringValue(value: unknown): string | undefined {
 	return typeof value === "string" ? value : undefined;
 }
 
-function addUsage(target: UsageSummary, raw: unknown): void {
+function usageSummaryFrom(raw: unknown): UsageSummary {
 	const usage = recordValue(raw);
 	const cost = recordValue(usage.cost);
 	const input = numberValue(usage.input);
 	const output = numberValue(usage.output);
 	const cacheRead = numberValue(usage.cacheRead);
 	const cacheWrite = numberValue(usage.cacheWrite);
-	target.input += input;
-	target.output += output;
-	target.cacheRead += cacheRead;
-	target.cacheWrite += cacheWrite;
-	target.totalTokens += numberValue(usage.totalTokens) || input + output + cacheRead + cacheWrite;
-	target.cost.input += numberValue(cost.input);
-	target.cost.output += numberValue(cost.output);
-	target.cost.cacheRead += numberValue(cost.cacheRead);
-	target.cost.cacheWrite += numberValue(cost.cacheWrite);
-	target.cost.total += numberValue(cost.total ?? usage.cost);
+	const summary = createUsageSummary();
+	summary.input = input;
+	summary.output = output;
+	summary.cacheRead = cacheRead;
+	summary.cacheWrite = cacheWrite;
+	summary.totalTokens = numberValue(usage.totalTokens) || input + output + cacheRead + cacheWrite;
+	summary.cost.input = numberValue(cost.input);
+	summary.cost.output = numberValue(cost.output);
+	summary.cost.cacheRead = numberValue(cost.cacheRead);
+	summary.cost.cacheWrite = numberValue(cost.cacheWrite);
+	summary.cost.total = numberValue(cost.total ?? usage.cost);
 	if (typeof usage.cacheWrite1h === "number" && Number.isFinite(usage.cacheWrite1h)) {
-		target.cacheWrite1h = (target.cacheWrite1h ?? 0) + usage.cacheWrite1h;
+		summary.cacheWrite1h = usage.cacheWrite1h;
 	}
 	if (typeof usage.reasoning === "number" && Number.isFinite(usage.reasoning)) {
-		target.reasoning = (target.reasoning ?? 0) + usage.reasoning;
+		summary.reasoning = usage.reasoning;
 	}
+	return summary;
 }
 
-function reconcileStreamingUsage(progress: RunnerProgress, raw: unknown): void {
-	const latest = createUsageSummary();
-	addUsage(latest, raw);
+function addUsage(target: UsageSummary, raw: unknown): void {
+	addUsageSummary(target, usageSummaryFrom(raw));
+}
+
+function reconcileStreamingUsage(progress: RunnerProgress, raw: unknown): number | undefined {
+	const latest = usageSummaryFrom(raw);
 	if (progress.streamingUsage) subtractUsageSummary(progress.usage, progress.streamingUsage);
 	addUsageSummary(progress.usage, latest);
 	progress.streamingUsage = latest;
 
-	const outputTokens = numberValue(recordValue(raw).output);
 	progress.outputTokens -= progress.streamingOutputTokens ?? 0;
-	progress.outputTokens += outputTokens;
-	progress.streamingOutputTokens = outputTokens;
+	progress.outputTokens += latest.output;
+	progress.streamingOutputTokens = latest.output;
+	return Number.isFinite(latest.totalTokens) && latest.totalTokens > 0 ? latest.totalTokens : undefined;
 }
 
 function addActivity(progress: RunnerProgress, summary: string, isError = false, now = Date.now()): void {
@@ -323,12 +329,16 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown, now
 				next.liveOutput = "";
 				next.streamingUsage = undefined;
 				next.streamingOutputTokens = undefined;
+				next.streamingContextTokens = undefined;
 				setPhase(next, "waiting_for_model", now);
 			}
 			break;
 		}
 		case "message_update": {
-			if (event.usage !== undefined) reconcileStreamingUsage(next, event.usage);
+			if (event.usage !== undefined) {
+				next.streamingContextTokens = reconcileStreamingUsage(next, event.usage)
+					?? next.streamingContextTokens;
+			}
 			const update = recordValue(event.assistantMessageEvent);
 			const updateType = stringValue(update.type);
 			if (updateType === "thinking_start" || updateType === "thinking_delta" || updateType === "thinking_end") {
@@ -347,9 +357,17 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown, now
 				break;
 			}
 			if (message.role !== "assistant") break;
-			if (message.usage !== undefined) reconcileStreamingUsage(next, message.usage);
+			const streamedContextTokens = next.streamingContextTokens;
+			const finalContextTokens = message.usage === undefined
+				? undefined
+				: reconcileStreamingUsage(next, message.usage);
+			const stopReason = stringValue(message.stopReason);
+			if (stopReason !== "aborted" && stopReason !== "error") {
+				next.contextTokens = finalContextTokens ?? streamedContextTokens ?? next.contextTokens;
+			}
 			next.streamingUsage = undefined;
 			next.streamingOutputTokens = undefined;
+			next.streamingContextTokens = undefined;
 			const output = assistantText(message);
 			const truncation = truncateHead(output, {
 				maxLines: MAX_FINAL_OUTPUT_LINES,
@@ -359,7 +377,7 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown, now
 			next.finalOutputTruncation = truncation.truncated ? truncation : undefined;
 			next.fullOutputPath = undefined;
 			next.liveOutput = truncateUtf8Tail(output, MAX_LIVE_OUTPUT_BYTES);
-			next.finalStopReason = stringValue(message.stopReason);
+			next.finalStopReason = stopReason;
 			next.finalError = stringValue(message.errorMessage);
 			next.finalAssistantSeen = true;
 			setPhase(next, "responding", now);
@@ -435,6 +453,8 @@ export function reduceJsonEvent(progress: RunnerProgress, rawEvent: unknown, now
 			break;
 		}
 		case "compaction_start":
+			next.contextTokens = null;
+			next.streamingContextTokens = undefined;
 			setPhase(next, "compacting", now, "compacting context");
 			addActivity(next, "compacting context", false, now);
 			break;

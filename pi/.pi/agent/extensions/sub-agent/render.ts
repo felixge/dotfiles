@@ -14,6 +14,7 @@ import type {
 	AgentSnapshot,
 	AgentStatusResponse,
 	CancelToolDetails,
+	ContextUsage,
 	SpawnToolDetails,
 	StatusToolDetails,
 	SteerToolDetails,
@@ -44,6 +45,41 @@ export function formatTokens(value: number): string {
 	if (value < 10_000) return `${(value / 1_000).toFixed(1)}k`;
 	if (value < 1_000_000) return `${Math.round(value / 1_000)}k`;
 	return `${(value / 1_000_000).toFixed(1)}m`;
+}
+
+export function contextUsageFromSnapshot(
+	run: Pick<AgentSnapshot, "contextWindow" | "contextTokens">,
+): ContextUsage | undefined {
+	const contextWindow = run.contextWindow;
+	if (typeof contextWindow !== "number" || !Number.isFinite(contextWindow) || contextWindow <= 0) return undefined;
+	const rawTokens = run.contextTokens;
+	if (typeof rawTokens !== "number" || !Number.isFinite(rawTokens) || rawTokens <= 0) {
+		return { tokens: null, contextWindow, percent: null };
+	}
+	const percent = (rawTokens / contextWindow) * 100;
+	return Number.isFinite(percent)
+		? { tokens: rawTokens, contextWindow, percent }
+		: { tokens: null, contextWindow, percent: null };
+}
+
+export function formatContextPercent(contextUsage: ContextUsage | undefined): string {
+	if (!contextUsage) return "-";
+	const normalized = contextUsageFromSnapshot({
+		contextWindow: contextUsage.contextWindow,
+		contextTokens: contextUsage.tokens,
+	});
+	if (!normalized) return "-";
+	return normalized.percent === null ? "?" : `${normalized.percent.toFixed(1)}%`;
+}
+
+export function formatContextUsage(contextUsage: ContextUsage | undefined): string {
+	const normalized = contextUsage && contextUsageFromSnapshot({
+		contextWindow: contextUsage.contextWindow,
+		contextTokens: contextUsage.tokens,
+	});
+	if (!normalized) return "Context: unavailable";
+	if (normalized.tokens === null) return `Context: ?/${formatTokens(normalized.contextWindow)}`;
+	return `Context: ${formatContextPercent(normalized)} (${formatTokens(normalized.tokens)}/${formatTokens(normalized.contextWindow)})`;
 }
 
 export function formatCost(cost: number): string {
@@ -175,6 +211,7 @@ export function observationFromSnapshot(
 		? 0
 		: (run.errorOriginalBytes ?? Buffer.byteLength(run.error, "utf8"));
 	const visibleErrorBytes = error === undefined ? 0 : Buffer.byteLength(error, "utf8");
+	const contextUsage = contextUsageFromSnapshot(run);
 
 	const observation: AgentObservation = {
 		id: run.id,
@@ -226,6 +263,7 @@ export function observationFromSnapshot(
 		turns: run.turns,
 		...(run.tokensPerSecond15s !== undefined ? { tokensPerSecond15s: run.tokensPerSecond15s } : {}),
 		usage: cloneUsageSummary(run.usage),
+		...(contextUsage ? { contextUsage } : {}),
 		...(error !== undefined ? { error } : {}),
 		...(error !== undefined && originalErrorBytes > visibleErrorBytes ? {
 			errorTruncation: {
@@ -311,7 +349,7 @@ export function formatStatusProgress(response: Pick<AgentStatusResponse, "agents
 		const activity = operation
 			? `${operation.summary} ${formatDuration(operation.runningMs)}, quiet ${formatDuration(operation.quietMs)}`
 			: `${run.phase.summary ?? run.phase.kind.replaceAll("_", " ")} ${formatDuration(run.phase.ageMs)}, quiet ${formatDuration(run.quietMs)}`;
-		return `${formatAgentLabel(run)} [${run.access}] ${run.status}: ${activity}`;
+		return `${formatAgentLabel(run)} [${run.access}] ${run.status}, ctx ${formatContextPercent(run.contextUsage)}: ${activity}`;
 	});
 	if (lines.length < response.agents.length) lines.push(`[${response.agents.length - lines.length} agents omitted]`);
 	const text = lines.join("\n");
@@ -462,7 +500,9 @@ export function renderStatusResult(
 	const active = details.agents.length - completed - failed - details.agents.filter((item) => item.status === "cancelled" || item.status === "interrupted").length;
 	const summary = `${completed} completed, ${failed} failed, ${active} active`;
 	const waitSummary = details.timedOut ? `timed out after ${formatDuration(details.waitedMs ?? 0)}` : undefined;
-	const access = details.agents.map((item) => `${formatAgentLabel(item)}:${item.access}`).join(" ");
+	const access = details.agents
+		.map((item) => `${formatAgentLabel(item)}:${item.access} ctx ${formatContextPercent(item.contextUsage)}`)
+		.join(" ");
 	const usage = formatUsage(aggregateUsage(details.agents));
 	const resultColor = failed > 0 ? "error" : details.allTerminal ? "success" : "warning";
 	if (!options.expanded) {
@@ -487,6 +527,7 @@ export function renderStatusResult(
 			0,
 			0,
 		));
+		container.addChild(new Text(theme.fg("dim", formatContextUsage(item.contextUsage)), 0, 0));
 		container.addChild(new Text(theme.fg("dim", `Phase: ${item.phase.kind} ${formatDuration(item.phase.ageMs)}, quiet ${formatDuration(item.quietMs)}`), 0, 0));
 		for (const operation of item.activeOperations) {
 			container.addChild(new Text(`Active: ${operation.summary} ${formatDuration(operation.runningMs)}, quiet ${formatDuration(operation.quietMs)}`, 0, 0));

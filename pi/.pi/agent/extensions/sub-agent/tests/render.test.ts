@@ -5,6 +5,9 @@ import { modelVisibleResults } from "../index.ts";
 import {
 	MODEL_VISIBLE_OUTPUT_BYTES,
 	STATUS_RESPONSE_MAX_BYTES,
+	contextUsageFromSnapshot,
+	formatContextPercent,
+	formatContextUsage,
 	observationFromSnapshot,
 	renderStatusCall,
 	renderStatusResult,
@@ -24,6 +27,8 @@ function structuredSnapshot(overrides: Partial<AgentSnapshot> = {}): AgentSnapsh
 		name: "worker",
 		prompt: "task",
 		model: "provider/model",
+		contextWindow: 200,
+		contextTokens: 12,
 		thinking: "high",
 		cwd: "/repo",
 		access: "read",
@@ -124,6 +129,32 @@ test("observation projection exposes timestamps, steering metadata, and objectiv
 	assert.equal(observation.recentOperations[0]?.durationMs, 100);
 });
 
+test("context usage formatting handles known, unknown, unavailable, and over-limit values", () => {
+	const known = contextUsageFromSnapshot(structuredSnapshot());
+	assert.deepEqual(known, { tokens: 12, contextWindow: 200, percent: 6 });
+	assert.equal(formatContextPercent(known), "6.0%");
+	assert.equal(formatContextUsage(known), "Context: 6.0% (12/200)");
+
+	const unknown = contextUsageFromSnapshot(structuredSnapshot({ contextTokens: null }));
+	assert.equal(formatContextPercent(unknown), "?");
+	assert.equal(formatContextUsage(unknown), "Context: ?/200");
+	assert.equal(contextUsageFromSnapshot(structuredSnapshot({ contextWindow: 0 })), undefined);
+	assert.equal(contextUsageFromSnapshot(structuredSnapshot({ contextWindow: Number.NaN })), undefined);
+	assert.equal(formatContextPercent(undefined), "-");
+	assert.equal(formatContextUsage(undefined), "Context: unavailable");
+
+	const overLimit = contextUsageFromSnapshot(structuredSnapshot({ contextWindow: 100, contextTokens: 101.2 }));
+	assert.equal(formatContextPercent(overLimit), "101.2%");
+});
+
+test("observation projection includes structured current context usage", () => {
+	assert.deepEqual(observationFromSnapshot(structuredSnapshot(), 1_000).contextUsage, {
+		tokens: 12,
+		contextWindow: 200,
+		percent: 6,
+	});
+});
+
 test("observation projection tail-truncates live UTF-8 safely", () => {
 	const observation = observationFromSnapshot(
 		structuredSnapshot({ liveOutput: `prefix-${"😀".repeat(20)}-suffix` }),
@@ -208,11 +239,11 @@ test("status TUI rendering distinguishes snapshot and wait modes", () => {
 	const response = statusResponseFromSnapshots([structuredSnapshot()], false, 1_000);
 	const details: StatusToolDetails = { ...response, attributedIds: [] };
 	const partial = renderStatusResult({ content: [], details }, { expanded: false, isPartial: true }, plainTheme);
-	assert.match(partial.render(160).join("\n"), /worker \(abc123\) \[read\] running: bash: npm test 0s, quiet 0s/u);
+	assert.match(partial.render(160).join("\n"), /worker \(abc123\) \[read\] running, ctx 6\.0%: bash: npm test 0s, quiet 0s/u);
 	const phaseResponse = statusResponseFromSnapshots([structuredSnapshot({ activeOperations: [] })], false, 10_000);
 	const phaseDetails: StatusToolDetails = { ...phaseResponse, attributedIds: [] };
 	const phasePartial = renderStatusResult({ content: [], details: phaseDetails }, { expanded: false, isPartial: true }, plainTheme);
-	assert.match(phasePartial.render(160).join("\n"), /worker \(abc123\) \[read\] running: using tools 9s, quiet 9s/u);
+	assert.match(phasePartial.render(160).join("\n"), /worker \(abc123\) \[read\] running, ctx 6\.0%: using tools 9s, quiet 9s/u);
 	const countdownResponse = statusResponseFromSnapshots([structuredSnapshot()], true, 2_250, {
 		waitedMs: 1_250,
 		timeoutMs: 60_000,
@@ -225,7 +256,7 @@ test("status TUI rendering distinguishes snapshot and wait modes", () => {
 	);
 	assert.match(countdown.render(160).join("\n"), /Time remaining: 59s/u);
 	const compact = renderStatusResult({ content: [], details }, { expanded: false, isPartial: false }, plainTheme);
-	assert.match(compact.render(160).join("\n"), /worker \(abc123\):read/u);
+	assert.match(compact.render(160).join("\n"), /worker \(abc123\):read ctx 6\.0%/u);
 	const timedOutResponse = statusResponseFromSnapshots([structuredSnapshot()], true, 61_000, {
 		timedOut: true,
 		waitedMs: 60_000,
@@ -238,18 +269,23 @@ test("status TUI rendering distinguishes snapshot and wait modes", () => {
 	assert.match(timedOut.render(160).join("\n"), /timed out after 1m0s/u);
 	const expanded = renderStatusResult({ content: [], details }, { expanded: true, isPartial: false }, plainTheme);
 	assert.match(expanded.render(160).join("\n"), /model\/high read 0s/u);
+	assert.match(expanded.render(160).join("\n"), /Context: 6\.0% \(12\/200\)/u);
 	assert.match(expanded.render(160).join("\n"), /Phase: using_tools/u);
 });
 
 test("status rendering accepts historical details without wait metadata", () => {
 	const modern = statusResponseFromSnapshots([structuredSnapshot()], false, 1_000);
 	const { timedOut: _timedOut, waitedMs: _waitedMs, ...historical } = modern;
-	const details: StatusToolDetails = historical;
+	const agents = historical.agents.map(({ contextUsage: _contextUsage, ...agent }) => agent);
+	const details: StatusToolDetails = { ...historical, agents };
 
 	assert.doesNotThrow(() => {
 		renderStatusResult({ content: [], details }, { expanded: false, isPartial: true }, plainTheme);
-		renderStatusResult({ content: [], details }, { expanded: false, isPartial: false }, plainTheme);
 	});
+	const compact = renderStatusResult({ content: [], details }, { expanded: false, isPartial: false }, plainTheme);
+	assert.match(compact.render(160).join("\n"), /ctx -/u);
+	const expanded = renderStatusResult({ content: [], details }, { expanded: true, isPartial: false }, plainTheme);
+	assert.match(expanded.render(160).join("\n"), /Context: unavailable/u);
 });
 
 test("compact and expanded status summaries use consistent colors", () => {

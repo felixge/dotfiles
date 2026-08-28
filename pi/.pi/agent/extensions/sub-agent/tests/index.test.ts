@@ -199,6 +199,7 @@ test("agent_spawn publicly exposes read, bash, and write access semantics", asyn
 	const accessSchema = spawnTool.parameters.properties.access;
 	assert.deepEqual(accessSchema.enum, ["read", "bash", "write"]);
 	assert.equal(accessSchema.default, "read");
+	assert.equal("contextWindow" in spawnTool.parameters.properties, false);
 	assert.match(accessSchema.description, /bash: read, bash, grep, find, ls for non-mutating commands/u);
 	assert.match(spawnTool.description, /write agents sharing a working directory/u);
 	await manager.shutdown();
@@ -824,12 +825,13 @@ test("agent_start binds sibling agent_spawn calls without parent-abort cleanup",
 	const spawnTool = api.tools.get("agent_spawn");
 	assert.ok(spawnTool);
 	await api.emit("agent_start", { type: "agent_start" });
+	let contextWindow = 200_000;
 	const context = {
 		cwd: process.cwd(),
 		model: { provider: "provider", id: "model" },
 		thinkingLevel: "off",
 		modelRegistry: {
-			find: () => ({ provider: "provider", id: "model", reasoning: false }),
+			find: () => ({ provider: "provider", id: "model", reasoning: false, contextWindow }),
 			getApiKeyAndHeaders: async () => ({ ok: true }),
 		},
 		sessionManager: {
@@ -843,12 +845,19 @@ test("agent_start binds sibling agent_spawn calls without parent-abort cleanup",
 	const secondRun = manager.get(second.details.run.id);
 	assert.equal(firstRun?.originEntryId, "assistant-1");
 	assert.equal(firstRun?.parentRunId, "parent-1");
+	assert.equal(firstRun?.contextWindow, 200_000);
+	assert.equal(firstRun?.contextTokens, null);
 	assert.equal(secondRun?.parentRunId, "parent-1");
+	assert.equal(secondRun?.contextWindow, 200_000);
+
+	contextWindow = Number.NaN;
+	const invalidWindow = await spawnTool.execute("spawn-3", { prompt: "three" }, undefined, undefined, context);
+	assert.equal(manager.get(invalidWindow.details.run.id)?.contextWindow, undefined);
 
 	await assert.rejects(
 		spawnTool.execute(
-			"spawn-3",
-			{ prompt: "three" },
+			"spawn-4",
+			{ prompt: "four" },
 			undefined,
 			undefined,
 			{ ...context, sessionManager: { getLeafId: () => null } },

@@ -1,3 +1,4 @@
+import { contextUsageFromSnapshot } from "./render.ts";
 import type {
 	ActiveOperation,
 	AgentObservation,
@@ -10,7 +11,7 @@ import type {
 import { isTerminalStatus } from "./types.ts";
 
 export const TERMINAL_RUN_ENTRY_TYPE = "sub-agent-terminal";
-export const TERMINAL_RUN_ENTRY_VERSION = 2;
+export const TERMINAL_RUN_ENTRY_VERSION = 3;
 
 export interface TerminalRunEntryData {
 	version: typeof TERMINAL_RUN_ENTRY_VERSION;
@@ -55,6 +56,10 @@ function isUsage(value: unknown): boolean {
 
 function numberOr(value: unknown, fallback: number): number {
 	return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function positiveNumber(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 function inferredPhase(status: AgentStatus, timestamp: number, summary?: string): AgentPhase {
@@ -142,6 +147,8 @@ function snapshotFrom(value: unknown): AgentSnapshot | undefined {
 		phase: phaseFrom(value.phase, value.status, fallbackTimestamp, typeof value.currentActivity === "string" ? value.currentActivity : undefined),
 		activeOperations: activeOperationsFrom(value.activeOperations, fallbackTimestamp),
 		recentOperations: recentOperationsFrom(value.recentOperations),
+		contextWindow: positiveNumber(value.contextWindow),
+		contextTokens: value.contextTokens === null ? null : positiveNumber(value.contextTokens),
 	};
 }
 
@@ -172,7 +179,13 @@ function observationFrom(value: unknown): AgentObservation | undefined {
 		typeof value.revision !== "number" || typeof value.turns !== "number" || !isUsage(value.usage) ||
 		!isRecord(value.phase) || typeof value.phase.kind !== "string" || typeof value.phase.startedAt !== "string" ||
 		!Array.isArray(value.activeOperations) || !Array.isArray(value.recentOperations)) return undefined;
-	return value as unknown as AgentObservation;
+	const rawContext = isRecord(value.contextUsage) ? value.contextUsage : undefined;
+	const contextWindow = positiveNumber(rawContext?.contextWindow);
+	const contextTokens = rawContext?.tokens === null ? null : positiveNumber(rawContext?.tokens);
+	const contextUsage = contextWindow !== undefined && contextTokens !== undefined
+		? contextUsageFromSnapshot({ contextWindow, contextTokens })
+		: undefined;
+	return { ...(value as unknown as AgentObservation), contextUsage };
 }
 
 function restoreObservation(existing: AgentSnapshot, observation: AgentObservation): AgentSnapshot {
@@ -215,6 +228,10 @@ function restoreObservation(existing: AgentSnapshot, observation: AgentObservati
 		currentActivity: observation.activeOperations.at(-1)?.summary ?? observation.phase.summary ?? observation.phase.kind,
 		turns: observation.turns,
 		usage: observation.usage,
+		...(observation.contextUsage ? {
+			contextWindow: observation.contextUsage.contextWindow,
+			contextTokens: observation.contextUsage.tokens,
+		} : {}),
 		tokensPerSecond15s: observation.tokensPerSecond15s,
 		finalOutput: observation.finalOutput ?? existing.finalOutput,
 		finalOutputTruncation: observation.finalOutput !== undefined && observation.outputTruncation
@@ -328,7 +345,7 @@ export function readAgentHistory(entries: readonly unknown[]): AgentHistory {
 			}
 		}
 		if (entry.type === "custom" && entry.customType === TERMINAL_RUN_ENTRY_TYPE && isRecord(entry.data)) {
-			if (entry.data.version !== 1 && entry.data.version !== TERMINAL_RUN_ENTRY_VERSION) continue;
+			if (entry.data.version !== 1 && entry.data.version !== 2 && entry.data.version !== TERMINAL_RUN_ENTRY_VERSION) continue;
 			const run = snapshotFrom(entry.data.run);
 			if (!run || !isTerminalStatus(run.status)) continue;
 			store(run);

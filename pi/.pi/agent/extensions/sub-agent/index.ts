@@ -119,7 +119,7 @@ async function resolveSpawnConfig(
 		access?: AgentAccess;
 	},
 	ctx: ExtensionContext,
-): Promise<{ name?: string; prompt: string; model: string; thinking: ThinkingLevel; cwd: string; access: AgentAccess }> {
+): Promise<{ name?: string; prompt: string; model: string; contextWindow?: number; thinking: ThinkingLevel; cwd: string; access: AgentAccess }> {
 	if (!params.prompt.trim()) throw new Error("Sub-agent prompt must not be empty");
 	const name = params.name?.replace(/\s+/gu, " ").trim();
 	if (params.name !== undefined && !name) throw new Error("Sub-agent name must not be empty");
@@ -134,10 +134,14 @@ async function resolveSpawnConfig(
 	const requestedThinking = (params.thinking ?? ctx.thinkingLevel) as ModelThinkingLevel;
 	const thinking = clampThinkingLevel(model, requestedThinking) as ThinkingLevel;
 	const cwd = await resolveCanonicalCwd(ctx.cwd, params.cwd);
+	const contextWindow = Number.isFinite(model.contextWindow) && model.contextWindow > 0
+		? model.contextWindow
+		: undefined;
 	return {
 		...(name ? { name } : {}),
 		prompt: params.prompt,
 		model: modelName,
+		...(contextWindow === undefined ? {} : { contextWindow }),
 		thinking,
 		cwd,
 		access: params.access ?? "read",

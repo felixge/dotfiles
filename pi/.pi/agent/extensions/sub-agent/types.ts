@@ -106,6 +106,7 @@ export interface AgentRunConfig {
 	name?: string;
 	prompt: string;
 	model: string;
+	contextWindow?: number;
 	thinking: ThinkingLevel;
 	cwd: string;
 	access: AgentAccess;
@@ -126,6 +127,8 @@ export interface AgentRun extends AgentRunConfig {
 	currentActivity?: string;
 	turns: number;
 	usage: UsageSummary;
+	contextTokens: number | null;
+	streamingContextTokens?: number;
 	outputTokens: number;
 	finalOutput?: string;
 	finalOutputTruncation?: TruncationResult;
@@ -137,8 +140,9 @@ export interface AgentRun extends AgentRunConfig {
 	activity: ActivityEvent[];
 }
 
-export interface AgentSnapshot extends Readonly<Omit<AgentRun, "usage" | "activity" | "outputTokens" | "phase" | "activeOperations" | "recentOperations">> {
+export interface AgentSnapshot extends Readonly<Omit<AgentRun, "usage" | "activity" | "outputTokens" | "streamingContextTokens" | "contextTokens" | "phase" | "activeOperations" | "recentOperations">> {
 	readonly usage: Readonly<UsageSummary>;
+	readonly contextTokens?: number | null;
 	readonly tokensPerSecond15s?: number;
 	readonly phase: Readonly<AgentPhase>;
 	readonly activeOperations: readonly Readonly<ActiveOperation>[];
@@ -156,6 +160,8 @@ export interface RunnerProgress {
 	turns: number;
 	usage: UsageSummary;
 	streamingUsage?: UsageSummary;
+	contextTokens: number | null;
+	streamingContextTokens?: number;
 	outputTokens: number;
 	streamingOutputTokens?: number;
 	finalOutput?: string;
@@ -240,6 +246,12 @@ export interface ActiveOperationObservation {
 	quietMs: number;
 }
 
+export interface ContextUsage {
+	tokens: number | null;
+	contextWindow: number;
+	percent: number | null;
+}
+
 export interface AgentObservation {
 	id: string;
 	name?: string;
@@ -265,6 +277,7 @@ export interface AgentObservation {
 	turns: number;
 	tokensPerSecond15s?: number;
 	usage: UsageSummary;
+	contextUsage?: ContextUsage;
 	error?: string;
 	errorTruncation?: {
 		truncated: true;

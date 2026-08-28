@@ -232,6 +232,7 @@ test("event reducer tracks output, activity, turns, retries, and usage without r
 	});
 	assert.equal(state.turns, 1);
 	assert.equal(state.finalOutput, "final answer");
+	assert.equal(state.contextTokens, 21);
 	assert.deepEqual(state.usage, {
 		input: 12,
 		output: 4,
@@ -426,6 +427,8 @@ test("event reducer reconciles cumulative streaming usage and retains partial us
 	});
 	assert.equal(state.usage.totalTokens, 10);
 	assert.equal(state.usage.cost.total, 0.05);
+	assert.equal(state.streamingContextTokens, 10);
+	assert.equal(state.contextTokens, null);
 	assert.equal(state.outputTokens, 2);
 	state = reduceJsonEvent(state, {
 		type: "message_end",
@@ -445,9 +448,81 @@ test("event reducer reconciles cumulative streaming usage and retains partial us
 	});
 	assert.equal(state.usage.totalTokens, 12);
 	assert.equal(state.usage.cost.total, 0.07);
+	assert.equal(state.contextTokens, 12);
+	assert.equal(state.streamingContextTokens, undefined);
 	assert.equal(state.outputTokens, 3);
 	assert.equal(state.streamingUsage, undefined);
 	assert.equal(state.streamingOutputTokens, undefined);
+});
+
+test("event reducer replaces current context usage across turns and preserves it after invalid completions", () => {
+	let state = reduceJsonEvent(createInitialProgress(), {
+		type: "message_end",
+		message: { role: "assistant", content: [], stopReason: "stop", usage: { totalTokens: 100, output: 10 } },
+	});
+	assert.equal(state.contextTokens, 100);
+	assert.equal(state.usage.totalTokens, 100);
+
+	state = reduceJsonEvent(state, { type: "message_start", message: { role: "assistant" } });
+	state = reduceJsonEvent(state, {
+		type: "message_update",
+		usage: { totalTokens: 140, output: 20 },
+		assistantMessageEvent: { type: "text_delta", delta: "next" },
+	});
+	assert.equal(state.streamingContextTokens, 140);
+	assert.equal(state.contextTokens, 100);
+	state = reduceJsonEvent(state, {
+		type: "message_end",
+		message: { role: "assistant", content: [], stopReason: "stop", usage: { totalTokens: 150, output: 25 } },
+	});
+	assert.equal(state.contextTokens, 150);
+	assert.equal(state.usage.totalTokens, 250);
+
+	for (const stopReason of ["aborted", "error"]) {
+		state = reduceJsonEvent(state, { type: "message_start", message: { role: "assistant" } });
+		state = reduceJsonEvent(state, {
+			type: "message_update",
+			usage: { totalTokens: 180, output: 20 },
+			assistantMessageEvent: { type: "text_delta", delta: "discarded" },
+		});
+		state = reduceJsonEvent(state, {
+			type: "message_end",
+			message: { role: "assistant", content: [], stopReason, usage: { totalTokens: 190, output: 25 } },
+		});
+		assert.equal(state.contextTokens, 150);
+		assert.equal(state.streamingContextTokens, undefined);
+	}
+	assert.equal(state.usage.totalTokens, 630);
+
+	state = reduceJsonEvent(state, { type: "message_start", message: { role: "assistant" } });
+	state = reduceJsonEvent(state, {
+		type: "message_end",
+		message: { role: "assistant", content: [], stopReason: "stop", usage: {} },
+	});
+	assert.equal(state.contextTokens, 150);
+	assert.equal(reduceJsonEvent(createInitialProgress(), {
+		type: "message_end",
+		message: { role: "assistant", content: [], stopReason: "stop", usage: {} },
+	}).contextTokens, null);
+});
+
+test("compaction resets current context without treating compaction billing as occupancy", () => {
+	let state = reduceJsonEvent(createInitialProgress(), {
+		type: "message_end",
+		message: { role: "assistant", content: [], stopReason: "stop", usage: { totalTokens: 200 } },
+	});
+	state = reduceJsonEvent(state, { type: "compaction_start" });
+	assert.equal(state.contextTokens, null);
+	assert.equal(state.streamingContextTokens, undefined);
+	state = reduceJsonEvent(state, { type: "compaction_end", result: { usage: { totalTokens: 50 } } });
+	assert.equal(state.contextTokens, null);
+	assert.equal(state.usage.totalTokens, 250);
+	state = reduceJsonEvent(state, {
+		type: "message_end",
+		message: { role: "assistant", content: [], stopReason: "stop", usage: { totalTokens: 80 } },
+	});
+	assert.equal(state.contextTokens, 80);
+	assert.equal(state.usage.totalTokens, 330);
 });
 
 test("event reducer includes nested tool and compaction usage", () => {

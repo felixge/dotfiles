@@ -66,6 +66,7 @@ export interface SpawnRequest {
 	name?: string;
 	prompt: string;
 	model: string;
+	contextWindow?: number;
 	thinking: AgentRunConfig["thinking"];
 	cwd: string;
 	access: AgentRunConfig["access"];
@@ -139,6 +140,8 @@ function cloneSnapshot(run: ManagedRun, now: number): AgentSnapshot {
 		name: run.name,
 		prompt: run.prompt,
 		model: run.model,
+		contextWindow: run.contextWindow,
+		contextTokens: run.streamingContextTokens ?? run.contextTokens,
 		thinking: run.thinking,
 		cwd: run.cwd,
 		access: run.access,
@@ -231,6 +234,7 @@ export class AgentManager {
 			currentActivity: "queued",
 			turns: 0,
 			usage: createUsageSummary(),
+			contextTokens: null,
 			outputTokens: 0,
 			liveOutput: "",
 			stderr: "",
@@ -601,6 +605,8 @@ export class AgentManager {
 		run.currentActivity = progress.currentActivity;
 		run.turns = progress.turns;
 		run.usage = cloneUsageSummary(progress.usage);
+		run.contextTokens = progress.contextTokens;
+		run.streamingContextTokens = progress.streamingContextTokens;
 		if (progress.outputTokens !== run.outputTokens) {
 			run.outputTokens = progress.outputTokens;
 			appendTokenSample(run.tokenSamples, run.outputTokens, this.now());
@@ -698,6 +704,7 @@ export class AgentManager {
 			});
 		}
 		run.activeOperations = [];
+		run.streamingContextTokens = undefined;
 		if (run.recentOperations.length > 100) run.recentOperations.splice(0, run.recentOperations.length - 100);
 		run.phase = { kind: run.status, startedAt: endedAt };
 		run.lastProgressAt = endedAt;

@@ -4,7 +4,10 @@ import type { AgentManager } from "./manager.ts";
 import type { AgentSnapshot, AgentStatus } from "./types.ts";
 import { isTerminalStatus } from "./types.ts";
 import {
+	contextUsageFromSnapshot,
 	formatAgentLabel,
+	formatContextPercent,
+	formatContextUsage,
 	formatCost,
 	formatDuration,
 	formatTokenRate,
@@ -117,7 +120,8 @@ class AgentsDashboard {
 	}
 
 	render(width: number): string[] {
-		const safeWidth = Math.max(20, width);
+		const renderWidth = Math.max(0, width);
+		const safeWidth = Math.max(20, renderWidth);
 		const innerWidth = safeWidth - 2;
 		const maxLines = Math.max(8, Math.floor(this.tui.terminal.rows * 0.8));
 		const body = this.detail ? this.renderDetail(innerWidth, maxLines - 2) : this.renderList(innerWidth, maxLines - 2);
@@ -125,7 +129,7 @@ class AgentsDashboard {
 			this.theme.fg("border", `╭${"─".repeat(innerWidth)}╮`),
 			...body.slice(0, maxLines - 2).map((line) => this.row(line, innerWidth)),
 			this.theme.fg("border", `╰${"─".repeat(innerWidth)}╯`),
-		];
+		].map((line) => truncateToWidth(line, renderWidth, ""));
 	}
 
 	invalidate(): void {}
@@ -154,17 +158,28 @@ class AgentsDashboard {
 
 	private renderList(width: number, maxLines: number): string[] {
 		const runs = this.runs();
-		let agentWidth = Math.min(24, Math.max(6, width - 32));
-		const mandatoryWidth = 32 + agentWidth;
-		const showElapsed = width - mandatoryWidth >= 10;
-		const showModel = width - mandatoryWidth - (showElapsed ? 10 : 0) >= 21;
-		const showCurrent = width - mandatoryWidth - (showElapsed ? 10 : 0) - (showModel ? 21 : 0) >= 9;
-		const optionalWidth = (showElapsed ? 10 : 0) + (showModel ? 21 : 0) + (showCurrent ? 9 : 0);
-		const spareWidth = Math.max(0, width - mandatoryWidth - optionalWidth);
+		let agentWidth = Math.min(24, Math.max(6, width - 14));
+		const mandatoryWidth = 14 + agentWidth;
+		let remainingWidth = Math.max(0, width - mandatoryWidth);
+		const showAccess = remainingWidth >= 7;
+		if (showAccess) remainingWidth -= 7;
+		const showCost = remainingWidth >= 10;
+		if (showCost) remainingWidth -= 10;
+		const showTokenRate = remainingWidth >= 8;
+		if (showTokenRate) remainingWidth -= 8;
+		const showElapsed = remainingWidth >= 10;
+		if (showElapsed) remainingWidth -= 10;
+		const showModel = remainingWidth >= 21;
+		if (showModel) remainingWidth -= 21;
+		const showCurrent = remainingWidth >= 9;
+		if (showCurrent) remainingWidth -= 9;
 		const desiredAgentWidth = Math.max(agentWidth, ...runs.map((run) => visibleWidth(formatAgentLabel(run))));
-		agentWidth += Math.min(spareWidth, desiredAgentWidth - agentWidth);
+		agentWidth += Math.min(remainingWidth, desiredAgentWidth - agentWidth);
 
-		let header = ` STAT ${padColumn("ACCESS", 6)} ${padColumn("AGENT", agentWidth)} ${padColumnStart("COST", 9)} ${padColumnStart("TOK/S", 7)}`;
+		let header = ` STAT ${padColumnStart("CTX", 6)} ${padColumn("AGENT", agentWidth)}`;
+		if (showAccess) header += ` ${padColumn("ACCESS", 6)}`;
+		if (showCost) header += ` ${padColumnStart("COST", 9)}`;
+		if (showTokenRate) header += ` ${padColumnStart("TOK/S", 7)}`;
 		if (showElapsed) header += ` ${padColumn("ELAPSED", 9)}`;
 		if (showModel) header += ` ${padColumn("MODEL/THINKING", 20)}`;
 		if (showCurrent) header += " CURRENT";
@@ -183,11 +198,12 @@ class AgentsDashboard {
 			const elapsed = formatDuration((run.endedAt ?? Date.now()) - (run.startedAt ?? run.createdAt));
 			const model = `${shortModel(run.model)}/${run.thinking}`;
 			const coloredStatus = this.theme.fg(statusColor(run.status), statusLabel(run.status).padEnd(4));
-			const access = padColumn(run.access, 6);
+			const context = padColumnStart(formatContextPercent(contextUsageFromSnapshot(run)), 6);
 			const agent = this.theme.fg("accent", padColumn(formatAgentLabel(run), agentWidth));
-			const cost = this.theme.fg("warning", padColumnStart(formatCost(run.usage.cost.total), 9));
-			const tokenRate = this.theme.fg("success", padColumnStart(formatTokenRate(run.tokensPerSecond15s), 7));
-			let line = `${selected ? this.theme.fg("accent", ">") : " "} ${coloredStatus} ${access} ${agent} ${cost} ${tokenRate}`;
+			let line = `${selected ? this.theme.fg("accent", ">") : " "} ${coloredStatus} ${context} ${agent}`;
+			if (showAccess) line += ` ${padColumn(run.access, 6)}`;
+			if (showCost) line += ` ${this.theme.fg("warning", padColumnStart(formatCost(run.usage.cost.total), 9))}`;
+			if (showTokenRate) line += ` ${this.theme.fg("success", padColumnStart(formatTokenRate(run.tokensPerSecond15s), 7))}`;
 			if (showElapsed) line += ` ${elapsed.padEnd(9)}`;
 			if (showModel) line += ` ${model.padEnd(20)}`;
 			if (showCurrent) line += ` ${structuredActivity(run)}`;
@@ -207,6 +223,7 @@ class AgentsDashboard {
 			...(run.name ? [` Name: ${run.name}`] : []),
 			` Status: ${this.theme.fg(statusColor(run.status), run.status)}`,
 			` Model: ${run.model}`,
+			` ${formatContextUsage(contextUsageFromSnapshot(run))}`,
 			` Thinking: ${run.thinking}`,
 			` Access: ${run.access}`,
 			` Cwd: ${run.cwd}`,

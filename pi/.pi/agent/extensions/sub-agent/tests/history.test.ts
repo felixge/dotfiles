@@ -6,6 +6,7 @@ import {
 	persistedTerminalRun,
 	readAgentHistory,
 	TERMINAL_RUN_ENTRY_TYPE,
+	TERMINAL_RUN_ENTRY_VERSION,
 } from "../history.ts";
 import { observationFromSnapshot } from "../render.ts";
 import type { AgentSnapshot, AgentStatus } from "../types.ts";
@@ -71,8 +72,14 @@ test("session history marks spawns without terminal records as interrupted", () 
 	assert.match(history.runs[0]?.error ?? "", /before recording a terminal result/u);
 });
 
-test("terminal custom entries persist final snapshots and steering metadata without duplicate live output", () => {
-	const completed = { ...snapshot("aaaaaa", "completed"), steerCount: 2, lastSteeredAt: 18 };
+test("terminal custom entries persist final snapshots, context, and steering metadata without duplicate live output", () => {
+	const completed = {
+		...snapshot("aaaaaa", "completed"),
+		contextWindow: 200_000,
+		contextTokens: 24_600,
+		steerCount: 2,
+		lastSteeredAt: 18,
+	};
 	const data = persistedTerminalRun(completed);
 	const history = readAgentHistory([
 		{ type: "custom", customType: TERMINAL_RUN_ENTRY_TYPE, data },
@@ -80,12 +87,15 @@ test("terminal custom entries persist final snapshots and steering metadata with
 		{ type: "custom", customType: TERMINAL_RUN_ENTRY_TYPE, data: { version: 99, run: completed } },
 	]);
 
+	assert.equal(data.version, TERMINAL_RUN_ENTRY_VERSION);
 	assert.equal(data.run.liveOutput, "");
 	assert.equal(data.run.tokensPerSecond15s, undefined);
 	assert.equal(history.runs[0]?.status, "completed");
 	assert.equal(history.runs[0]?.finalOutput, "done");
 	assert.equal(history.runs[0]?.steerCount, 2);
 	assert.equal(history.runs[0]?.lastSteeredAt, 18);
+	assert.equal(history.runs[0]?.contextWindow, 200_000);
+	assert.equal(history.runs[0]?.contextTokens, 24_600);
 	assert.deepEqual([...history.persistedTerminalIds], ["aaaaaa"]);
 });
 
@@ -101,6 +111,7 @@ test("terminal history accepts bash access and remains compatible with prior acc
 		data: { version: index === 0 ? 1 : 2, run },
 	})));
 	assert.deepEqual(history.runs.map((run) => run.access), ["read", "bash", "write"]);
+	assert.ok(history.runs.every((run) => run.contextWindow === undefined && run.contextTokens === undefined));
 });
 
 test("version 1 terminal entries restore with normalized structured timing", () => {
@@ -126,6 +137,8 @@ test("version 1 terminal entries restore with normalized structured timing", () 
 	assert.deepEqual(history.runs[0]?.activeOperations, []);
 	assert.equal(history.runs[0]?.steerCount, 0);
 	assert.equal(history.runs[0]?.lastSteeredAt, undefined);
+	assert.equal(history.runs[0]?.contextWindow, undefined);
+	assert.equal(history.runs[0]?.contextTokens, undefined);
 });
 
 test("agent_steer tool details restore acknowledgement metadata", () => {
@@ -194,9 +207,13 @@ test("malformed terminal entries are ignored", () => {
 	assert.deepEqual([...history.persistedTerminalIds], []);
 });
 
-test("agent_status observations restore structured terminal state", () => {
+test("agent_status observations restore structured terminal state and context", () => {
 	const running = snapshot("aaaaaa");
-	const completed = snapshot("aaaaaa", "completed");
+	const completed = {
+		...snapshot("aaaaaa", "completed"),
+		contextWindow: 200_000,
+		contextTokens: 24_600,
+	};
 	const observation = observationFromSnapshot(completed, 20);
 	const history = readAgentHistory([
 		spawnEntry(running),
@@ -220,6 +237,36 @@ test("agent_status observations restore structured terminal state", () => {
 	assert.equal(history.runs[0]?.revision, completed.revision);
 	assert.equal(history.runs[0]?.phase.kind, "completed");
 	assert.equal(history.runs[0]?.finalOutput, "done");
+	assert.equal(history.runs[0]?.contextWindow, 200_000);
+	assert.equal(history.runs[0]?.contextTokens, 24_600);
+});
+
+test("malformed persisted context values are ignored", () => {
+	const completed = {
+		...snapshot("aaaaaa", "completed"),
+		contextWindow: Number.POSITIVE_INFINITY,
+		contextTokens: -1,
+	};
+	const history = readAgentHistory([{
+		type: "custom",
+		customType: TERMINAL_RUN_ENTRY_TYPE,
+		data: { version: TERMINAL_RUN_ENTRY_VERSION, run: completed },
+	}]);
+	assert.equal(history.runs.length, 1);
+	assert.equal(history.runs[0]?.contextWindow, undefined);
+	assert.equal(history.runs[0]?.contextTokens, undefined);
+
+	const running = { ...snapshot("bbbbbb"), contextWindow: 200_000, contextTokens: 10_000 };
+	const observation = {
+		...observationFromSnapshot({ ...snapshot("bbbbbb", "completed"), contextWindow: 200_000, contextTokens: 20_000 }),
+		contextUsage: { tokens: -1, contextWindow: 200_000, percent: -1 },
+	};
+	const observed = readAgentHistory([
+		spawnEntry(running),
+		{ type: "message", message: { role: "toolResult", toolName: "agent_status", details: { agents: [observation] } } },
+	]);
+	assert.equal(observed.runs[0]?.contextWindow, 200_000);
+	assert.equal(observed.runs[0]?.contextTokens, 10_000);
 });
 
 test("agent_status history preserves output truncation across re-projection", () => {
