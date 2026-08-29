@@ -179,6 +179,7 @@ install_homebrew_packages() {
     if is_datadog; then
         if is_macos; then
             tap_datadog
+            brew install -q datadog/tap/shadowfax
             # ddoc builds from source on some machines and can take a very long time.
             # brew install -q datadog/tap/ddoc
             brew install -q --cask \
