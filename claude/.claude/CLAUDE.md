@@ -12,7 +12,3 @@
 
 * Auto-commit changes you make (but don't commit files that are ignored by .gitignore or similar)
 * Ammend commits or split into smaller commits when it makes sense.
-
-# Herdr
-
-* For herdr operations or questions, run `herdr --skill`.
