@@ -38,7 +38,7 @@ describe("unbash parser adapter", () => {
     expect(invocation?.args.slice(0, 4).map((word) => word.literal)).toEqual(["%s", "a b", "c d", "plain"]);
     expect(invocation?.args[0]?.parts).toEqual([{ kind: "literal", value: "%s", quoted: true }]);
     expect(invocation?.args[2]?.parts).toEqual([{ kind: "literal", value: "c d", quoted: false }]);
-    expect(invocation?.args[4]).toMatchObject({ literal: undefined, dynamic: true, hasUnquotedGlob: false });
+    expect(invocation?.args[4]).toMatchObject({ literal: fixture.env.HOME, dynamic: false, hasUnquotedGlob: false });
     expect(invocation?.args[4]?.parts).toEqual([{ kind: "parameter", name: "HOME", quoted: true }]);
     expect(invocation?.args[5]).toMatchObject({ literal: "$HOME", dynamic: false, hasUnquotedGlob: false });
     expect(invocation?.args[6]).toMatchObject({ literal: "*", dynamic: true, hasUnquotedGlob: true });
@@ -179,6 +179,93 @@ git status --short 2>/dev/null || true`;
     expect(matchingRules({ analysis: dynamicSplit }).map((rule) => rule.name)).toContain("analysis-uncertain");
   });
 
+  it("keeps standalone and query-only wrappers as their actual executable", () => {
+    const result = analyze("env | sort; command -v sudo", fixture);
+    expect(result.invocations.map((invocation) => invocation.executable.literal)).toEqual(["env", "sort", "command"]);
+    expect(result.invocations[0]?.wrappers).toEqual([]);
+    expect(result.uncertainties).toEqual([]);
+    expect(matchingRules({ analysis: result })).toEqual([]);
+  });
+
+  it("does not flag unknown assignments until they reach a guarded sink", () => {
+    const difit = analyze("change=$(jj log -r '@-' --no-graph -T change_id); commit=$(jj log -r \"$change\" --no-graph -T commit_id); difit \"$commit\" --background", fixture);
+    expect(difit.uncertainties).toEqual([]);
+
+    const process = analyze("pid=$!; kill -0 \"$pid\" 2>/dev/null || true", fixture);
+    expect(process.uncertainties).toEqual([]);
+    expect(matchingRules({ analysis: process })).toEqual([]);
+  });
+
+  it("resolves known SSH hosts and symbolic remote HOME executables", () => {
+    const host = analyze("TARGET=workspace-felixge-control-4; ssh \"$TARGET\" 'echo ok'", fixture);
+    expect(host.uncertainties).toEqual([]);
+
+    const remoteHome = analyze("ssh host '$HOME/dotfiles/install.bash'", fixture);
+    expect(remoteHome.uncertainties).toEqual([]);
+    expect(remoteHome.invocations.map((invocation) => invocation.executable.literal)).toContain("<remote-home>/dotfiles/install.bash");
+  });
+
+  it("binds bounded literal loop variables", () => {
+    const benign = analyze('for cmd in docker podman; do "$cmd" --version; done', fixture);
+    expect(benign.uncertainties).toEqual([]);
+    expect(benign.invocations.map((invocation) => invocation.executable.literal)).toEqual(["docker", "podman"]);
+
+    const dangerous = analyze('for cmd in echo rm; do "$cmd" -rf /; done', fixture);
+    expect(matchingRules({ analysis: dangerous }).map((rule) => rule.name)).toContain("recursive-delete");
+  });
+
+  it("tracks mktemp paths but keeps arbitrary or ambiguous output unresolved", () => {
+    const temporary = analyze('tmp=$(mktemp -d /tmp/command-guard.XXXXXX); cd "$tmp"; rm -rf child', fixture);
+    expect(temporary.uncertainties).toEqual([]);
+    expect(matchingRules({ analysis: temporary })).toEqual([]);
+
+    const arbitrary = analyze('tmp=$(printf /etc); cd "$tmp"; rm -rf child', fixture);
+    expect(arbitrary.uncertainties).toContain("cd directory is dynamic or unresolved");
+    expect(matchingRules({ analysis: arbitrary }).map((rule) => rule.name)).toEqual(expect.arrayContaining(["analysis-uncertain", "recursive-delete"]));
+
+    const ambiguousTemplate = analyze('tmp=$(mktemp -p /tmp ../../etc/file.XXXXXX); rm -rf "$tmp"', fixture);
+    expect(matchingRules({ analysis: ambiguousTemplate }).map((rule) => rule.name)).toContain("recursive-delete");
+  });
+
+  it("invalidates mktemp path facts when env removes or replaces the variable", () => {
+    const wrappers = ["env -i", "env -u tmp", "env --unset=tmp", "env tmp="];
+    for (const wrapper of wrappers) {
+      const command = `tmp=$(mktemp -d /tmp/g.XXXXXX); ${wrapper} sh -c 'rm -rf "$tmp/etc"'`;
+      expect(matchingRules({ analysis: analyze(command, fixture) }).map((rule) => rule.name), command).toContain("recursive-delete");
+    }
+  });
+
+  it("treats output redirections as guarded filesystem writes", () => {
+    const dynamic = analyze('target=$(printf /etc/cron.d/pwn); printf x > "$target"', fixture);
+    expect(dynamic.uncertainties).toContain("redirection target is dynamic or unresolved");
+    expect(matchingRules({ analysis: dynamic }).map((rule) => rule.name)).toContain("analysis-uncertain");
+
+    expect(matchingRules({ analysis: analyze("printf x > /etc/cron.d/pwn", fixture) }).map((rule) => rule.name)).toContain("root-path-write");
+  });
+
+  it("fails closed when unresolved values reach guarded sinks", () => {
+    const cases = [
+      ['target=$(printf /etc/example); cp file "$target"', "cp filesystem operand is dynamic or unresolved"],
+      ['options=$(printf -- -rf); rm $options "$HOME"', "rm filesystem operand is dynamic or unresolved"],
+      ['subcommand=$(printf uninstall); brew "$subcommand" package', "brew subcommand is dynamic or unresolved"],
+      ['action=$(printf prune); docker system "$action"', "docker subcommand is dynamic or unresolved"],
+      ['option=$(printf -- -e); nc "$option" host 1234', "netcat option is dynamic or unresolved"],
+    ] as const;
+    for (const [command, reason] of cases) {
+      const result = analyze(command, fixture);
+      expect(result.uncertainties, command).toContain(reason);
+      expect(matchingRules({ analysis: result }).map((rule) => rule.name), command).toContain("analysis-uncertain");
+    }
+  });
+
+  it("bounds nested literal loop expansion globally", () => {
+    const values = Array.from({ length: 32 }, (_, index) => `v${index}`).join(" ");
+    const source = `for a in ${values}; do for b in ${values}; do for c in ${values}; do "$c"; done; done; done`;
+    const result = analyze(source, fixture);
+    expect(result.invocations.length).toBeLessThanOrEqual(1100);
+    expect(result.uncertainties).toContain("executable is dynamic or unresolved");
+  });
+
   it("invalidates cwd after unresolved cd and cwd-changing control flow", () => {
     const unresolved = analyze('D=$(printf /etc); cd "$D"; rm -rf child', fixture);
     const unresolvedRm = unresolved.invocations.find((invocation) => invocation.executable.literal === "rm");
@@ -191,6 +278,11 @@ git status --short 2>/dev/null || true`;
     expect(conditionalRm?.cwd).toBeUndefined();
     expect(conditional.uncertainties).toContain("cwd may change across compound control flow");
     expect(matchingRules({ analysis: conditional }).map((rule) => rule.name)).toEqual(expect.arrayContaining(["analysis-uncertain", "recursive-delete"]));
+  });
+
+  it("preserves wrapper uncertainty through query-only command", () => {
+    const result = analyze('env -C "$UNKNOWN_CWD" command -v rm', fixture);
+    expect(result.uncertainties).toContain("env chdir is dynamic or unresolved");
   });
 
   it("tracks sudo directory options and invalidates dynamic directories", () => {
@@ -223,8 +315,12 @@ git status --short 2>/dev/null || true`;
     expect(matchingRules({ analysis: heredoc }).map((rule) => rule.name)).toContain("analysis-uncertain");
   });
 
-  it("fails closed for dynamic executables and cwd after OR", () => {
-    const dynamic = analyze('C=rm; "$C" -rf /', fixture);
+  it("resolves known executables and fails closed for unknown executables and cwd after OR", () => {
+    const known = analyze('C=rm; "$C" -rf /', fixture);
+    expect(known.uncertainties).toEqual([]);
+    expect(matchingRules({ analysis: known }).map((rule) => rule.name)).toContain("recursive-delete");
+
+    const dynamic = analyze('C=$(printf rm); "$C" -rf /', fixture);
     expect(dynamic.uncertainties).toContain("executable is dynamic or unresolved");
     expect(matchingRules({ analysis: dynamic }).map((rule) => rule.name)).toContain("analysis-uncertain");
 
@@ -336,6 +432,11 @@ git status --short 2>/dev/null || true`;
       ["dd if=input $EXTRA", "dd argument is dynamic or unresolved"],
       ["npm install $PKG -g", "npm option is dynamic or unresolved"],
       ["npm $SUB install -g", "npm subcommand is dynamic or unresolved"],
+      ["kill -s $SIGNAL 123", "kill signal is dynamic or unresolved"],
+      ['kill "$SIGNAL" 123', "kill signal is dynamic or unresolved"],
+      ["brew $SUB package", "brew subcommand is dynamic or unresolved"],
+      ["docker system $ACTION", "docker subcommand is dynamic or unresolved"],
+      ["nc $OPTION host 1234", "netcat option is dynamic or unresolved"],
     ] as const;
     for (const [command, reason] of cases) {
       const result = analyze(command, fixture);

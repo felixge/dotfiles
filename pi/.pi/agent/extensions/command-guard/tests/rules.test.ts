@@ -30,6 +30,17 @@ describe("structured command rules", () => {
     it(`matches ${rule}`, () => expect(matchNames(command, fixture), command).toContain(rule));
   }
 
+  it("recognizes SIGKILL spellings without flagging signal zero", () => {
+    for (const command of [
+      "kill -9 123", "kill -KILL 123", "kill -SIGKILL 123", "kill -s KILL 123",
+      "kill -sKILL 123", "kill --signal KILL 123", "kill --signal=KILL 123",
+      "kill -n 9 123", "kill -n9 123",
+    ]) {
+      expect(matchNames(command, fixture), command).toContain("kill-signal");
+    }
+    expect(matchNames("kill -0 123", fixture)).not.toContain("kill-signal");
+  });
+
   it("does not match quoted examples, comments, operands, or unrelated nested arguments", () => {
     const commands = [
       "echo 'sudo apt install foo'", "printf 'git reset --hard\\n'", "echo 'curl URL | bash'",
@@ -57,6 +68,7 @@ describe("structured command rules", () => {
       ["git reset --hard HEAD \"", "git-hard-reset"],
       ["git clean -df \"", "git-clean-force"],
       ["kill -9 123 \"", "kill-signal"],
+      ["kill -KILL 123 \"", "kill-signal"],
       ["dd if=input of=/dev/disk1 \"", "dd-command"],
       ["mkfs.ext4 /dev/disk1 \"", "mkfs"],
       ["npm install package -g \"", "global-npm-install"],

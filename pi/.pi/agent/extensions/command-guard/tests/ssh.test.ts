@@ -99,6 +99,20 @@ describe("SSH command analysis", () => {
     expect(matchNames("ssh host 'if true; then cd /etc; fi; rm -rf child'", fixture)).toContain("recursive-delete");
   });
 
+  it("resolves relative write operands and redirections against a sensitive remote cwd", () => {
+    for (const command of [
+      "ssh host 'cd /etc && cp source target'",
+      "ssh host 'cd /etc && chmod 700 shadow'",
+      "ssh host 'cd /usr/local && mv source target'",
+      "ssh host 'cd /etc && printf x > cron.d/pwn'",
+    ]) {
+      expect(matchNames(command, fixture), command).toContain("root-path-write");
+    }
+
+    const dynamic = "ssh root@host 'target=$(printf /etc/cron.d/pwn); printf x > \"$target\"'";
+    expect(matchNames(dynamic, fixture)).toContain("analysis-uncertain");
+  });
+
   it("still analyzes a literal remote payload when the destination host is dynamic", () => {
     const analysis = analyzeCommand('ssh "$HOST" \'rm -rf /\'', localExecutionContext(fixture.cwd, fixture.env));
     expect(analysis.uncertainties).toContain("SSH host is dynamic or unresolved");

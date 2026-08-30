@@ -26,6 +26,8 @@ export type ExecutionContext =
       home: string;
       tempRoots: string[];
       env: Record<string, string | undefined>;
+      /** Safe representative paths inferred from commands such as mktemp. */
+      pathValues: Record<string, string | undefined>;
     }
   | {
       kind: "ssh";
@@ -33,6 +35,7 @@ export type ExecutionContext =
       cwd: SymbolicPath;
       home: SymbolicPath;
       env?: Record<string, string | undefined>;
+      pathValues: Record<string, string | undefined>;
     };
 
 export interface CommandInvocation {
@@ -40,6 +43,8 @@ export interface CommandInvocation {
   executable: ParsedWord;
   originalExecutable: ParsedWord;
   args: ParsedWord[];
+  /** Files opened for writing by output redirections. */
+  writeTargets?: ParsedWord[];
   /** Environment used to expand the command's arguments in the outer shell. */
   argumentExecution: ExecutionContext;
   /** Environment and cwd used by the invoked command or nested child shell. */
@@ -75,4 +80,5 @@ export interface ResolvedWord {
   value?: string;
   unresolved: boolean;
   hasUnquotedGlob: boolean;
+  hasUnquotedFieldSplitting: boolean;
 }

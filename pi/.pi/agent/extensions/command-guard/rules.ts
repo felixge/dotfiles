@@ -1,5 +1,6 @@
 import path from "node:path";
 import { inspectRm, isHighRiskRm, isHomeDotfileTarget, isProtectedRootOperand } from "./paths.js";
+import { sendsSigkill } from "./shell.js";
 import type { CommandInvocation, ParsedWord, Rule } from "./types.js";
 
 function name(invocation: CommandInvocation): string | undefined {
@@ -52,7 +53,11 @@ export const rules: Rule[] = [
     description: "Writing to sensitive system paths",
     test: ({ analysis }) => analysis.fallbackMatches.has("root-path-write") || analysis.invocations.some((invocation) => {
       const executable = name(invocation);
-      return Boolean(executable && ROOT_WRITE_COMMANDS.has(executable) && invocation.args.some((arg) => isProtectedRootOperand(arg, invocation.execution, invocation.argumentExecution)));
+      const protectedArgument = executable && ROOT_WRITE_COMMANDS.has(executable)
+        && invocation.args.some((arg) => isProtectedRootOperand(arg, invocation.execution, invocation.argumentExecution));
+      const protectedRedirect = invocation.writeTargets?.some((target) => target.literal !== "/dev/null"
+        && isProtectedRootOperand(target, invocation.execution, invocation.argumentExecution));
+      return Boolean(protectedArgument || protectedRedirect);
     }),
   },
   {
@@ -112,8 +117,8 @@ export const rules: Rule[] = [
   },
   {
     name: "kill-signal",
-    description: "Sending kill signals (kill -9, killall)",
-    test: ({ analysis }) => analysis.fallbackMatches.has("kill-signal") || analysis.invocations.some((invocation) => command(invocation, "killall") || (command(invocation, "kill") && values(invocation).includes("-9"))),
+    description: "Sending SIGKILL or running killall",
+    test: ({ analysis }) => analysis.fallbackMatches.has("kill-signal") || analysis.invocations.some((invocation) => command(invocation, "killall") || (command(invocation, "kill") && sendsSigkill(values(invocation)))),
   },
   {
     name: "dd-command",

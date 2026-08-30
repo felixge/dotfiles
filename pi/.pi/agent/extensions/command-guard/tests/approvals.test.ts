@@ -33,14 +33,14 @@ describe("per-rule approvals", () => {
   it("records the analysis and allow-once decision for a triggered command", async () => {
     const guard = new CommandGuard();
     const ctx = context(ALLOW_ONCE);
-    await guard.handle("code=$?", ctx);
+    await guard.handle('"$UNKNOWN" arg', ctx);
     expect(ctx.audit).toHaveBeenCalledOnce();
     expect(ctx.audit.mock.calls[0]?.[0]).toMatchObject({
-      command: "code=$?",
+      command: '"$UNKNOWN" arg',
       cwd: fixture.cwd,
       rules: [{ name: "analysis-uncertain", description: "Command analysis was incomplete or ambiguous" }],
-      uncertainties: ["assignment value is dynamic or unresolved"],
-      parseFailures: ["code=$?"],
+      uncertainties: ["executable is dynamic or unresolved"],
+      parseFailures: ['"$UNKNOWN" arg'],
       fallbackMatches: [],
       decision: "allow-once",
       allowedRulesBefore: [],

@@ -15,11 +15,15 @@ import type {
   CommandInvocation,
   ExecutionContext,
   ParsedWord,
+  ResolvedWord,
   SymbolicPath,
   WordPart,
 } from "./types.js";
+import { isProtectedRootOperand } from "./paths.js";
 
 const MAX_NESTING = 5;
+const MAX_LOOP_VALUES = 32;
+const MAX_LOOP_EXPANSIONS = 1024;
 const SHELLS = new Set(["sh", "bash", "zsh"]);
 const EXECUTORS = new Set(["bash", "sh", "zsh", "python", "node", "ruby", "perl"]);
 const DOWNLOADERS = new Set(["curl", "wget"]);
@@ -41,6 +45,7 @@ interface BuildState {
   analysis: CommandAnalysis;
   nextInvocationId: number;
   nextPipelineId: number;
+  loopExpansions: number;
 }
 
 interface NormalizedInvocation {
@@ -64,14 +69,38 @@ function cloneSymbolic(value: SymbolicPath): SymbolicPath {
 
 function cloneExecution(execution: ExecutionContext): ExecutionContext {
   if (execution.kind === "local") {
-    return { ...execution, tempRoots: [...execution.tempRoots], env: { ...execution.env } };
+    return {
+      ...execution,
+      tempRoots: [...execution.tempRoots],
+      env: { ...execution.env },
+      pathValues: { ...execution.pathValues },
+    };
   }
   return {
     ...execution,
     cwd: cloneSymbolic(execution.cwd),
     home: cloneSymbolic(execution.home),
     env: execution.env ? { ...execution.env } : undefined,
+    pathValues: { ...execution.pathValues },
   };
+}
+
+function clearEnvironment(execution: ExecutionContext): ExecutionContext {
+  return { ...execution, env: {}, pathValues: {} };
+}
+
+function unsetEnvironmentVariable(execution: ExecutionContext, name: string): ExecutionContext {
+  const env = { ...(execution.env ?? {}) };
+  const pathValues = { ...execution.pathValues };
+  delete env[name];
+  delete pathValues[name];
+  return { ...execution, env, pathValues };
+}
+
+function setEnvironmentVariable(execution: ExecutionContext, name: string, value: string | undefined): ExecutionContext {
+  const pathValues = { ...execution.pathValues };
+  delete pathValues[name];
+  return { ...execution, env: { ...(execution.env ?? {}), [name]: value }, pathValues };
 }
 
 function sourceSlice(source: string, node: { pos: number; end: number }): string {
@@ -171,31 +200,89 @@ export function parsedWord(node: ShellWord, _source?: string): ParsedWord {
   };
 }
 
-export function resolveWord(word: ParsedWord, execution: ExecutionContext): { value?: string; unresolved: boolean; hasUnquotedGlob: boolean } {
+function parameterValue(name: string, execution: ExecutionContext): string | undefined {
+  if (execution.kind === "local") return name === "PWD" ? execution.cwd : execution.env[name];
+  const present = execution.env && Object.hasOwn(execution.env, name);
+  const value = execution.env?.[name];
+  if (value !== undefined || present) return value;
+  if (name === "HOME") return "<remote-home>";
+  if (name === "TMPDIR") return "<remote-tmp>";
+  return undefined;
+}
+
+export function resolveWord(word: ParsedWord, execution: ExecutionContext): ResolvedWord {
   let value = "";
   let hasUnquotedGlob = word.hasUnquotedGlob;
+  let hasUnquotedFieldSplitting = false;
   for (const part of word.parts) {
     if (part.kind === "literal") {
       value += part.value;
       continue;
     }
     if (part.kind !== "parameter" || !part.name) {
-      return { unresolved: true, hasUnquotedGlob };
+      return { unresolved: true, hasUnquotedGlob, hasUnquotedFieldSplitting };
     }
 
-    let resolved: string | undefined;
-    if (execution.kind === "local") {
-      resolved = part.name === "PWD" ? execution.cwd : execution.env[part.name];
-    } else {
-      resolved = execution.env?.[part.name];
-      if (resolved === undefined && part.name === "HOME") resolved = "<remote-home>";
-      else if (resolved === undefined && part.name === "TMPDIR") resolved = "<remote-tmp>";
-    }
-    if (resolved === undefined) return { unresolved: true, hasUnquotedGlob };
+    const resolved = parameterValue(part.name, execution);
+    if (resolved === undefined) return { unresolved: true, hasUnquotedGlob, hasUnquotedFieldSplitting };
     value += resolved;
-    if (!part.quoted && containsUnquotedGlob(resolved)) hasUnquotedGlob = true;
+    if (!part.quoted) {
+      if (containsUnquotedGlob(resolved)) hasUnquotedGlob = true;
+      if (/\s/.test(resolved) || resolved === "") hasUnquotedFieldSplitting = true;
+    }
   }
-  return { value, unresolved: false, hasUnquotedGlob };
+  return { value, unresolved: false, hasUnquotedGlob, hasUnquotedFieldSplitting };
+}
+
+function concreteWord(word: ParsedWord, execution: ExecutionContext): ParsedWord {
+  const resolved = resolveWord(word, execution);
+  if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.hasUnquotedFieldSplitting || resolved.value === undefined) return word;
+  return { ...word, literal: resolved.value, dynamic: false, hasUnquotedGlob: false };
+}
+
+/**
+ * Resolve path-shaped words without pretending their dynamic components are
+ * concrete scalar values. The bounded case covers trusted path facts, such as
+ * mktemp results, propagated through quoted variables.
+ */
+export function resolvePathWord(word: ParsedWord, execution: ExecutionContext): ResolvedWord {
+  const concrete = resolveWord(word, execution);
+  if (!concrete.unresolved) return concrete;
+
+  let value = "";
+  let bounded = true;
+  let rawDynamic = false;
+  for (const part of word.parts) {
+    if (part.kind === "literal") {
+      value += part.value;
+      continue;
+    }
+    if (part.kind === "parameter" && part.name) {
+      const resolved = parameterValue(part.name, execution);
+      if (resolved !== undefined) {
+        if (!part.quoted && (/\s/.test(resolved) || resolved === "" || containsUnquotedGlob(resolved))) bounded = false;
+        value += resolved;
+        continue;
+      }
+      const fact = execution.pathValues[part.name];
+      if (fact !== undefined) {
+        value += fact;
+        bounded &&= part.quoted;
+        continue;
+      }
+    }
+    value += "<dynamic>";
+    rawDynamic = true;
+    if (!part.quoted) bounded = false;
+  }
+
+  if (word.hasUnquotedGlob || rawDynamic) bounded = false;
+  return {
+    value,
+    unresolved: !bounded,
+    hasUnquotedGlob: word.hasUnquotedGlob,
+    hasUnquotedFieldSplitting: !bounded,
+  };
 }
 
 function unknownCwd(execution: ExecutionContext): ExecutionContext {
@@ -244,42 +331,104 @@ function assignmentName(word: ParsedWord): string | undefined {
   return /^([A-Za-z_][A-Za-z0-9_]*)=/.exec(prefix || word.literal || word.raw)?.[1];
 }
 
-interface AssignmentResult {
-  execution: ExecutionContext;
-  uncertain: boolean;
+function singleCommandExpansion(word: ShellWord): ShellCommand | undefined {
+  let parts = word.parts ?? [];
+  while (parts.length === 1 && (parts[0]?.type === "DoubleQuoted" || parts[0]?.type === "LocaleString")) {
+    parts = parts[0].parts;
+  }
+  const expansion = parts.length === 1 && parts[0]?.type === "CommandExpansion" ? parts[0] : undefined;
+  const statement = expansion?.script?.commands.length === 1 ? expansion.script.commands[0] : undefined;
+  if (statement?.type !== "Statement" || statement.background || statement.redirects.length > 0) return undefined;
+  return statement.command.type === "Command" ? statement.command : undefined;
+}
+
+function defaultTempRoot(execution: ExecutionContext): string {
+  if (execution.kind === "ssh") return "<remote-tmp>";
+  const tmpdir = execution.env.TMPDIR;
+  return tmpdir && path.isAbsolute(tmpdir) ? path.resolve(tmpdir) : "/tmp";
+}
+
+function mktempPathFact(word: ShellWord, execution: ExecutionContext): string | undefined {
+  const command = singleCommandExpansion(word);
+  if (!command?.name || command.prefix.length > 0 || command.redirects.length > 0) return undefined;
+  const executable = concreteWord(parsedWord(command.name), execution).literal;
+  if (!executable || basename(executable) !== "mktemp") return undefined;
+
+  const args = command.suffix.map((arg) => concreteWord(parsedWord(arg), execution).literal);
+  if (args.some((arg) => arg === undefined)) return undefined;
+  let directory = defaultTempRoot(execution);
+  let explicitDirectory = false;
+  let template: string | undefined;
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index] ?? "";
+    if (["-d", "--directory", "-u", "--dry-run", "-q", "--quiet"].includes(arg)) continue;
+    if (["-p", "--tmpdir"].includes(arg)) {
+      const value = args[++index];
+      if (!value) return undefined;
+      directory = value;
+      explicitDirectory = true;
+      continue;
+    }
+    if (arg.startsWith("--tmpdir=")) {
+      directory = arg.slice("--tmpdir=".length) || directory;
+      explicitDirectory = true;
+      continue;
+    }
+    if (arg === "-t") {
+      const prefix = args[++index];
+      if (!prefix) return undefined;
+      template = path.posix.join(directory, `${prefix}.XXXXXXXXXX`);
+      continue;
+    }
+    if (["--suffix"].includes(arg)) {
+      if (!args[++index]) return undefined;
+      continue;
+    }
+    if (arg.startsWith("--suffix=")) continue;
+    if (arg.startsWith("-")) return undefined;
+    if (template !== undefined) return undefined;
+    template = arg;
+  }
+
+  template ??= path.posix.join(directory, "tmp.XXXXXXXXXX");
+  if (explicitDirectory && !template.startsWith("/") && !template.startsWith("<remote-")) {
+    if (template.includes("/")) return undefined;
+    template = path.posix.join(directory, template);
+  }
+  return template.replace(/X{3,}/g, "<mktemp>");
 }
 
 function applyAssignments(
   assignments: readonly AssignmentPrefix[],
   initialExecution: ExecutionContext,
   expansionExecution: ExecutionContext,
-): AssignmentResult {
+): ExecutionContext {
   let execution = cloneExecution(initialExecution);
-  let uncertain = false;
   for (const assignment of assignments) {
-    if (!assignment.name) {
-      uncertain = true;
-      continue;
-    }
+    if (!assignment.name) continue;
     const value = assignment.value ? parsedWord(assignment.value) : EMPTY_WORD;
     const resolved = resolveWord(value, expansionExecution);
     let nextValue = resolved.unresolved || resolved.value === undefined ? undefined : resolved.value;
-    if (assignment.append && nextValue !== undefined) {
+    let pathValue = assignment.value && nextValue === undefined
+      ? mktempPathFact(assignment.value, expansionExecution)
+      : undefined;
+    if (assignment.append) {
       const previous = execution.env?.[assignment.name];
-      nextValue = previous === undefined ? nextValue : `${previous}${nextValue}`;
+      nextValue = nextValue === undefined || previous === undefined ? undefined : `${previous}${nextValue}`;
+      pathValue = undefined;
     }
-    if (nextValue === undefined) uncertain = true;
     execution = {
       ...execution,
       env: { ...(execution.env ?? {}), [assignment.name]: nextValue },
+      pathValues: { ...execution.pathValues, [assignment.name]: pathValue },
     };
   }
-  return { execution, uncertain };
+  return execution;
 }
 
 function resolveWrapperCwd(word: ParsedWord, execution: ExecutionContext, expansionExecution: ExecutionContext = execution): ExecutionContext | undefined {
   const resolved = resolveWord(word, expansionExecution);
-  if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.value === undefined) return undefined;
+  if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.hasUnquotedFieldSplitting || resolved.value === undefined) return undefined;
   if (execution.kind === "local") {
     if (!execution.cwd) return undefined;
     let value = resolved.value;
@@ -308,13 +457,24 @@ function normalizeWrappers(
     const wrapperLiteral = words[index]?.literal;
     const name = wrapperLiteral ? basename(wrapperLiteral) : undefined;
     if (name === "command") {
-      wrappers.push(name);
+      const wrapper = words[index] ?? EMPTY_WORD;
+      const wrapperArgs = words.slice(index + 1);
+      let queryOnly = false;
       index++;
-      while (words[index]?.literal?.startsWith("-") && words[index]?.literal !== "--") index++;
+      while (words[index]?.literal?.startsWith("-") && words[index]?.literal !== "--") {
+        queryOnly ||= /[vV]/.test(words[index]?.literal?.slice(1) ?? "");
+        index++;
+      }
       if (words[index]?.literal === "--") index++;
+      if (queryOnly || index >= words.length) {
+        return { executable: wrapper, args: wrapperArgs, wrappers, execution: initialExecution, uncertain };
+      }
+      wrappers.push(name);
       continue;
     }
     if (name === "env") {
+      const wrapper = words[index] ?? EMPTY_WORD;
+      const wrapperArgs = words.slice(index + 1);
       wrappers.push(name);
       index++;
       while (index < words.length) {
@@ -325,7 +485,7 @@ function normalizeWrappers(
           break;
         }
         if (value === "-i" || value === "--ignore-environment") {
-          execution = { ...execution, env: {} };
+          execution = clearEnvironment(execution);
           index++;
           continue;
         }
@@ -353,9 +513,8 @@ function normalizeWrappers(
         }
         if (value === "-u" || value === "--unset") {
           const variable = words[index + 1]?.literal;
-          if (execution.kind === "local" && variable && /^[A-Za-z_][A-Za-z0-9_]*$/.test(variable)) {
-            execution = { ...execution, env: { ...execution.env } };
-            delete execution.env[variable];
+          if (variable && /^[A-Za-z_][A-Za-z0-9_]*$/.test(variable)) {
+            execution = unsetEnvironmentVariable(execution, variable);
           } else {
             uncertain ??= "env unset variable is dynamic or unresolved";
           }
@@ -364,9 +523,8 @@ function normalizeWrappers(
         }
         if (wordStartsWith(word, "--unset=")) {
           const variable = value?.slice("--unset=".length);
-          if (execution.kind === "local" && variable && /^[A-Za-z_][A-Za-z0-9_]*$/.test(variable)) {
-            execution = { ...execution, env: { ...execution.env } };
-            delete execution.env[variable];
+          if (variable && /^[A-Za-z_][A-Za-z0-9_]*$/.test(variable)) {
+            execution = unsetEnvironmentVariable(execution, variable);
           } else {
             uncertain ??= "env unset variable is dynamic or unresolved";
           }
@@ -399,9 +557,8 @@ function normalizeWrappers(
         }
         if (wordStartsWith(word, "-u") && word.raw.length > 2) {
           const variable = (value ?? word.raw).slice(2);
-          if (execution.kind === "local" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(variable)) {
-            execution = { ...execution, env: { ...execution.env } };
-            delete execution.env[variable];
+          if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(variable)) {
+            execution = unsetEnvironmentVariable(execution, variable);
           } else {
             uncertain ??= "env unset variable is dynamic or unresolved";
           }
@@ -421,11 +578,7 @@ function normalizeWrappers(
           const value = !resolved.unresolved && resolved.value !== undefined
             ? resolved.value.slice(assignment.length + 1)
             : undefined;
-          execution = {
-            ...execution,
-            env: { ...(execution.env ?? {}), [assignment]: value },
-          };
-          if (value === undefined) uncertain ??= "env assignment is dynamic or unresolved";
+          execution = setEnvironmentVariable(execution, assignment, value);
           index++;
           continue;
         }
@@ -436,9 +589,15 @@ function normalizeWrappers(
         }
         break;
       }
+      if (index >= words.length && envSplitString === undefined) {
+        wrappers.pop();
+        return { executable: wrapper, args: wrapperArgs, wrappers, execution: initialExecution, uncertain };
+      }
       continue;
     }
     if (name === "sudo") {
+      const wrapper = words[index] ?? EMPTY_WORD;
+      const wrapperArgs = words.slice(index + 1);
       wrappers.push(name);
       index++;
       while (index < words.length) {
@@ -484,6 +643,10 @@ function normalizeWrappers(
         if (!value?.startsWith("-")) break;
         index++;
         if (["-C", "-g", "-h", "-p", "-R", "-r", "-t", "-T", "-u"].includes(value)) index++;
+      }
+      if (index >= words.length) {
+        wrappers.pop();
+        return { executable: wrapper, args: wrapperArgs, wrappers, execution: initialExecution, uncertain };
       }
       continue;
     }
@@ -729,6 +892,23 @@ interface FallbackAnalysis {
   recursionLimitReached: boolean;
 }
 
+export function sendsSigkill(args: readonly string[]): boolean {
+  const signalIsKill = (value: string | undefined): boolean => {
+    const normalized = value?.toUpperCase();
+    return normalized === "9" || normalized === "KILL" || normalized === "SIGKILL";
+  };
+
+  for (let index = 0; index < args.length; index++) {
+    const value = args[index] ?? "";
+    if (value === "--") return false;
+    if (value === "-9" || value.toUpperCase() === "-KILL" || value.toUpperCase() === "-SIGKILL") return true;
+    if ((value === "-s" || value === "--signal" || value === "-n") && signalIsKill(args[index + 1])) return true;
+    if ((value.startsWith("-s") || value.startsWith("-n")) && value.length > 2 && signalIsKill(value.slice(2))) return true;
+    if (value.startsWith("--signal=") && signalIsKill(value.slice("--signal=".length))) return true;
+  }
+  return false;
+}
+
 function fallbackRules(source: string): FallbackAnalysis {
   const matches = new Set<string>();
   const segments = fallbackSegments(stripShellComments(source));
@@ -799,7 +979,7 @@ function fallbackRules(source: string): FallbackAnalysis {
     if (executable === "git" && args[0] === "push" && (args.includes("--force") || args.slice(1).some((arg) => /^-[^-]+$/.test(arg) && arg.includes("f")))) matches.add("git-force-push");
     if (executable === "git" && args[0] === "reset" && args.includes("--hard")) matches.add("git-hard-reset");
     if (executable === "git" && args[0] === "clean" && (args.includes("--force") || args.slice(1).some((arg) => /^-[^-]+$/.test(arg) && arg.includes("f")))) matches.add("git-clean-force");
-    if (executable === "killall" || (executable === "kill" && args.includes("-9"))) matches.add("kill-signal");
+    if (executable === "killall" || (executable === "kill" && sendsSigkill(args))) matches.add("kill-signal");
     if (executable === "dd" && args.some((arg) => arg.startsWith("of="))) matches.add("dd-command");
     if (executable === "mkfs" || executable.startsWith("mkfs.")) matches.add("mkfs");
     if (executable === "npm" && ["install", "i", "uninstall", "remove"].includes(args[0] ?? "") && (args.includes("--global") || args.slice(1).some((arg) => /^-[^-]+$/.test(arg) && arg.includes("g")))) matches.add("global-npm-install");
@@ -834,8 +1014,8 @@ function remotePathFromWord(
   execution: Extract<ExecutionContext, { kind: "ssh" }>,
   expansionExecution: ExecutionContext = execution,
 ): SymbolicPath {
-  const resolved = resolveWord(word, expansionExecution);
-  if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.value === undefined) return { kind: "unknown" };
+  const resolved = resolvePathWord(word, expansionExecution);
+  if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.hasUnquotedFieldSplitting || resolved.value === undefined) return { kind: "unknown" };
   let value = resolved.value;
   if (value === "~") return { kind: "home", value: "" };
   if (value.startsWith("~/")) return { kind: "home", value: path.posix.normalize(value.slice(2)) };
@@ -890,8 +1070,8 @@ function updateCwd(
       execution.cwd = execution.home;
       return;
     }
-    const resolved = resolveWord(target, expansionExecution);
-    if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.value === undefined || !execution.cwd) {
+    const resolved = resolvePathWord(target, expansionExecution);
+    if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.hasUnquotedFieldSplitting || resolved.value === undefined || !execution.cwd) {
       execution.cwd = undefined;
       markUncertain(build, "cd directory is dynamic or unresolved", invocation.raw, execution);
       return;
@@ -912,7 +1092,10 @@ function shellPayload(args: ParsedWord[], execution: ExecutionContext): { found:
       const payload = args[index + 1];
       if (!payload) return { found: true };
       const resolved = resolveWord(payload, execution);
-      return { found: true, value: resolved.unresolved || resolved.hasUnquotedGlob ? undefined : resolved.value };
+      return {
+        found: true,
+        value: resolved.unresolved || resolved.hasUnquotedGlob || resolved.hasUnquotedFieldSplitting ? undefined : resolved.value,
+      };
     }
   }
   return { found: false };
@@ -967,7 +1150,7 @@ function payloadFromWords(words: ParsedWord[], execution: ExecutionContext): str
   const values: string[] = [];
   for (const word of words) {
     const resolved = resolveWord(word, execution);
-    if (resolved.unresolved || resolved.value === undefined) return undefined;
+    if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.hasUnquotedFieldSplitting || resolved.value === undefined) return undefined;
     values.push(resolved.value);
   }
   return values.join(" ");
@@ -1205,6 +1388,32 @@ function walkRedirectCommands(redirects: readonly Redirect[], source: string, st
   }
 }
 
+const OUTPUT_REDIRECTS = new Set([">", ">>", ">|", "<>", "&>", "&>>"]);
+
+function redirectWriteTargets(redirects: readonly Redirect[], execution: ExecutionContext): ParsedWord[] {
+  return redirects.flatMap((redirect) => {
+    if (!OUTPUT_REDIRECTS.has(redirect.operator) || !redirect.target) return [];
+    return [concreteWord(parsedWord(redirect.target), execution)];
+  });
+}
+
+function markUnsafeRedirects(
+  targets: ParsedWord[],
+  source: string,
+  execution: ExecutionContext,
+  build: BuildState,
+  representedByInvocation: boolean,
+): void {
+  for (const target of targets) {
+    const resolved = resolvePathWord(target, execution);
+    if (resolved.unresolved || resolved.value === undefined || resolved.hasUnquotedGlob || resolved.hasUnquotedFieldSplitting) {
+      markUncertain(build, "redirection target is dynamic or unresolved", source, execution);
+    } else if (!representedByInvocation && target.literal !== "/dev/null" && isProtectedRootOperand(target, execution, execution)) {
+      markUncertain(build, "redirection writes to a protected root path", source, execution);
+    }
+  }
+}
+
 interface HeredocBody {
   value?: string;
   quoted: boolean;
@@ -1223,6 +1432,7 @@ function heredocBody(command: ShellCommand): HeredocBody | undefined {
 
 const GIT_FORCE_SUBCOMMANDS = new Set(["push", "reset", "clean"]);
 const NPM_INSTALL_SUBCOMMANDS = new Set(["install", "i", "uninstall", "remove"]);
+const FILESYSTEM_SINKS = new Set(["rm", "mv", "cp", "chmod", "chown", "ln", "tee"]);
 
 function chmodModeArgument(args: ParsedWord[]): ParsedWord | undefined | "ambiguous" {
   let options = true;
@@ -1278,7 +1488,96 @@ function markDynamicRuleRelevantArgs(executable: string, invocation: CommandInvo
     } else if (NPM_INSTALL_SUBCOMMANDS.has(subcommand.literal) && invocation.args.slice(1).some((arg) => arg.literal === undefined)) {
       markUncertain(build, "npm option is dynamic or unresolved", invocation.raw, execution);
     }
+    return;
   }
+  if (executable === "brew") {
+    if (invocation.args[0]?.literal === undefined) markUncertain(build, "brew subcommand is dynamic or unresolved", invocation.raw, execution);
+    return;
+  }
+  if (executable === "docker") {
+    const subcommand = invocation.args[0]?.literal;
+    if (subcommand === undefined || (subcommand === "system" && invocation.args[1]?.literal === undefined)) {
+      markUncertain(build, "docker subcommand is dynamic or unresolved", invocation.raw, execution);
+    }
+    return;
+  }
+  if (executable === "nc" || executable === "ncat" || executable === "netcat") {
+    for (const arg of invocation.args) {
+      if (arg.literal === "--") break;
+      if (arg.literal === undefined) {
+        markUncertain(build, "netcat option is dynamic or unresolved", invocation.raw, execution);
+        break;
+      }
+      if (!arg.literal.startsWith("-") || arg.literal === "-") break;
+    }
+    return;
+  }
+  if (executable === "kill") {
+    let options = true;
+    for (let index = 0; index < invocation.args.length && options; index++) {
+      const value = invocation.args[index]?.literal;
+      if (value === "--") {
+        options = false;
+        continue;
+      }
+      if (value === "-l" || value === "--list") return;
+      if (value === undefined) {
+        markUncertain(build, "kill signal is dynamic or unresolved", invocation.raw, execution);
+        return;
+      }
+      if (value === "-s" || value === "--signal" || value === "-n") {
+        if (invocation.args[index + 1]?.literal === undefined) {
+          markUncertain(build, "kill signal is dynamic or unresolved", invocation.raw, execution);
+        }
+        return;
+      }
+      if (value.startsWith("-") && value !== "-") return;
+      options = false;
+    }
+  }
+}
+
+function filesystemOperands(executable: string, args: ParsedWord[]): ParsedWord[] {
+  const operands: ParsedWord[] = [];
+  let options = true;
+  let positional = 0;
+  for (const arg of args) {
+    const value = arg.literal;
+    if (options && value === "--") {
+      options = false;
+      continue;
+    }
+    if (options && value?.startsWith("-") && value !== "-") continue;
+    positional++;
+    if ((executable === "chmod" || executable === "chown") && positional === 1) continue;
+    operands.push(arg);
+  }
+  return operands;
+}
+
+function hasLiteralRecursiveRmOption(args: ParsedWord[]): boolean {
+  let options = true;
+  for (const arg of args) {
+    const value = arg.literal;
+    if (value === "--") {
+      options = false;
+      continue;
+    }
+    if (!options || value === undefined || !value.startsWith("-") || value === "-") continue;
+    if (value === "--recursive" || (/^-[^-]+$/.test(value) && /[rR]/.test(value.slice(1)))) return true;
+  }
+  return false;
+}
+
+function markDynamicFilesystemOperands(executable: string, invocation: CommandInvocation, build: BuildState, execution: ExecutionContext): void {
+  if (!FILESYSTEM_SINKS.has(executable)) return;
+  // Recursive rm already fails closed with the more specific recursive-delete rule.
+  if (executable === "rm" && hasLiteralRecursiveRmOption(invocation.args)) return;
+  const unresolved = filesystemOperands(executable, invocation.args).some((operand) => {
+    const resolved = resolvePathWord(operand, invocation.argumentExecution);
+    return resolved.unresolved || resolved.value === undefined || resolved.hasUnquotedGlob || resolved.hasUnquotedFieldSplitting;
+  });
+  if (unresolved) markUncertain(build, `${executable} filesystem operand is dynamic or unresolved`, invocation.raw, execution);
 }
 
 function walkCall(command: ShellCommand, source: string, state: WalkState, build: BuildState, depth: number): CommandInvocation | undefined {
@@ -1288,23 +1587,24 @@ function walkCall(command: ShellCommand, source: string, state: WalkState, build
       for (const word of assignment.array ?? []) walkWordCommands(word, source, state, build, depth);
       walkPartsCommands(assignment.indexParts, source, state, build, depth);
     }
-    const applied = applyAssignments(command.prefix, state.execution, state.execution);
-    state.execution = applied.execution;
-    if (applied.uncertain) markUncertain(build, "assignment value is dynamic or unresolved", sourceSlice(source, command), state.execution);
+    state.execution = applyAssignments(command.prefix, state.execution, state.execution);
+    const writeTargets = redirectWriteTargets(command.redirects, state.execution);
+    markUnsafeRedirects(writeTargets, sourceSlice(source, command), state.execution, build, false);
     walkRedirectCommands(command.redirects, source, state, build, depth);
     return undefined;
   }
 
   const astWords = [command.name, ...command.suffix];
-  const words = astWords.map((word) => parsedWord(word));
   const argumentExecution = cloneExecution(state.execution);
-  const prefix = applyAssignments(command.prefix, state.execution, argumentExecution);
-  const normalized = normalizeWrappers(words, prefix.execution, argumentExecution);
+  const words = astWords.map((word) => concreteWord(parsedWord(word), argumentExecution));
+  const execution = applyAssignments(command.prefix, state.execution, argumentExecution);
+  const normalized = normalizeWrappers(words, execution, argumentExecution);
   const invocation: CommandInvocation = {
     id: build.nextInvocationId++,
     executable: normalized.executable,
     originalExecutable: words[0],
     args: normalized.args,
+    writeTargets: redirectWriteTargets(command.redirects, argumentExecution),
     argumentExecution,
     execution: cloneExecution(normalized.execution),
     cwd: normalized.execution.kind === "local" ? normalized.execution.cwd : cloneSymbolic(normalized.execution.cwd),
@@ -1316,7 +1616,7 @@ function walkCall(command: ShellCommand, source: string, state: WalkState, build
     raw: sourceSlice(source, command),
   };
   build.analysis.invocations.push(invocation);
-  if (prefix.uncertain) markUncertain(build, "assignment value is dynamic or unresolved", invocation.raw, state.execution);
+  markUnsafeRedirects(invocation.writeTargets ?? [], invocation.raw, argumentExecution, build, true);
   if (normalized.uncertain) markUncertain(build, normalized.uncertain, invocation.raw, state.execution);
   if (normalized.envSplitString === undefined && normalized.executable.dynamic) {
     markUncertain(build, "executable is dynamic or unresolved", invocation.raw, state.execution);
@@ -1342,7 +1642,10 @@ function walkCall(command: ShellCommand, source: string, state: WalkState, build
   walkRedirectCommands(command.redirects, source, substitutionState, build, depth);
 
   const executable = invocation.executable.literal ? basename(invocation.executable.literal) : undefined;
-  if (executable) markDynamicRuleRelevantArgs(executable, invocation, build, state.execution);
+  if (executable) {
+    markDynamicRuleRelevantArgs(executable, invocation, build, state.execution);
+    markDynamicFilesystemOperands(executable, invocation, build, state.execution);
+  }
   if (executable && SHELLS.has(executable)) {
     const payload = shellPayload(invocation.args, state.execution);
     if (payload.value !== undefined) parseNested(payload.value, normalized.execution, build, depth, invocation.id, "shell-c");
@@ -1357,10 +1660,11 @@ function walkCall(command: ShellCommand, source: string, state: WalkState, build
         cwd: { kind: "home", value: "" },
         home: { kind: "home", value: "" },
         env: {},
+        pathValues: {},
       };
       const dynamicCommandWord = ssh.commandWords.some((word) => {
         const resolved = resolveWord(word, state.execution);
-        return resolved.unresolved || resolved.hasUnquotedGlob || resolved.value === undefined;
+        return resolved.unresolved || resolved.hasUnquotedGlob || resolved.hasUnquotedFieldSplitting || resolved.value === undefined;
       });
       if (dynamicCommandWord) markUncertain(build, "SSH command is dynamic or unresolved", invocation.raw, state.execution);
       const payload = dynamicCommandWord ? undefined : payloadFromWords(ssh.commandWords, state.execution);
@@ -1450,7 +1754,29 @@ function walkNode(node: ShellNode, source: string, state: WalkState, build: Buil
   } else if (node.type === "For" || node.type === "Select") {
     walkWordCommands(node.name, source, state, build, depth);
     for (const word of node.wordlist) walkWordCommands(word, source, state, build, depth);
-    walkNode(node.body, source, { ...state, execution: cloneExecution(state.execution) }, build, depth);
+
+    const variable = parsedWord(node.name).literal;
+    const values = node.wordlist.map((word) => concreteWord(parsedWord(word), state.execution));
+    const bounded = variable !== undefined && /^[A-Za-z_][A-Za-z0-9_]*$/.test(variable)
+      && values.length > 0 && values.length <= MAX_LOOP_VALUES
+      && values.every((word) => word.literal !== undefined && !word.dynamic);
+    const canExpand = bounded && build.loopExpansions + values.length <= MAX_LOOP_EXPANSIONS;
+    if (canExpand) {
+      build.loopExpansions += values.length;
+      for (const word of values) {
+        const execution = cloneExecution(state.execution);
+        execution.env = { ...(execution.env ?? {}), [variable]: word.literal };
+        execution.pathValues = { ...execution.pathValues, [variable]: undefined };
+        walkNode(node.body, source, { ...state, execution }, build, depth);
+      }
+    } else {
+      const execution = cloneExecution(state.execution);
+      if (variable !== undefined) {
+        execution.env = { ...(execution.env ?? {}), [variable]: undefined };
+        execution.pathValues = { ...execution.pathValues, [variable]: undefined };
+      }
+      walkNode(node.body, source, { ...state, execution }, build, depth);
+    }
     markCwdMayChange(node, source, state, build);
   } else if (node.type === "ArithmeticFor") {
     walkArithmeticCommands(node.initialize, source, state, build, depth);
@@ -1490,12 +1816,12 @@ export function localExecutionContext(cwd: string, env: NodeJS.ProcessEnv = proc
   const home = env.HOME ? path.resolve(env.HOME) : path.resolve(cwd);
   const tempRoots = ["/tmp", "/private/tmp"];
   if (env.TMPDIR && path.isAbsolute(env.TMPDIR)) tempRoots.push(path.resolve(env.TMPDIR));
-  return { kind: "local", cwd: path.resolve(cwd), home, tempRoots, env: { ...env } };
+  return { kind: "local", cwd: path.resolve(cwd), home, tempRoots, env: { ...env }, pathValues: {} };
 }
 
 export function analyzeCommand(source: string, execution: ExecutionContext): CommandAnalysis {
   const analysis: CommandAnalysis = { source, invocations: [], parseFailures: [], fallbackMatches: new Set(), uncertainties: [] };
-  const build: BuildState = { analysis, nextInvocationId: 1, nextPipelineId: 1 };
+  const build: BuildState = { analysis, nextInvocationId: 1, nextPipelineId: 1, loopExpansions: 0 };
   const script = parseComplete(source);
   if (!script) {
     analysis.parseFailures.push({ source, context: cloneExecution(execution) });

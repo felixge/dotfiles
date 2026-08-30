@@ -20,7 +20,7 @@ describe("command guard extension audit entries", () => {
     await toolCallHandler?.({
       toolName: "bash",
       toolCallId: "call-1",
-      input: { command: "code=$?" },
+      input: { command: '"$UNKNOWN" arg' },
     }, {
       cwd: "/tmp/project",
       hasUI: true,
@@ -33,11 +33,11 @@ describe("command guard extension audit entries", () => {
     expect(appendEntry.mock.calls[0]?.[1]).toMatchObject({
       version: 1,
       toolCallId: "call-1",
-      command: "code=$?",
+      command: '"$UNKNOWN" arg',
       cwd: "/tmp/project",
       decision: "allow-once",
-      uncertainties: ["assignment value is dynamic or unresolved"],
-      parseFailures: ["code=$?"],
+      uncertainties: ["executable is dynamic or unresolved"],
+      parseFailures: ['"$UNKNOWN" arg'],
     });
     expect(appendEntry.mock.calls[0]?.[1].analyzerHash).toMatch(/^sha256:[0-9a-f]{64}$/);
   });

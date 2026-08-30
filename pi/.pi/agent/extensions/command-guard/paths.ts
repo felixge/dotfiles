@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { resolveWord } from "./shell.js";
+import { resolvePathWord, resolveWord } from "./shell.js";
 import type { CommandInvocation, ExecutionContext, ParsedWord, SymbolicPath } from "./types.js";
 
 const SENSITIVE_ROOTS = [
@@ -91,8 +91,8 @@ function resolveLocalTarget(
   expansionExecution: ExecutionContext = execution,
 ): string | undefined {
   if (!execution.cwd) return undefined;
-  const resolved = resolveWord(word, expansionExecution);
-  if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.value === undefined) return undefined;
+  const resolved = resolvePathWord(word, expansionExecution);
+  if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.hasUnquotedFieldSplitting || resolved.value === undefined) return undefined;
   let value = resolved.value;
   if (value === "~") value = execution.home;
   else if (value.startsWith("~/")) value = path.join(execution.home, value.slice(2));
@@ -136,8 +136,8 @@ export function resolveRemoteTarget(
   execution: Extract<ExecutionContext, { kind: "ssh" }>,
   expansionExecution: ExecutionContext = execution,
 ): SymbolicPath {
-  const resolved = resolveWord(word, expansionExecution);
-  if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.value === undefined) return { kind: "unknown" };
+  const resolved = resolvePathWord(word, expansionExecution);
+  if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.hasUnquotedFieldSplitting || resolved.value === undefined) return { kind: "unknown" };
   const value = resolved.value;
   if (value === "~" || value === "<remote-home>") return { kind: "home", value: "" };
   if (value.startsWith("~/")) return { kind: "home", value: normalizeSymbolicValue(value.slice(2)) };
@@ -186,7 +186,7 @@ export function isHomeDotfileTarget(word: ParsedWord, execution: ExecutionContex
     return target.kind === "absolute" && /^\/(?:home|Users)\/[^/]+\/\./.test(target.value);
   }
   const resolved = resolveWord(word, expansionExecution);
-  if (resolved.unresolved || resolved.value === undefined) return false;
+  if (resolved.unresolved || resolved.hasUnquotedGlob || resolved.hasUnquotedFieldSplitting || resolved.value === undefined) return false;
   let value = resolved.value;
   if (value.startsWith("~/")) value = path.join(execution.home, value.slice(2));
   if (!execution.cwd) return false;
