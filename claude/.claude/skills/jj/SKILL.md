@@ -1,6 +1,6 @@
 ---
 name: jj
-description: For any version-control task, first run `repo_vcs <repo-path>` to detect the repository type. Load and use this skill only when it prints `jj`; when it prints `git`, use Git instead. Covers commits, diffs, logs, branches, rebasing, pushing, pulling, and all other VCS operations.
+description: Reference for Jujutsu version-control tasks. Use when repository context identifies jj.
 ---
 
 ## jj

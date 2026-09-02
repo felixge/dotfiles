@@ -37,14 +37,17 @@ export const DEFAULT_KILL_GRACE_MS = 5_000;
 export const STARTUP_SIGNAL_DEATH_WINDOW_MS = 1_000;
 
 const ACCESS_TOOLS: Record<AgentRunConfig["access"], string> = {
-	read: "read,grep,find,ls",
-	bash: "read,bash,grep,find,ls",
-	write: "read,bash,edit,write,grep,find,ls",
+	read: "read,grep,find,ls,detect_vcs",
+	bash: "read,bash,grep,find,ls,detect_vcs",
+	write: "read,bash,edit,write,grep,find,ls,detect_vcs",
 };
 export const BASH_ACCESS_ADVISORY =
 	"Bash access is for inspection and other non-mutating commands only. Do not modify files through bash or work around the lack of edit and write tools.";
 export const DEFAULT_GATEWAY_COST_EXTENSION_PATH = fileURLToPath(
 	new URL("../gateway-cost-fallback/index.ts", import.meta.url),
+);
+export const DEFAULT_DETECT_VCS_EXTENSION_PATH = fileURLToPath(
+	new URL("../detect-vcs/index.ts", import.meta.url),
 );
 
 interface ReadableLike {
@@ -90,6 +93,7 @@ export interface ProcessRunnerOptions {
 	maxStderrBytes?: number;
 	now?: () => number;
 	gatewayCostExtensionPath?: string;
+	detectVcsExtensionPath?: string;
 }
 
 export function createInitialProgress(now = Date.now()): RunnerProgress {
@@ -572,6 +576,7 @@ export class PiProcessRunner implements AgentRunner {
 	private readonly maxStderrBytes: number;
 	private readonly now: () => number;
 	private readonly gatewayCostExtensionPath: string;
+	private readonly detectVcsExtensionPath: string;
 
 	constructor(options: ProcessRunnerOptions = {}) {
 		this.spawnProcess = options.spawn ?? defaultSpawn;
@@ -582,8 +587,12 @@ export class PiProcessRunner implements AgentRunner {
 		this.maxStderrBytes = options.maxStderrBytes ?? MAX_STDERR_BYTES;
 		this.now = options.now ?? Date.now;
 		this.gatewayCostExtensionPath = options.gatewayCostExtensionPath ?? DEFAULT_GATEWAY_COST_EXTENSION_PATH;
+		this.detectVcsExtensionPath = options.detectVcsExtensionPath ?? DEFAULT_DETECT_VCS_EXTENSION_PATH;
 		if (!isAbsolute(this.gatewayCostExtensionPath)) {
 			throw new Error("gateway cost extension path must be absolute");
+		}
+		if (!isAbsolute(this.detectVcsExtensionPath)) {
+			throw new Error("detect-vcs extension path must be absolute");
 		}
 	}
 
@@ -592,10 +601,12 @@ export class PiProcessRunner implements AgentRunner {
 			"--mode",
 			"rpc",
 			"--no-session",
-			// Keep discovery disabled while explicitly loading only the pure cost hook.
+			// Keep discovery disabled while explicitly loading the required hooks.
 			"--no-extensions",
 			"--extension",
 			this.gatewayCostExtensionPath,
+			"--extension",
+			this.detectVcsExtensionPath,
 			"--no-skills",
 			"--no-prompt-templates",
 			"--no-approve",

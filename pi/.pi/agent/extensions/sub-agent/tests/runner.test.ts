@@ -9,6 +9,7 @@ import test from "node:test";
 import { AgentManager } from "../manager.ts";
 import {
 	BASH_ACCESS_ADVISORY,
+	DEFAULT_DETECT_VCS_EXTENSION_PATH,
 	DEFAULT_GATEWAY_COST_EXTENSION_PATH,
 	LfDelimitedJsonReader,
 	MAX_ACTIVITY_EVENTS,
@@ -23,6 +24,7 @@ import type { AgentRunConfig, RunnerProgress } from "../types.ts";
 
 const fixture = fileURLToPath(new URL("./fixtures/child.mjs", import.meta.url));
 const gatewayCostExtensionPath = "/test/gateway-cost-fallback/index.ts";
+const detectVcsExtensionPath = "/test/detect-vcs/index.ts";
 const config: AgentRunConfig = {
 	id: "abc123",
 	originEntryId: "assistant-1",
@@ -186,15 +188,21 @@ test("LF reader handles split UTF-8, multiple lines, CRLF, and an unterminated f
 	assert.deepEqual(lines, ['{"value":"héllo"}', '{"value":2}', '{"value":"last"}']);
 });
 
-test("default gateway cost extension path is absolute and points to the bundled fallback", () => {
-	assert.equal(isAbsolute(DEFAULT_GATEWAY_COST_EXTENSION_PATH), true);
-	assert.equal(existsSync(DEFAULT_GATEWAY_COST_EXTENSION_PATH), true);
+test("default explicit extension paths are absolute and point to bundled extensions", () => {
+	for (const path of [DEFAULT_GATEWAY_COST_EXTENSION_PATH, DEFAULT_DETECT_VCS_EXTENSION_PATH]) {
+		assert.equal(isAbsolute(path), true);
+		assert.equal(existsSync(path), true);
+	}
 });
 
-test("gateway cost extension path rejects child-cwd-relative overrides", () => {
+test("explicit extension paths reject child-cwd-relative overrides", () => {
 	assert.throws(
 		() => new PiProcessRunner({ gatewayCostExtensionPath: "../gateway-cost-fallback/index.ts" }),
-		/extension path must be absolute/u,
+		/gateway cost extension path must be absolute/u,
+	);
+	assert.throws(
+		() => new PiProcessRunner({ detectVcsExtensionPath: "../detect-vcs/index.ts" }),
+		/detect-vcs extension path must be absolute/u,
 	);
 });
 
@@ -593,6 +601,7 @@ test("process runner sends one RPC prompt, keeps stdin open, and retains isolati
 			return { command: process.execPath, args: [fixture, "stdin"] };
 		},
 		gatewayCostExtensionPath,
+		detectVcsExtensionPath,
 		timeoutMs: 2_000,
 	});
 	const updates: string[] = [];
@@ -616,6 +625,8 @@ test("process runner sends one RPC prompt, keeps stdin open, and retains isolati
 		"--no-extensions",
 		"--extension",
 		gatewayCostExtensionPath,
+		"--extension",
+		detectVcsExtensionPath,
 		"--no-skills",
 		"--no-prompt-templates",
 		"--no-approve",
@@ -624,7 +635,7 @@ test("process runner sends one RPC prompt, keeps stdin open, and retains isolati
 		"--thinking",
 		"low",
 		"--tools",
-		"read,grep,find,ls",
+		"read,grep,find,ls,detect_vcs",
 	]);
 });
 
@@ -634,14 +645,14 @@ test("process runner configures bash and write access with exact tools and a bas
 			access: "bash" as const,
 			trailingArgs: [
 				"--tools",
-				"read,bash,grep,find,ls",
+				"read,bash,grep,find,ls,detect_vcs",
 				"--append-system-prompt",
 				BASH_ACCESS_ADVISORY,
 			],
 		},
 		{
 			access: "write" as const,
-			trailingArgs: ["--tools", "read,bash,edit,write,grep,find,ls"],
+			trailingArgs: ["--tools", "read,bash,edit,write,grep,find,ls,detect_vcs"],
 		},
 	]) {
 		let piArgs: string[] = [];
@@ -651,6 +662,7 @@ test("process runner configures bash and write access with exact tools and a bas
 				return { command: process.execPath, args: [fixture, "stdin"] };
 			},
 			gatewayCostExtensionPath,
+			detectVcsExtensionPath,
 			timeoutMs: 2_000,
 		});
 		const result = await runner.start({ ...config, access: expected.access }, () => {}).result;

@@ -48,7 +48,7 @@ describe("unbash parser adapter", () => {
   it("does not mistake the [ test builtin for a globbed executable", () => {
     const source = String.raw`if [ -f terminology.md ]; then rg -n -i 'hero run' terminology.md || true; else printf 'terminology.md not found\n'; fi
 printf '\n=== repo ===\n'
-repo_vcs "$PWD" 2>/dev/null || true
+printf '%s\n' "$PWD" 2>/dev/null || true
 printf '\n=== status ===\n'
 git status --short 2>/dev/null || true`;
     const result = analyze(source, fixture);
