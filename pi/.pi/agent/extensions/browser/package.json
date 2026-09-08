@@ -1,6 +1,11 @@
 {
   "name": "pi-browser-extension",
   "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "markdown-it": "14.1.1",
     "shiki": "4.0.2"
@@ -8,6 +13,8 @@
   "devDependencies": {
     "@mariozechner/pi-coding-agent": "^0.73.1",
     "@types/markdown-it": "14.1.2",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
     "typescript": "6.0.3"
   }
 }
