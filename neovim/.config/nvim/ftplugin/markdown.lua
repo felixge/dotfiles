@@ -1,3 +1,6 @@
+-- Keep Markdown syntax markers visible while editing.
+vim.opt_local.conceallevel = 0
+
 -- Resolve /-prefixed paths as repo-relative (matching GitHub behavior).
 -- Used by gf and other file-navigation commands.
 vim.opt_local.includeexpr = "v:lua.require'config.markdown'.includeexpr(v:fname)"
