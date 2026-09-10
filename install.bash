@@ -10,6 +10,7 @@ main() {
     trust_github
     trust_homebrew_taps
     install_homebrew_packages
+    install_dogbrew_packages
     setup_bashrc
     setup_gitconfig
     setup_tmux
@@ -83,31 +84,6 @@ tap_datadog() {
         brew trust -q --tap datadog/tap
     fi
 }
-
-install_datadog_workspaces_linux() (
-    local version="v0.55.0"
-    local sha256="0c43a9877013dc6ae56a66298d42b62de306733b42efb0cda58e7a7dad676826"
-    local arch
-    case "$(uname -m)" in
-        aarch64 | arm64) arch="arm64" ;;
-        x86_64 | amd64) arch="amd64" ;;
-        *) echo "unsupported workspaces architecture: $(uname -m)"; return 1 ;;
-    esac
-
-    local tmpdir
-    tmpdir="$(mktemp -d)"
-    trap 'rm -rf "$tmpdir"' EXIT
-
-    local archive="$tmpdir/workspaces.tar.gz"
-    curl -fsSL \
-        "https://binaries.ddbuild.io/dd-source/workspaces/$version/workspaces-tar.tar.gz" \
-        -o "$archive"
-    echo "$sha256  $archive" | sha256sum --check --status
-    tar -xzf "$archive" -C "$tmpdir" "datadog-workspaces-linux-$arch"
-    install -m 0755 \
-        "$tmpdir/datadog-workspaces-linux-$arch" \
-        "$HOMEBREW_PREFIX/bin/workspaces"
-)
 
 install_homebrew_packages() {
     echo "-> install homebrew packages"
@@ -183,12 +159,18 @@ install_homebrew_packages() {
             # brew install -q datadog/tap/ddoc
             brew install -q --cask \
                 datadog/tap/dd-auth \
-                datadog/tap/bzl \
-                datadog/tap/datadog-workspaces
-        else
-            install_datadog_workspaces_linux
+                datadog/tap/bzl
         fi
     fi
+}
+
+install_dogbrew_packages() {
+    if ! command_exists dogbrew; then
+        return
+    fi
+
+    echo "-> install dogbrew packages"
+    dogbrew install workspaces
 }
 
 trust_github() {
