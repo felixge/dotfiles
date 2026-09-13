@@ -57,3 +57,7 @@ difit "$commit" --port '<port>' --background
 ```
 
 Update the remembered PID and port from the returned JSON and report the refreshed URL. This refresh requirement remains active for the rest of the task/session after the first difit request.
+
+## Inject comments
+
+Use the exact repository-relative `path` from `/api/diff` as `filePath`. After import, verify `/api/comments-json` paths match. Comments visible only under Copy Prompt are misplaced. Remove stale threads before retrying because identical bodies may be deduplicated.
