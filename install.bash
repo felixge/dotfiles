@@ -73,6 +73,7 @@ trust_homebrew_taps() {
 
     echo "-> trust homebrew taps"
     brew trust -q --tap \
+        abue-ammar/tinycast \
         anomalyco/tap \
         datadog-labs/pack
 }
@@ -147,8 +148,9 @@ install_homebrew_packages() {
     brew install -q "${brew_packages[@]}"
     brew install -q datadog-labs/pack/pup anomalyco/tap/opencode
     if is_macos; then
+        brew tap abue-ammar/tinycast
         brew install -q pngpaste
-        brew install -q --cask keycastr kitty
+        brew install -q --cask keycastr kitty tinycast
     else
         brew install -q bubblewrap
     fi
