@@ -150,7 +150,7 @@ install_homebrew_packages() {
     if is_macos; then
         brew tap abue-ammar/tinycast
         brew install -q pngpaste
-        brew install -q --cask keycastr kitty tinycast
+        brew install -q --cask keycastr kitty meetingbar tinycast
     else
         brew install -q bubblewrap
     fi
