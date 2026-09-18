@@ -4,6 +4,9 @@ case ":$PATH:" in
     *) export PATH="$HOME/.local/bin:$PATH" ;;
 esac
 
+# Some terminal hosts, including ChatGPT Desktop, do not set a locale.
+export LANG="${LANG:-en_US.UTF-8}"
+
 # source homebrew env, including completions
 if ! command -v brew >/dev/null 2>&1; then
     for prefix in "/opt/homebrew" "/home/linuxbrew/.linuxbrew"; do
