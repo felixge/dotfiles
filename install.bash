@@ -101,6 +101,7 @@ install_homebrew_packages() {
         codex
         curl
         direnv
+        duckdb
         fd
         fzf
         gawk
