@@ -3,7 +3,7 @@ import { DynamicBorder, type ExtensionAPI } from "@earendil-works/pi-coding-agen
 import { Container, type SelectItem, SelectList, Text } from "@earendil-works/pi-tui";
 
 export default function (pi: ExtensionAPI) {
-  pi.registerShortcut("ctrl+t", {
+  pi.registerShortcut("alt+t", {
     description: "Choose thinking level",
     handler: async (ctx) => {
       if (!ctx.model?.reasoning) {
