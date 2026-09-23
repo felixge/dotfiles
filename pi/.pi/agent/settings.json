@@ -2,7 +2,7 @@
   "lastChangelogVersion": "0.87.0",
   "theme": "light",
   "defaultProvider": "ai-gw-openai",
-  "defaultModel": "openai/gpt-5.6-sol",
+  "defaultModel": "openai/gpt-6-sol",
   "enabledModels": [
     "ai-gw-anthropic-1m/anthropic/claude-opus-5-5",
     "ai-gw-anthropic-1m/anthropic/claude-fable-5",
@@ -14,7 +14,7 @@
     "ai-gw-baseten/baseten/zai-org/GLM-5.3"
   ],
   "hideThinkingBlock": true,
-  "defaultThinkingLevel": "low",
+  "defaultThinkingLevel": "medium",
   "enableSkillCommands": true,
   "skills": [
     "~/.claude/skills"
