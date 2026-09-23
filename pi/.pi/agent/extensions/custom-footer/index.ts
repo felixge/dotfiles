@@ -1,12 +1,12 @@
 /**
  * Custom Footer Extension
  *
- * Replaces the default footer with a custom one that shows elapsed session time
- * on the stats line (line 2), next to token counts and cost.
+ * Replaces the default footer with a custom one that shows last-turn and total
+ * session time on the stats line (line 2), next to token counts and cost.
  *
  * Accumulated time is persisted via pi.appendEntry() so it survives session
  * resumes. On shutdown, the elapsed time since the last resume is saved. On
- * startup, all persisted intervals are summed to produce the starting offset.
+ * startup, the latest snapshot restores the total and last-turn durations.
  *
  * Footer rendering logic adapted from pi's built-in FooterComponent:
  * https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/src/modes/interactive/components/footer.ts
@@ -16,12 +16,14 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth } from "@mariozechner/pi-tui";
 import { sumSessionUsage } from "../lib/session-usage.ts";
 import { OutputTokenRateTracker } from "./token-rate.ts";
+import { TurnTimer } from "./turn-timer.ts";
 
 const ENTRY_TYPE = "custom-footer";
 const FAST_STATUS_EVENT = "openai-fast:status";
 
 interface TimerEntry {
 	elapsedMs: number;
+	lastTurnMs?: number;
 }
 
 interface FastStatus {
@@ -38,6 +40,7 @@ export default function (pi: ExtensionAPI) {
 	let fastStatus: FastStatus | undefined;
 	let requestRender: (() => void) | undefined;
 	const tokenRate = new OutputTokenRateTracker();
+	const turnTimer = new TurnTimer();
 
 	pi.events.on(FAST_STATUS_EVENT, (data) => {
 		const status = data as Partial<FastStatus>;
@@ -51,16 +54,16 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	function saveElapsed(): void {
-		pi.appendEntry(ENTRY_TYPE, { elapsedMs: totalElapsed() } satisfies TimerEntry);
+		pi.appendEntry(ENTRY_TYPE, { elapsedMs: totalElapsed(), lastTurnMs: turnTimer.lastDurationMs } satisfies TimerEntry);
 	}
 
-	function restoreFromSession(entries: Iterable<{ type: string; customType?: string; data?: unknown }>): number {
-		let restored = 0;
+	function restoreFromSession(entries: Iterable<{ type: string; customType?: string; data?: unknown }>): TimerEntry {
+		let restored: TimerEntry = { elapsedMs: 0 };
 		for (const entry of entries) {
 			if (entry.type === "custom" && entry.customType === ENTRY_TYPE) {
 				const data = entry.data as TimerEntry | undefined;
 				if (data && typeof data.elapsedMs === "number") {
-					restored = data.elapsedMs;
+					restored = data;
 				}
 			}
 		}
@@ -85,8 +88,10 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
-		accumulatedMs = restoreFromSession(ctx.sessionManager.getEntries());
+		const restored = restoreFromSession(ctx.sessionManager.getEntries());
+		accumulatedMs = restored.elapsedMs;
 		resumeStart = Date.now();
+		turnTimer.reset(restored.lastTurnMs);
 		tokenRate.reset();
 
 		ctx.ui.setFooter((tui, theme, footerData) => {
@@ -169,7 +174,11 @@ export default function (pi: ExtensionAPI) {
 						parts.push(theme.fg("dim", contextDisplay));
 					}
 
-					parts.push(theme.fg("accent", `⏱ ${formatDuration(totalElapsed())}`));
+					const turnMs = turnTimer.durationMs;
+					if (turnMs !== undefined) {
+						parts.push(theme.fg("accent", `${turnTimer.running ? "turn" : "last"}: ${formatDuration(turnMs)}`));
+					}
+					parts.push(theme.fg("accent", `⏱ total: ${formatDuration(totalElapsed())}`));
 
 					const statsLine = truncateToWidth(parts.join(theme.fg("dim", " ")), width, "…");
 					return [pwdLine, statsLine];
@@ -193,10 +202,18 @@ export default function (pi: ExtensionAPI) {
 		tokenRate.observeMessage(event.message.usage.output);
 	});
 
-	pi.on("session_switch", async (_event, ctx) => {
-		accumulatedMs = restoreFromSession(ctx.sessionManager.getEntries());
-		resumeStart = Date.now();
-		tokenRate.reset();
+	pi.on("input", (event) => {
+		if (event.source === "interactive" && !event.streamingBehavior) turnTimer.submitted();
+	});
+
+	pi.on("before_agent_start", () => {
+		turnTimer.started();
+		requestRender?.();
+	});
+
+	pi.on("agent_settled", () => {
+		turnTimer.settled();
+		requestRender?.();
 	});
 
 	pi.on("session_shutdown", async () => {
