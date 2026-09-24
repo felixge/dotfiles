@@ -341,7 +341,8 @@ test("agent_status replaces agent_wait and exposes a validated optional timeout"
 	const guidelines = statusTool.promptGuidelines.join("\n");
 	assert.match(guidelines, /timeoutSeconds: 60/u);
 	assert.doesNotMatch(guidelines, /parent task work/u);
-	assert.match(guidelines, /bash sleep or tight polling/u);
+	assert.match(guidelines, /shell sleeps or tight polling to monitor sub-agents/u);
+	assert.match(guidelines, /normal shell sleep is fine there/u);
 	assert.match(guidelines, /concise progress update/u);
 	void manager.shutdown();
 });
