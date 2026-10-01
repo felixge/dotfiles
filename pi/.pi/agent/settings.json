@@ -1,8 +1,8 @@
 {
   "lastChangelogVersion": "0.87.0",
   "theme": "light",
-  "defaultProvider": "ai-gw-anthropic-1m",
-  "defaultModel": "anthropic/claude-opus-5-5",
+  "defaultProvider": "ai-gw-openai",
+  "defaultModel": "openai/gpt-6.1-sol",
   "enabledModels": [
     "ai-gw-anthropic-1m/anthropic/claude-opus-5-5",
     "ai-gw-anthropic-1m/anthropic/claude-fable-5",
