@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.99.2",
+  "lastChangelogVersion": "1.0.0",
   "theme": "light",
   "defaultProvider": "ai-gw-openai",
   "defaultModel": "openai/gpt-6.1-sol",
