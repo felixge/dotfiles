@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "1.0.0",
+  "lastChangelogVersion": "1.0.4",
   "theme": "light",
   "defaultProvider": "ai-gw-openai",
   "defaultModel": "openai/gpt-6.1-sol",
@@ -14,7 +14,9 @@
     "ai-gw-baseten/baseten/zai-org/GLM-5.3-Flash",
     "ai-gw-baseten/baseten/zai-org/GLM-5.3"
   ],
-  "defaultTools": ["+codemode"],
+  "defaultTools": [
+    "+codemode"
+  ],
   "hideThinkingBlock": true,
   "defaultThinkingLevel": "medium",
   "enableSkillCommands": true,
