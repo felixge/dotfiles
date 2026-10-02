@@ -10,7 +10,6 @@ import {
 	formatContextUsage,
 	formatCost,
 	formatDuration,
-	formatTokenRate,
 	formatUsage,
 	shortModel,
 } from "./render.ts";
@@ -165,8 +164,6 @@ class AgentsDashboard {
 		if (showAccess) remainingWidth -= 7;
 		const showCost = remainingWidth >= 10;
 		if (showCost) remainingWidth -= 10;
-		const showTokenRate = remainingWidth >= 8;
-		if (showTokenRate) remainingWidth -= 8;
 		const showElapsed = remainingWidth >= 10;
 		if (showElapsed) remainingWidth -= 10;
 		const showModel = remainingWidth >= 21;
@@ -179,7 +176,6 @@ class AgentsDashboard {
 		let header = ` STAT ${padColumnStart("CTX", 6)} ${padColumn("AGENT", agentWidth)}`;
 		if (showAccess) header += ` ${padColumn("ACCESS", 6)}`;
 		if (showCost) header += ` ${padColumnStart("COST", 9)}`;
-		if (showTokenRate) header += ` ${padColumnStart("TOK/S", 7)}`;
 		if (showElapsed) header += ` ${padColumn("ELAPSED", 9)}`;
 		if (showModel) header += ` ${padColumn("MODEL/THINKING", 20)}`;
 		if (showCurrent) header += " CURRENT";
@@ -203,7 +199,6 @@ class AgentsDashboard {
 			let line = `${selected ? this.theme.fg("accent", ">") : " "} ${coloredStatus} ${context} ${agent}`;
 			if (showAccess) line += ` ${padColumn(run.access, 6)}`;
 			if (showCost) line += ` ${this.theme.fg("warning", padColumnStart(formatCost(run.usage.cost.total), 9))}`;
-			if (showTokenRate) line += ` ${this.theme.fg("success", padColumnStart(formatTokenRate(run.tokensPerSecond15s), 7))}`;
 			if (showElapsed) line += ` ${elapsed.padEnd(9)}`;
 			if (showModel) line += ` ${model.padEnd(20)}`;
 			if (showCurrent) line += ` ${structuredActivity(run)}`;
@@ -232,7 +227,6 @@ class AgentsDashboard {
 			` Steers accepted: ${run.steerCount}`,
 			...(run.lastSteeredAt === undefined ? [] : [` Last steered: ${new Date(run.lastSteeredAt).toISOString()}`]),
 			` Cost: ${formatCost(run.usage.cost.total)}`,
-			` Token rate (15s avg): ${formatTokenRate(run.tokensPerSecond15s)} tok/s`,
 			` Usage: ${formatUsage(run.usage) || "none"}`,
 			` Phase: ${run.phase.kind} (${formatDuration((run.endedAt ?? Date.now()) - run.phase.startedAt)})`,
 			` Quiet: ${formatDuration((run.endedAt ?? Date.now()) - run.lastProgressAt)}`,

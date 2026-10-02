@@ -143,7 +143,6 @@ export interface AgentRun extends AgentRunConfig {
 export interface AgentSnapshot extends Readonly<Omit<AgentRun, "usage" | "activity" | "outputTokens" | "streamingContextTokens" | "contextTokens" | "phase" | "activeOperations" | "recentOperations">> {
 	readonly usage: Readonly<UsageSummary>;
 	readonly contextTokens?: number | null;
-	readonly tokensPerSecond15s?: number;
 	readonly phase: Readonly<AgentPhase>;
 	readonly activeOperations: readonly Readonly<ActiveOperation>[];
 	readonly recentOperations: readonly Readonly<OperationEvent>[];
@@ -275,7 +274,6 @@ export interface AgentObservation {
 	recentOperations: OperationObservation[];
 	recentOperationsOmitted?: number;
 	turns: number;
-	tokensPerSecond15s?: number;
 	usage: UsageSummary;
 	contextUsage?: ContextUsage;
 	error?: string;

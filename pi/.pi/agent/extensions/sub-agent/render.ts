@@ -86,12 +86,6 @@ export function formatCost(cost: number): string {
 	return `$${cost.toFixed(4)}`;
 }
 
-export function formatTokenRate(rate: number | undefined): string {
-	if (rate === undefined) return "-";
-	if (rate < 1_000) return rate.toFixed(1);
-	return `${(rate / 1_000).toFixed(1)}k`;
-}
-
 export function formatUsage(usage: Readonly<UsageSummary>): string {
 	const parts: string[] = [];
 	if (usage.input) parts.push(`in:${formatTokens(usage.input)}`);
@@ -261,7 +255,6 @@ export function observationFromSnapshot(
 			recentOperationsOmitted: run.recentOperations.length - visibleRecentOperations.length,
 		} : {}),
 		turns: run.turns,
-		...(run.tokensPerSecond15s !== undefined ? { tokensPerSecond15s: run.tokensPerSecond15s } : {}),
 		usage: cloneUsageSummary(run.usage),
 		...(contextUsage ? { contextUsage } : {}),
 		...(error !== undefined ? { error } : {}),

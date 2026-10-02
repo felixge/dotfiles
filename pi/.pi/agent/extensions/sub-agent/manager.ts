@@ -19,18 +19,12 @@ import {
 	type UsageSummary,
 } from "./types.ts";
 
-interface TokenSample {
-	timestamp: number;
-	tokens: number;
-}
-
 interface ManagedRun extends AgentRun {
 	handle?: RunningAgentProcess;
 	completion?: Promise<void>;
 	cancellationRequested: boolean;
 	logicalSettlementObserved: boolean;
 	runnerRevision: number;
-	tokenSamples: TokenSample[];
 }
 
 export interface WaitTimer {
@@ -77,7 +71,6 @@ export type ManagerListener = (snapshots: readonly AgentSnapshot[]) => void;
 const WAIT_UPDATE_INTERVAL_MS = 100;
 const WAIT_HEARTBEAT_INTERVAL_MS = 1_000;
 const MAX_SET_TIMEOUT_DELAY_MS = 2_147_483_647;
-const TOKEN_RATE_WINDOW_MS = 15_000;
 const ID_PATTERN = /^[a-z0-9]{6}$/u;
 
 function createRunId(): string {
@@ -105,34 +98,7 @@ function startupSignalDeathMessage(diagnostic: NonNullable<RunnerResult["startup
 	return `Pi was killed during startup (${details.join(", ")}). A host security or process policy may be responsible.`;
 }
 
-function appendTokenSample(samples: TokenSample[], tokens: number, timestamp: number): void {
-	const latest = samples.at(-1);
-	if (latest?.tokens === tokens) return;
-	if (latest?.timestamp === timestamp) {
-		latest.tokens = tokens;
-	} else {
-		samples.push({ timestamp, tokens });
-	}
-	const cutoff = timestamp - TOKEN_RATE_WINDOW_MS;
-	while (samples.length > 2 && samples[1]!.timestamp <= cutoff) samples.shift();
-}
-
-function calculateTokenRate(samples: readonly TokenSample[], endpoint: number): number {
-	if (samples.length < 2) return 0;
-	const cutoff = endpoint - TOKEN_RATE_WINDOW_MS;
-	let baseline = samples[0]!;
-	for (const sample of samples) {
-		if (sample.timestamp > cutoff) break;
-		baseline = sample;
-	}
-	const latest = samples.at(-1)!;
-	const elapsedMs = Math.min(TOKEN_RATE_WINDOW_MS, endpoint - baseline.timestamp);
-	if (elapsedMs <= 0) return 0;
-	return Math.max(0, latest.tokens - baseline.tokens) / (elapsedMs / 1000);
-}
-
-function cloneSnapshot(run: ManagedRun, now: number): AgentSnapshot {
-	const endpoint = run.endedAt ?? now;
+function cloneSnapshot(run: ManagedRun): AgentSnapshot {
 	return Object.freeze({
 		id: run.id,
 		originEntryId: run.originEntryId,
@@ -159,7 +125,6 @@ function cloneSnapshot(run: ManagedRun, now: number): AgentSnapshot {
 		currentActivity: run.currentActivity,
 		turns: run.turns,
 		usage: Object.freeze({ ...run.usage, cost: Object.freeze({ ...run.usage.cost }) }),
-		...(run.startedAt !== undefined ? { tokensPerSecond15s: calculateTokenRate(run.tokenSamples, endpoint) } : {}),
 		finalOutput: run.finalOutput,
 		finalOutputTruncation: run.finalOutputTruncation
 			? Object.freeze({ ...run.finalOutputTruncation })
@@ -242,22 +207,20 @@ export class AgentManager {
 			cancellationRequested: false,
 			logicalSettlementObserved: false,
 			runnerRevision: 0,
-			tokenSamples: [],
 		};
 		this.runs.set(id, run);
 		this.pump();
 		this.emit();
-		return cloneSnapshot(run, this.now());
+		return cloneSnapshot(run);
 	}
 
 	get(id: string): AgentSnapshot | undefined {
 		const run = this.runs.get(id);
-		return run ? cloneSnapshot(run, this.now()) : undefined;
+		return run ? cloneSnapshot(run) : undefined;
 	}
 
 	getAll(): AgentSnapshot[] {
-		const now = this.now();
-		return Array.from(this.runs.values(), (run) => cloneSnapshot(run, now));
+		return Array.from(this.runs.values(), (run) => cloneSnapshot(run));
 	}
 
 	async steer(id: string, message: string): Promise<AgentSnapshot> {
@@ -278,7 +241,7 @@ export class AgentManager {
 		run.lastSteeredAt = this.now();
 		run.revision += 1;
 		this.emit();
-		return cloneSnapshot(run, this.now());
+		return cloneSnapshot(run);
 	}
 
 	subscribe(listener: ManagerListener): () => void {
@@ -354,8 +317,7 @@ export class AgentManager {
 			};
 		};
 		const selected = () => {
-			const now = this.now();
-			return ids.map((id) => cloneSnapshot(this.runs.get(id)!, now));
+			return ids.map((id) => cloneSnapshot(this.runs.get(id)!));
 		};
 		const publish = (snapshots: AgentSnapshot[]) => {
 			if (!onSnapshot) return;
@@ -574,7 +536,6 @@ export class AgentManager {
 		run.lastProgressAt = now;
 		run.revision += 1;
 		run.phase = { kind: "starting", startedAt: now };
-		run.tokenSamples = [{ timestamp: run.startedAt, tokens: 0 }];
 		run.currentActivity = "starting";
 
 		try {
@@ -607,10 +568,7 @@ export class AgentManager {
 		run.usage = cloneUsageSummary(progress.usage);
 		run.contextTokens = progress.contextTokens;
 		run.streamingContextTokens = progress.streamingContextTokens;
-		if (progress.outputTokens !== run.outputTokens) {
-			run.outputTokens = progress.outputTokens;
-			appendTokenSample(run.tokenSamples, run.outputTokens, this.now());
-		}
+		run.outputTokens = progress.outputTokens;
 		run.finalOutput = progress.finalOutput;
 		run.finalOutputTruncation = progress.finalOutputTruncation
 			? { ...progress.finalOutputTruncation }

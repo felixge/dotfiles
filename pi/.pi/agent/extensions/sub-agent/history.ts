@@ -232,7 +232,6 @@ function restoreObservation(existing: AgentSnapshot, observation: AgentObservati
 			contextWindow: observation.contextUsage.contextWindow,
 			contextTokens: observation.contextUsage.tokens,
 		} : {}),
-		tokensPerSecond15s: observation.tokensPerSecond15s,
 		finalOutput: observation.finalOutput ?? existing.finalOutput,
 		finalOutputTruncation: observation.finalOutput !== undefined && observation.outputTruncation
 			? {
@@ -269,15 +268,13 @@ function interrupted(run: AgentSnapshot): AgentSnapshot {
 		activeOperations: [],
 		currentActivity: "interrupted",
 		error: "Sub-agent was interrupted before recording a terminal result",
-		tokensPerSecond15s: undefined,
 	};
 }
 
 export function persistedTerminalRun(run: AgentSnapshot): TerminalRunEntryData {
-	const { tokensPerSecond15s: _tokenRate, ...snapshot } = run;
 	return {
 		version: TERMINAL_RUN_ENTRY_VERSION,
-		run: { ...snapshot, liveOutput: "" },
+		run: { ...run, liveOutput: "" },
 	};
 }
 

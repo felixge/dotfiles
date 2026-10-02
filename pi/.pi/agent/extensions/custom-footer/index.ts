@@ -15,7 +15,6 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth } from "@mariozechner/pi-tui";
 import { sumSessionUsage } from "../lib/session-usage.ts";
-import { OutputTokenRateTracker } from "./token-rate.ts";
 import { TurnTimer } from "./turn-timer.ts";
 
 const ENTRY_TYPE = "custom-footer";
@@ -39,7 +38,6 @@ export default function (pi: ExtensionAPI) {
 	let timer: ReturnType<typeof setInterval> | undefined;
 	let fastStatus: FastStatus | undefined;
 	let requestRender: (() => void) | undefined;
-	const tokenRate = new OutputTokenRateTracker();
 	const turnTimer = new TurnTimer();
 
 	pi.events.on(FAST_STATUS_EVENT, (data) => {
@@ -92,7 +90,6 @@ export default function (pi: ExtensionAPI) {
 		accumulatedMs = restored.elapsedMs;
 		resumeStart = Date.now();
 		turnTimer.reset(restored.lastTurnMs);
-		tokenRate.reset();
 
 		ctx.ui.setFooter((tui, theme, footerData) => {
 			const render = () => tui.requestRender();
@@ -154,7 +151,6 @@ export default function (pi: ExtensionAPI) {
 					];
 					if (totalInput) parts.push(theme.fg("accent", `↑${formatTokens(totalInput)}`));
 					if (totalOutput) parts.push(theme.fg("success", `↓${formatTokens(totalOutput)}`));
-					parts.push(theme.fg("success", `${tokenRate.rate().toFixed(1)} tok/s`));
 					if (totalCacheRead) parts.push(theme.fg("dim", `R${formatTokens(totalCacheRead)}`));
 					if (totalCacheWrite) parts.push(theme.fg("dim", `W${formatTokens(totalCacheWrite)}`));
 
@@ -185,21 +181,6 @@ export default function (pi: ExtensionAPI) {
 				},
 			};
 		});
-	});
-
-	pi.on("message_start", (event) => {
-		if (event.message.role !== "assistant") return;
-		tokenRate.startMessage(event.message.usage.output);
-	});
-
-	pi.on("message_update", (event) => {
-		if (event.message.role !== "assistant") return;
-		tokenRate.observeMessage(event.message.usage.output);
-	});
-
-	pi.on("message_end", (event) => {
-		if (event.message.role !== "assistant") return;
-		tokenRate.observeMessage(event.message.usage.output);
 	});
 
 	pi.on("input", (event) => {

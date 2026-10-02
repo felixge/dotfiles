@@ -56,6 +56,7 @@ test("dashboard renders context in list and detail views within the supplied wid
 				const component = factory(tui, theme, undefined, () => {});
 				try {
 					renders.list = component.render(80);
+					renders.wideList = component.render(160);
 					renders.narrowList = component.render(12);
 					component.handleInput("\r");
 					renders.detail = component.render(80);
@@ -72,6 +73,12 @@ test("dashboard renders context in list and detail views within the supplied wid
 
 	assert.match(renders.list!.join("\n"), /12\.3%.*abc123/u);
 	assert.match(renders.detail!.join("\n"), /Context: 12\.3%/u);
+	assert.match(renders.wideList!.join("\n"), /COST\s+ELAPSED\s+MODEL\/THINKING/u);
+	assert.match(renders.detail!.join("\n"), /Cost: \$0\.0000/u);
+	assert.match(renders.detail!.join("\n"), /Usage: none/u);
+	for (const lines of Object.values(renders)) {
+		assert.doesNotMatch(lines.join("\n"), /tok\/s|token rate/iu);
+	}
 	for (const line of [...renders.narrowList!, ...renders.narrowDetail!]) {
 		assert.ok(visibleWidth(line) <= 12);
 	}

@@ -41,7 +41,6 @@ function snapshot(id: string, status: AgentStatus = "running"): AgentSnapshot {
 			totalTokens: 10,
 			cost: { input: 0.1, output: 0.2, cacheRead: 0.3, cacheWrite: 0.4, total: 1 },
 		},
-		tokensPerSecond15s: 4.2,
 		finalOutput: status === "running" ? undefined : "done",
 		liveOutput: "streaming output",
 		stderr: "",
@@ -89,7 +88,6 @@ test("terminal custom entries persist final snapshots, context, and steering met
 
 	assert.equal(data.version, TERMINAL_RUN_ENTRY_VERSION);
 	assert.equal(data.run.liveOutput, "");
-	assert.equal(data.run.tokensPerSecond15s, undefined);
 	assert.equal(history.runs[0]?.status, "completed");
 	assert.equal(history.runs[0]?.finalOutput, "done");
 	assert.equal(history.runs[0]?.steerCount, 2);
