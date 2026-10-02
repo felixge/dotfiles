@@ -1,8 +1,6 @@
 # Writing Style
 
-* Be short and concise, no fluff or filler text.
-* DO NOT use emoji
-* DO NOT use EM dashes
+Write in ASD-STE100 style. Be concise. Do not use EM dashes or EMOJI.
 
 # Status Updates
 
