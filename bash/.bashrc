@@ -123,7 +123,7 @@ generate_prompt() {
 
     PS1="${exit_color}\W${reset} ${blue}${prompt_symbol}${reset} "
 }
-export PROMPT_COMMAND=generate_prompt
+export PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND; }generate_prompt"
 
 # ensure kitten is in PATH on remote machines (e.g. new tmux windows after kitten ssh)
 if [ -d "$HOME/.local/share/kitty-ssh-kitten/kitty/bin" ]; then
